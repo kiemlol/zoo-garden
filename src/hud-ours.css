@@ -1,0 +1,446 @@
+/*
+ * Zoo Garden's own HUD (stage 2 of docs/QUALITY-PLAN.md). Loaded after every older HUD sheet and before tap-targets.css.
+ *
+ * The arrangement
+ *   - Hero plate, top left: a plum plate with the name small along its top, a square-ish portrait wearing the level as a
+ *     honey badge on its corner, and beside it the energy count over the health and EXP bars.
+ *   - The dock, right edge: every menu button as a cream tile in one column. When the screen is too short for one column
+ *     it folds into two or three (CSS grid, no script). hud-layout.ts publishes its width as --dock-w.
+ *   - Map panel, Home tab and (on roomy screens) the quest slips hang in one column just left of the dock, the map
+ *     level with the dock's first button. The map is a rounded panel with the place name on a strip inside it.
+ *   - Fight cluster, bottom right. Touch screens: a paw print, the big attack pad with the four skills as toes on an arc
+ *     above it, in key order left to right. Desktop: the four skills in a row on a tray.
+ *   - Phones keep the quest chips under the hero plate; the boss bar and the Colossus strip sit under the map and stop
+ *     short of the dock.
+ * The look: plum ink (#3a2433) outlines and glass, cream tiles (#fff6e0), honey / tangerine / rose accents, one icon set
+ * (hud-icons.ts). Nothing here writes to the page while the game runs; it is layout and paint only.
+ *
+ * Selectors start with "#app #hud" so they win over the older sheets (hud-compact.css, hud-desk.css, joystick.css).
+ */
+:root {
+  --plum: #3a2433; --cream: #fff6e0; --cream-deep: #ffe9bf; --honey: #ffc93a;
+  --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px);
+  /* One dock cell (button plus breathing room; never under 44 px so touch targets cannot overlap). */
+  --dock: max(44px, calc(var(--b) + 8px));
+  /* Set by hud-layout.ts once the dock is measured; one column until then. */
+  --dock-w: var(--dock);
+  /* Height kept free under the dock for the fight cluster. */
+  --dock-room: 132px;
+  /* The right edge of everything that hangs left of the dock, and the top of the map: level with the dock's first button. */
+  --col: calc(var(--edge) + var(--safe-right) + var(--dock-w) + 8px);
+  --map-top: calc(var(--edge) + var(--safe-top) + (var(--dock) - var(--b)) / 2);
+  /* The portrait tile, and the hero plate's height with it: borders 4, padding 3 + 5, the name line 14, a gap of 2. */
+  --face: calc(var(--b) + 8px);
+  --hero-h: calc(var(--face) + 28px);
+  /* The hero plate's width, for what must stop before it (the Colossus bar, the Rescue belt). */
+  --hero-w: 262px;
+  --tile-shadow: 0 3px 0 rgba(58, 36, 51, .55);
+  --tile: linear-gradient(180deg, #fffaf0, var(--cream-deep));
+}
+@media (max-width: 900px) { :root { --hero-w: 244px; } }
+/* Phones: a 40 px tile (its tap area stays 44 px, hud-compact.css) beside 40 px of energy and bars; the plate is 65 px tall. */
+@media (orientation: portrait) and (max-width: 600px) { :root { --face: 40px; --hero-h: 65px; --hero-w: calc(min(130px, 34vw) + 74px); } }
+/* 360 px and narrower: no portrait tile. The plate takes the room the map leaves (never under 30vw of bars), so the name
+   and the energy number are not cut; --hero-in is the width of its bars. */
+@media (orientation: portrait) and (max-width: 360px) {
+  :root {
+    --sk: 44px; --mm: 84px; --paw-edge: 12px; --hero-h: 68px;
+    --hero-in: max(30vw, min(150px, calc(100vw - var(--col) - var(--mm) - var(--edge) * 2 - var(--safe-left) - 30px)));
+    --hero-w: calc(var(--hero-in) + 22px);
+  }
+  body.in-rescue { --hero-in: 30vw; }
+}
+/* Short landscape: the name and the energy count share the plate's top line, so it is 62 px tall (see "Short landscape" below). */
+@media (max-height: 520px) and (orientation: landscape) { :root { --face: 36px; --hero-h: 62px; --hero-w: 216px; } }
+@media (pointer: coarse), (max-width: 900px), (max-height: 520px) { :root { --dock-room: calc(var(--sk) * 2.38 + 44px); } }
+
+#app { --glass: rgba(58, 36, 51, .78); --glass-line: rgba(255, 246, 224, .5); }
+svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible; }
+
+/* ------------------------------------------------------------------ Hero plate */
+/* Three pieces on a grid: the name along the top, the portrait tile under it, the energy count and the bars beside the tile. */
+#app #hud .player-card {
+  left: calc(var(--edge) + var(--safe-left)); top: calc(var(--edge) + var(--safe-top)); padding: 3px 10px 5px 5px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "name name" "face details"; align-items: center; gap: 2px 8px;
+  border-radius: 16px; background: var(--glass); border: 2px solid var(--glass-line); box-shadow: 0 3px 0 rgba(58, 36, 51, .35);
+}
+/* The name never widens the plate (width 0, then stretched to the plate): a long one ends in an ellipsis. */
+#app #hud .player-name {
+  grid-area: name; display: block; width: 0; min-width: 100%; box-sizing: border-box; margin: 0; padding: 0 1px 0 3px; height: 14px;
+  font-size: 12px; line-height: 14px; font-weight: 900; letter-spacing: .2px;
+}
+/* The 4 px of headroom keeps stacked Vietnamese marks on capitals (Ệ, Ẵ) inside the clip. */
+#app #hud .player-name > strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: inherit; padding-top: 4px; margin-top: -4px; }
+#app #hud .hero-face { grid-area: face; position: relative; display: grid; }
+#app #hud .player-details { grid-area: details; min-width: 0; }
+#app #hud .avatar { width: var(--face); height: var(--face); border-radius: 30%; border: 2px solid var(--plum); background: linear-gradient(160deg, #fffaf0, #ffe08a); box-shadow: inset 0 0 0 2px #fff; }
+/* The level: a honey badge on the tile's lower right corner, the number alone. Three digits fit; it takes no taps. */
+#app #hud .level-badge {
+  position: absolute; right: -5px; bottom: -4px; box-sizing: border-box; min-width: 22px; height: 18px; padding: 0 4px; display: grid; place-items: center;
+  border-radius: 9px; background: var(--honey); border: 2px solid var(--plum); box-shadow: 0 0 0 1.5px var(--cream);
+  color: var(--plum); font-size: 11.5px; line-height: 1; font-weight: 1000; font-variant-numeric: tabular-nums; pointer-events: none;
+}
+#app #hud .level-badge > b { font-weight: inherit; }
+/* Energy: the spark on a cream coin and the count, over the health bar. Only the number is ever written (main.ts updateHud). */
+#app #hud .hero-energy {
+  display: flex; align-items: center; gap: 4px; height: 17px; margin-bottom: 2px; color: var(--honey);
+  font-size: 14px; line-height: 17px; font-weight: 1000; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+#app #hud .hero-energy > span { flex: none; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--cream); }
+#app #hud .hero-energy > span > svg { width: 12px; height: 12px; }
+#app #hud .hero-energy > b { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: inherit; }
+#app #hud .avatar > span { display: grid; place-items: center; width: 70%; height: 70%; font-size: 0; }
+#app #hud .avatar > span > svg { width: 100%; height: 100%; }
+/* The explorer's face (hero-portrait.ts): a still picture filling the tile on a soft apricot glow; the sprout icon stays
+   underneath as the stand-in until there is a picture. */
+#app #hud .avatar > .hero-pic { display: none; }
+#app #hud .avatar.has-face { padding: 0; background: radial-gradient(circle at 50% 38%, #fff6dc 0 30%, #ffd9a0 72%, #ffb98a); }
+#app #hud .avatar.has-face > span { display: none; }
+#app #hud .avatar.has-face > .hero-pic { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; pointer-events: none; -webkit-user-drag: none; }
+#app #hud .player-name { color: var(--cream); -webkit-text-stroke: 0; text-shadow: none; }
+#app #hud .meter { border-radius: 7px; border: 2px solid var(--plum); background: rgba(20, 10, 16, .55); box-shadow: 0 0 0 1px rgba(255, 246, 224, .35); }
+#app #hud .meter > div { border-radius: 4px; }
+#app #hud .experience { width: 100%; background: rgba(20, 10, 16, .55); }
+#app #hud .experience > div { background: linear-gradient(180deg, #ffd45a, #f59f1a); }
+#app #hud .experience > span { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .7); }
+#app #hud .location { color: var(--cream-deep); -webkit-text-stroke: 0; text-shadow: none; }
+#app #hud .location-dot { background: var(--honey); box-shadow: 0 0 0 1.5px var(--plum); }
+#app #hud .location { display: none; } /* the map's strip names the place */
+
+/* ------------------------------------------------------------------ The dock */
+#app #hud .top-actions {
+  position: absolute; left: auto; right: calc(var(--edge) + var(--safe-right)); top: calc(var(--edge) + var(--safe-top));
+  bottom: calc(var(--dock-room) + var(--safe-bottom)); width: auto; max-width: none;
+  display: grid; grid-auto-flow: column; grid-template-rows: repeat(auto-fill, var(--dock)); grid-auto-columns: var(--dock);
+  /* Columns are added leftwards from the screen edge. */
+  direction: rtl; place-items: center; align-content: start; gap: 0;
+}
+#app #hud .top-actions > *, #app #hud .top-actions button { direction: ltr; }
+#app #hud #social-slot, #app #hud #platform-slot, #app #hud #platform-slot .platform-tools { display: contents; }
+#app #hud .icon-button, #app #hud #social-slot .social-toggle, #app #hud #platform-slot .platform-tools button {
+  position: relative; inset: auto; z-index: auto; width: var(--b); height: var(--b); padding: 0; border-radius: 34%;
+  border: 2px solid var(--plum); background: var(--tile); box-shadow: var(--tile-shadow); color: var(--plum);
+  display: grid; place-items: center; font-size: 0; line-height: 1;
+}
+#app #hud .icon-button[hidden], #app #hud #platform-slot .platform-tools button[hidden] { display: none; }
+#app #hud .icon-button > svg { width: 68%; height: 68%; }
+#app #hud .icon-button:active, #app #hud #social-slot .social-toggle:active, #app #hud #platform-slot .platform-tools button:active, #app #hud .home-button:active { translate: 0 2px; box-shadow: 0 1px 0 rgba(58, 36, 51, .55); }
+/* Buttons other modules make from text: the text stays for screen readers, the drawing is painted over it. */
+#app #hud #social-slot .social-toggle, #app #hud #platform-slot .platform-tools button { background: var(--hi-friends) center / 68% 68% no-repeat, var(--tile); }
+#app #hud #social-slot .social-toggle[data-static-host] { background-image: var(--hi-sprout), var(--tile); }
+#app #hud #social-slot #neighbours-button { background-image: var(--hi-neighbours), var(--tile); }
+#app #hud #platform-slot .platform-tools button:first-child { background-image: var(--hi-fullscreen), var(--tile); }
+#app #hud #platform-slot .platform-tools button:not(:first-child) { background-image: var(--hi-install), var(--tile); }
+#app #hud #platform-slot .platform-tools button:not(:first-child)::before { content: none; }
+#app #hud #social-slot .social-toggle[data-online=true] { box-shadow: 0 0 0 3px #8fe06a, var(--tile-shadow); }
+#app #hud .icon-button > i { border-color: var(--cream); }
+#app #hud .icon-button > i.news-count { font-size: 10px; font-style: normal; }
+@media (hover: hover) { #app #hud .icon-button:hover, #app #hud #social-slot .social-toggle:hover, #app #hud #platform-slot .platform-tools button:hover, #app #hud .home-button:hover { filter: brightness(1.06) saturate(1.1); } }
+
+/* ------------------------------------------------------------------ Map panel and Home tab */
+#app #hud .minimap {
+  position: absolute; left: auto; right: var(--col); top: var(--map-top); width: var(--mm); height: var(--mm); padding: 0; overflow: hidden;
+  border-radius: 22%; border: 3px solid var(--cream); background: #93e06a; box-shadow: 0 0 0 2px var(--plum), 0 5px 0 2px rgba(58, 36, 51, .4);
+}
+#app #hud #minimap { border-radius: 0; }
+#app #hud .minimap > span {
+  left: 5px; top: 5px; width: 16px; height: 16px; border-radius: 6px; background: var(--plum); border: 1.5px solid var(--cream);
+  color: var(--cream); font-size: 9px; pointer-events: none;
+}
+#app #hud .minimap > small {
+  left: 0; right: 0; top: auto; bottom: 0; transform: none; padding: 2px 8px 3px; border-radius: 0; background: rgba(58, 36, 51, .84);
+  color: var(--cream); font-size: 10px; letter-spacing: .5px; text-align: center; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button {
+  position: fixed; left: auto; bottom: auto; right: calc(var(--col) + var(--mm) + 12px); top: var(--map-top) !important;
+  height: max(40px, var(--b)); padding: 0 12px 0 8px; gap: 5px; border-radius: 13px; border: 2px solid var(--plum); background: var(--tile);
+  box-shadow: var(--tile-shadow); color: var(--plum); font-size: 22px;
+}
+#app #hud .home-button span { font-size: var(--t-sm); font-weight: 1000; }
+
+/* ------------------------------------------------------------------ Quest slips */
+#app #hud .quest-tracker, #app #hud .bounty-tracker, #app #hud .challenge-tracker { box-shadow: 0 3px 0 rgba(58, 36, 51, .35); }
+#app #hud .tracker-chip { box-shadow: 0 2px 0 rgba(58, 36, 51, .35); }
+#app #hud .tracker-stack { left: calc(var(--edge) + var(--safe-left)); top: calc(var(--edge) + var(--safe-top) + var(--hero-h) + 8px); }
+/* Roomy screens: the slips hang under the map, right-aligned with it; the left column keeps effects and quick eat. */
+@media (min-width: 601px) and (min-height: 521px) {
+  #app #hud .tracker-panels, #app #hud #tracker-chip { position: fixed; right: var(--col); top: calc(var(--map-top) + var(--mm) + 12px); }
+  #app #hud .tracker-panels { width: 236px; gap: 6px; }
+  html[lang="vi"] #app #hud .quest-tracker .eyebrow { padding-right: 78px; } /* "Thu gọn" is wider than "Fold" */
+  #app #hud .quest-tracker, #app #hud .bounty-tracker, #app #hud .challenge-tracker { border-radius: 14px; border-left: 5px solid var(--honey); }
+  #app #hud .bounty-tracker { border-left-color: #ff7fa8; }
+  #app #hud .challenge-tracker { border-left-color: #ff8a2a; background: linear-gradient(90deg, rgba(120, 60, 10, .78), var(--glass)); }
+  #app #hud .tracker-stack { width: 236px; }
+}
+@media (min-width: 601px) and (min-height: 521px) and (max-width: 900px) { #app #hud .tracker-panels { width: 220px; } }
+
+/* ------------------------------------------------------------------ Fight cluster */
+#app #hud .skill {
+  border-radius: 36%; border: 3px solid var(--cream); box-shadow: 0 0 0 2px var(--plum), 0 4px 0 2px rgba(58, 36, 51, .5);
+}
+#app #hud .skill-spin { background: linear-gradient(160deg, #ffa3bf, #e8457a); }
+#app #hud .skill-dash { background: linear-gradient(160deg, #a6ea6a, #35a52e); }
+#app #hud .skill-stomp { background: linear-gradient(160deg, #ffbe6a, #f0731c); }
+#app #hud .skill-special { background: linear-gradient(160deg, #c5a3ff, #7d55e6); }
+#app #hud .skill > span { display: grid; place-items: center; width: 64%; height: 64%; filter: none; }
+#app #hud .skill > span > svg { width: 100%; height: 100%; }
+#app #hud .skill > .cooldown { border-radius: inherit; }
+#app #hud .skill > kbd { border-radius: 7px; background: var(--plum); border: 1.5px solid var(--cream); color: var(--cream); }
+#app #hud .skill > small { border-radius: 7px; background: var(--cream); color: var(--plum); box-shadow: 0 2px 0 rgba(58, 36, 51, .4); }
+#app #hud .attack-pad { display: none; }
+#app #hud .movement-joystick { background: rgba(58, 36, 51, .26); border-color: rgba(255, 246, 224, .8); }
+#app #hud .joystick-knob { background: rgba(255, 246, 224, .86); border-color: #fff; box-shadow: 0 3px 0 rgba(58, 36, 51, .4); }
+
+/* Desktop: the row sits on a tray. */
+@media (pointer: fine) and (min-width: 901px) and (min-height: 521px) {
+  #app #hud .skills, #app #hud.joystick-on .skills {
+    right: -6px; bottom: 14px; gap: 20px; padding: 10px 16px 22px; border-radius: 22px; background: rgba(58, 36, 51, .5); border: 2px solid var(--glass-line);
+  }
+}
+/* Names stay on one line under their button in both languages. */
+@media (pointer: fine) and (min-width: 901px) and (min-height: 521px) {
+  html[lang] #app #hud .skill > small { white-space: nowrap; max-width: calc(var(--sk) + 22px); overflow: hidden; text-overflow: ellipsis; font-size: 10px; line-height: 1.3; }
+}
+/* Touch and small screens: the paw. The pad is the heel; the four skills are toes at 162, 114, 66 and 18 degrees on a
+   circle of 1.4 skill widths around its centre (neighbours are 1.14 widths apart, so 44 px toes never share a tap). */
+@media (pointer: coarse), (max-width: 900px), (max-height: 520px) {
+  #app #hud .skills, #app #hud.joystick-on .skills {
+    position: fixed; left: auto; top: auto; right: calc(var(--paw-edge, 18px) + var(--safe-right)); bottom: calc(22px + var(--safe-bottom));
+    width: calc(var(--sk) * 3.66); height: calc(var(--sk) * 2.38); max-width: none; transform: none; gap: 0; padding: 0; background: none; border: 0;
+  }
+  #app #hud.joystick-right .skills, #app #hud.joystick-on.joystick-right .skills { right: auto; left: calc(var(--paw-edge, 18px) + var(--safe-left)); }
+  #app #hud .skill, #app #hud.joystick-on .skill { position: absolute; width: var(--sk); min-width: 0; height: var(--sk); border-radius: 46%; }
+  /* A toe is never under 44 px, and a square hit area would reach into its neighbours: the toe itself takes the tap. */
+  #app #hud .skill::after { content: none; }
+  #app #hud .skill[data-index="0"] { left: 0; bottom: calc(var(--sk) * .533); }
+  #app #hud .skill[data-index="1"] { left: calc(50% - var(--sk) * 1.069); bottom: calc(var(--sk) * 1.379); }
+  #app #hud .skill[data-index="2"] { left: calc(50% + var(--sk) * .069); bottom: calc(var(--sk) * 1.379); }
+  #app #hud .skill[data-index="3"] { left: auto; right: 0; bottom: calc(var(--sk) * .533); }
+  #app #hud .skill > small, #app #hud .skill > kbd { display: none; }
+  #app #hud .attack-pad {
+    display: grid; place-items: center; position: absolute; left: calc(50% - var(--sk) * .6); bottom: 0; width: calc(var(--sk) * 1.2); height: calc(var(--sk) * 1.2); padding: 0;
+    border-radius: 40%; border: 3px solid var(--cream); background: linear-gradient(160deg, #ffd45a, #ff8a2a); box-shadow: 0 0 0 2px var(--plum), 0 4px 0 2px rgba(58, 36, 51, .5);
+    touch-action: manipulation; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none;
+  }
+  #app #hud .attack-pad > svg { width: 60%; height: 60%; }
+  #app #hud .attack-pad:active { translate: 0 2px; filter: brightness(.94); }
+  /* Fishing: the cast / reel button stands over the paw, left of the dock; its hint sits between them. */
+  #app #hud #reel-button { position: fixed; left: auto; right: var(--col); bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 16px); }
+  #app #hud #reel-button + #fish-hint { left: auto; right: var(--col); bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 132px); }
+  #app #hud.joystick-right #reel-button, #app #hud.joystick-right #reel-button + #fish-hint { right: auto; left: calc(18px + var(--safe-left)); }
+}
+body.indoors #app #hud .skills { display: none; }
+
+/* ------------------------------------------------------------------ Jumping and air combat (Settings switch; body.air-combat) */
+/* With the switch off none of this applies and the paw above is the one from before. With it on the paw has five toes at
+   186, 138, 90, 42 and -6 degrees on a circle of 1.4 skill widths round the pad's centre (neighbours 1.14 widths apart).
+   The big pad in the middle is Jump (sky blue); the basic attack is the toe on the inner side, level with the pad; the
+   four skills follow in key order. Left-handed play mirrors it, so the attack toe stays on the inner side. */
+#app #hud .jump-pad { display: none; }
+@media (pointer: coarse), (max-width: 900px), (max-height: 520px) {
+  body.air-combat { --dock-room: calc(var(--sk) * 2.55 + 44px); }
+  body.air-combat #app #hud .skills, body.air-combat #app #hud.joystick-on .skills { width: calc(var(--sk) * 3.784); height: calc(var(--sk) * 2.55); }
+  body.air-combat #app #hud .skill[data-index="0"] { left: calc(50% - var(--sk) * 1.54); right: auto; bottom: calc(var(--sk) * 1.087); }
+  body.air-combat #app #hud .skill[data-index="1"] { left: calc(50% - var(--sk) * .5); right: auto; bottom: calc(var(--sk) * 1.55); }
+  body.air-combat #app #hud .skill[data-index="2"] { left: calc(50% + var(--sk) * .54); right: auto; bottom: calc(var(--sk) * 1.087); }
+  body.air-combat #app #hud .skill[data-index="3"] { left: calc(50% + var(--sk) * .892); right: auto; bottom: calc(var(--sk) * .004); }
+  body.air-combat #app #hud .attack-pad { left: calc(50% - var(--sk) * 1.892); bottom: calc(var(--sk) * .004); }
+  body.air-combat #app #hud.joystick-right .skill[data-index="0"] { left: calc(50% - var(--sk) * 1.892); right: auto; bottom: calc(var(--sk) * .004); }
+  body.air-combat #app #hud.joystick-right .skill[data-index="1"] { left: calc(50% - var(--sk) * 1.54); right: auto; bottom: calc(var(--sk) * 1.087); }
+  body.air-combat #app #hud.joystick-right .skill[data-index="2"] { left: calc(50% - var(--sk) * .5); right: auto; bottom: calc(var(--sk) * 1.55); }
+  body.air-combat #app #hud.joystick-right .skill[data-index="3"] { left: calc(50% + var(--sk) * .54); right: auto; bottom: calc(var(--sk) * 1.087); }
+  body.air-combat #app #hud.joystick-right .attack-pad { left: calc(50% + var(--sk) * .892); bottom: calc(var(--sk) * .004); }
+  /* The attack toe: the pad's own paint at a full skill toe's size. */
+  body.air-combat #app #hud .attack-pad { width: var(--sk); height: var(--sk); min-width: 0; border-radius: 46%; }
+  body.air-combat #app #hud .jump-pad { left: calc(50% - var(--sk) * .6); bottom: calc(var(--sk) * .05); }
+  /* The Jump pad: sky blue, the big heel of the paw. It acts as the finger lands (main.ts); holding it performs the extra jumps. */
+  body.air-combat #app #hud .jump-pad {
+    display: grid; place-items: center; position: absolute; width: calc(var(--sk) * 1.2); height: calc(var(--sk) * 1.2); min-width: 0; padding: 0;
+    border-radius: 40%; border: 3px solid var(--cream); background: linear-gradient(160deg, #8fe0ff, #2f9be6); box-shadow: 0 0 0 2px var(--plum), 0 4px 0 2px rgba(58, 36, 51, .5);
+    touch-action: none; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none;
+  }
+  body.air-combat #app #hud .jump-pad[hidden] { display: none; }
+  body.air-combat #app #hud .jump-pad > svg { width: 60%; height: 60%; pointer-events: none; }
+  body.air-combat #app #hud .jump-pad:active { translate: 0 2px; filter: brightness(.94); }
+  body.air-combat #app #hud #reel-button { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 16px); }
+  body.air-combat #app #hud #reel-button + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 132px); }
+}
+@media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
+  body.air-combat #app #hud #reel-button { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 58px); }
+  body.air-combat #app #hud #reel-button + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 8px); }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  body.air-combat.in-rescue #rescue-build, body.air-combat.in-rescue[data-rescue-orient="portrait"] #rescue-build { right: calc(var(--safe-right) + 18px + var(--sk) * 3.784 + 8px); }
+}
+/* The air window (jump-rules.ts airWindow): while a press would be an air move the attack toe and the skill toes wear a
+   sky rim, and the two skills with an air form and the attack toe turn sky blue; on the way down the attack toe shows the
+   dive in rose. The Jump pad keeps its own look throughout. Paint only. */
+#app #hud .skills.air .skill, #app #hud .skills.air .attack-pad { border-color: #bfeeff; box-shadow: 0 0 0 2px var(--plum), 0 0 0 5px rgba(143, 224, 255, .85), 0 4px 0 2px rgba(58, 36, 51, .5); }
+#app #hud .skills.air .skill-dash, #app #hud .skills.air .skill-stomp, #app #hud .skills.air .attack-pad { background: linear-gradient(160deg, #8fe0ff, #2f9be6); }
+#app #hud .skills.air .skill.air-form { background: linear-gradient(160deg, #8fe0ff, #2f9be6); }
+#app #hud .skills.air.dive .attack-pad { background: linear-gradient(160deg, #ffa3bf, #e8457a); }
+#app #hud .skills.air.dive .attack-pad > svg { rotate: 180deg; }
+/* The combo chip (jump-rules.ts ComboMeter): the count, the damage bonus and four pips (ground, launch, air, finisher).
+   Left edge, clear of the hero plate and the joystick. Written only when the chain changes. */
+#app #hud #combo-chip {
+  position: fixed; left: calc(var(--edge) + var(--safe-left)); top: 38%; display: grid; grid-template-columns: auto auto; align-items: baseline; column-gap: 6px;
+  padding: 4px 12px 6px 10px; border-radius: 14px; background: var(--glass); border: 2px solid var(--honey); color: var(--cream); pointer-events: none; rotate: -4deg; transform-origin: left center;
+}
+#app #hud #combo-chip[hidden] { display: none; }
+#app #hud #combo-chip > b { font: 900 30px/1 Nunito, sans-serif; color: var(--honey); -webkit-text-stroke: 1px var(--plum); }
+#app #hud #combo-chip > span { font: 900 13px/1 Nunito, sans-serif; letter-spacing: .04em; }
+#app #hud #combo-chip > i { grid-column: 1 / -1; font: 800 12px/1.2 Nunito, sans-serif; font-style: normal; color: #b9f5a0; min-height: 14px; }
+#app #hud #combo-chip > em { grid-column: 1 / -1; display: flex; gap: 4px; margin-top: 2px; }
+#app #hud #combo-chip > em > u { width: 14px; height: 5px; border-radius: 3px; background: rgba(255, 246, 224, .28); text-decoration: none; }
+#app #hud #combo-chip > em > u.on { background: var(--honey); }
+#app #hud #combo-chip > em > u.on:nth-child(3) { background: #8fe0ff; }
+#app #hud #combo-chip > em > u.on:nth-child(4) { background: #ff5d8c; }
+#app #hud #combo-chip.done { opacity: .6; }
+@media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
+  #app #hud #combo-chip { top: 44%; padding: 3px 9px 5px 8px; }
+  #app #hud #combo-chip > b { font-size: 24px; }
+}
+/* 'Blocked' over a boss that turned a low hit (world.ts blockFeedback). */
+#floating-text .float.block { color: #bfe6ff; }
+
+/* ------------------------------------------------------------------ Phones */
+@media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
+  #app #hud .minimap > small { display: block; padding: 1px 5px 2px; font-size: 8.5px; letter-spacing: 0; text-transform: none; }
+  #app #hud .player-card { gap: 1px 7px; padding: 3px 8px 4px 4px; border-radius: 14px; }
+  #app #hud .player-name { height: 13px; line-height: 13px; font-size: 11px; }
+  #app #hud .level-badge { right: -4px; bottom: -3px; }
+  /* The tile is under 44 px here: its tap area (hud-compact.css) grows upwards over the name, not down into the quest chip's. */
+  #app #hud .avatar::after { top: auto; bottom: 0; transform: translateX(-50%); }
+  #app #hud .hero-energy { height: 14px; line-height: 14px; margin-bottom: 1px; font-size: 13px; }
+  #app #hud .hero-energy > span { width: 14px; height: 14px; }
+  #app #hud .meter { height: 13px; }
+  #app #hud .experience { height: 11px; margin-top: 1px; }
+  #app #hud .experience > span { font-size: 8.5px; }
+  #app #hud .tracker-stack { top: calc(var(--edge) + var(--safe-top) + var(--hero-h) + 6px); width: min(188px, calc(100vw - var(--dock-w) - var(--mm) - var(--edge) * 3 - var(--safe-left) - var(--safe-right) - 12px)); }
+  #app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button { width: 44px; height: 44px; padding: 0; justify-content: center; }
+  #app #hud #reel-button { width: 56px; height: 56px; bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 58px); }
+  #app #hud #reel-button + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 8px); max-width: min(190px, calc(100vw - var(--col) - var(--safe-left) - 154px)); }
+}
+@media (orientation: portrait) and (max-width: 600px) {
+  /* The row for the boss bar: under the map and Home, and under the left column as it stands in a fight (the folded quest
+     chip, a row of effects and quick eat take 118 px under the hero plate). */
+  :root { --row3: max(calc(var(--map-top) + var(--mm) + 8px + 44px + 8px), calc(var(--edge) + var(--safe-top) + var(--hero-h) + 132px)); }
+  #app #hud .player-details { width: calc(var(--hero-w) - 74px); }
+  /* Home hangs under the map. */
+  #app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button { right: var(--col); top: calc(var(--map-top) + var(--mm) + 8px) !important; }
+  /* The boss bar and the Colossus strip run under the map and stop short of the dock. */
+  #app #hud #boss-bar { left: calc(var(--edge) + var(--safe-left)); right: var(--col); top: var(--row3); bottom: auto; width: auto; transform: none; }
+  #app.boss-on #hud #zone-banner { top: calc(var(--row3) + 58px); }
+  #app .colossus-banner { left: calc(var(--edge) + var(--safe-left)); right: var(--col); top: calc(var(--row3) + 60px); }
+}
+
+/* Short landscape phones have no height to spare (the stick stands right under the left column): the name and the energy
+   count share the plate's top line, the name above the tile and the count above the health bar, and the tile stands beside
+   the two bars. The bars and the count become cells of the plate's own grid. */
+@media (max-height: 520px) and (orientation: landscape) {
+  #app #hud .player-card {
+    width: calc(var(--hero-w) - 12px); box-sizing: border-box; grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "name name energy" "face health health" "face xp xp";
+  }
+  #app #hud .player-details { display: contents; }
+  #app #hud .player-name { height: 14px; line-height: 14px; }
+  #app #hud .hero-energy { grid-area: energy; margin: 0; }
+  #app #hud .meter.health { grid-area: health; align-self: end; }
+  #app #hud .meter.experience { grid-area: xp; align-self: start; margin-top: 0; }
+  #app #hud .tracker-stack { top: calc(var(--edge) + var(--safe-top) + var(--hero-h) + 4px); }
+}
+
+/* ------------------------------------------------------------------ Middling widths and the top-centre bars */
+/* Up to 1000 px wide the top centre belongs to the target frame and the Colossus bar: Home hangs under the map and the
+   slips start below it. */
+@media (min-width: 601px) and (min-height: 521px) and (max-width: 1000px) {
+  #app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button { right: var(--col); top: calc(var(--map-top) + var(--mm) + 10px) !important; }
+  #app #hud .tracker-panels, #app #hud #tracker-chip { top: calc(var(--map-top) + var(--mm) + 10px + max(40px, var(--b)) + 10px); }
+  #app .colossus-banner { width: min(400px, 36vw, calc(100vw - 2 * (var(--hero-w) + var(--edge) + 14px))); }
+}
+/* With a creature selected the target frame takes the top centre; the Colossus bar steps down under it. */
+@media (min-width: 601px) { #app.target-on .colossus-banner { top: calc(78px + var(--safe-top)); } }
+/* Desktop fishing: the cast / reel button stands clear above the skill tray. */
+@media (pointer: fine) and (min-width: 901px) and (min-height: 521px) {
+  #app #hud #reel-button { bottom: calc(132px + var(--safe-bottom)); }
+  #app #hud #fish-hint { right: 144px; bottom: calc(168px + var(--safe-bottom)); }
+}
+/* 360 px and narrower: the portrait tile steps aside (the satchel is the first dock button). Its level badge moves up
+   beside the name, and the energy count and the bars take the plate's whole width. */
+@media (orientation: portrait) and (max-width: 360px) {
+  #app #hud .avatar { display: none; }
+  #app #hud .player-card { grid-template-areas: "face name" "details details"; column-gap: 5px; padding-left: 8px; }
+  #app #hud .level-badge { position: static; height: 16px; min-width: 20px; box-shadow: none; }
+  #app #hud .player-name { padding-left: 0; height: 16px; line-height: 16px; }
+  #app #hud .player-details { width: var(--hero-in); }
+}
+
+/* ------------------------------------------------------------------ Modes (Rescue Call, Flag Rush, the Vault) */
+/* The map is away in every mode: Home takes the corner of its slot. */
+body.in-mode #app #hud .home-button { right: var(--col); top: var(--map-top) !important; }
+/* Indoors too: the way out stands where the map was. */
+body.indoors #app #hud .home-button { right: var(--col); top: var(--map-top) !important; }
+
+/* ------------------------------------------------------------------ Rescue Call */
+/* Its own panels use the right edge (the build panel) and the band under the top of the screen, and the map is away:
+   the dock lies down as a belt along the top instead, wrapping to short rows on phones. */
+body.in-rescue #app #hud .top-actions {
+  bottom: auto; display: flex; flex-wrap: wrap; direction: ltr; justify-content: flex-end; align-items: center; align-content: flex-start;
+  gap: calc(var(--dock) - var(--b)); row-gap: calc(var(--dock) - var(--b));
+  max-width: calc(100vw - var(--hero-w) - var(--edge) * 3 - var(--safe-left) - var(--safe-right));
+}
+/* Home goes under the belt, at the screen edge. */
+body.in-rescue #app #hud .home-button { right: calc(var(--edge) + var(--safe-right)); top: calc(var(--menu-bottom, 60px) + 8px) !important; }
+@media (orientation: portrait) and (max-width: 600px) {
+  body.in-rescue #app #hud .top-actions { max-width: max(48vw, calc(100vw - var(--hero-w) - var(--edge) * 2 - 6px)); }
+  /* Home stands under the hero plate, where the quest chips are in the village. */
+  body.in-rescue #app #hud .home-button { right: auto; left: calc(var(--edge) + var(--safe-left)); top: calc(var(--edge) + var(--safe-top) + var(--hero-h) + 8px) !important; }
+}
+/* Short landscape: the build panel leaves room for the paw (it used to leave 140 px for a 2 x 2 block). */
+@media (max-height: 500px) and (orientation: landscape) {
+  body.in-rescue #rescue-build, body.in-rescue[data-rescue-orient="portrait"] #rescue-build { right: calc(var(--safe-right) + 18px + var(--sk) * 3.66 + 8px); }
+}
+/* 360 px and narrower: How to play stays in Settings as before, so the dock is eight tiles; in a mode Home is the ninth. */
+@media (orientation: portrait) and (max-width: 360px) {
+  #app #hud .top-actions .secondary-icon { display: none; }
+  body.in-mode:not(.in-rescue) #app #hud .home-button { right: calc(var(--edge) + var(--safe-right)); top: calc(var(--menu-bottom, 360px) + 5px) !important; }
+}
+/* Phones: the quest chip is a pill only while it is one line; with the reward button under it, it is a small card. */
+@media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
+  #app #hud .quest-tracker:has(#quick-claim:not([hidden])) { border-radius: 16px; padding: 4px 26px 2px 5px; }
+  #app #hud .minimap > small { padding: 1px 3px 2px; }
+}
+
+/* Phones: the Colossus notice is a small chip at the top that opens on a tap, so it never covers the view. */
+@media (max-width: 600px) {
+  #app .colossus-banner { pointer-events: auto; cursor: pointer; }
+  #app .colossus-banner:not(.open) { right: auto; width: auto; padding: 4px; gap: 0; border-radius: 50%; }
+  #app .colossus-banner:not(.open) .cb-text, #app .colossus-banner:not(.open) .cb-pct { display: none; }
+  #app .colossus-banner:not(.open) .cb-icon { width: 36px; height: 36px; font-size: 20px; }
+}
+/* Opened by a tap, it shows everything, even while the guide keeps the banner folded. */
+@media (max-width: 600px) {
+  body #app #colossus-banner.open { max-width: none; }
+  body #app #colossus-banner.open small, body #app #colossus-banner.open .cb-meter { display: block; }
+  body #app #colossus-banner.open .cb-pct { display: inline; }
+}
+
+/* Desktop, with jumping on: the basic attack and Jump join the tray as its two left-hand buttons, each with its key and name. */
+@media (pointer: fine) and (min-width: 901px) and (min-height: 521px) {
+  body.air-combat #app #hud .skills .attack-pad, body.air-combat #app #hud .skills .jump-pad {
+    display: grid; place-items: center; position: relative; left: auto; right: auto; bottom: auto; flex: none; width: var(--sk); height: var(--sk); min-width: 0; padding: 0;
+    border-radius: 36%; border: 3px solid var(--cream); box-shadow: 0 0 0 2px var(--plum), 0 4px 0 2px rgba(58, 36, 51, .5); cursor: pointer;
+  }
+  body.air-combat #app #hud .skills .attack-pad { order: -2; background: linear-gradient(160deg, #ffd45a, #ff8a2a); }
+  body.air-combat #app #hud .skills .jump-pad { order: -1; background: linear-gradient(160deg, #8fe0ff, #2f9be6); }
+  body.air-combat #app #hud .skills .jump-pad[hidden] { display: none; }
+  body.air-combat #app #hud .skills .attack-pad > svg, body.air-combat #app #hud .skills .jump-pad > svg { width: 60%; height: 60%; pointer-events: none; }
+  body.air-combat #app #hud .skills .attack-pad::before, body.air-combat #app #hud .skills .jump-pad::before {
+    content: attr(data-key); position: absolute; top: -9px; right: -9px; min-width: 18px; padding: 0 4px; border-radius: 7px; background: var(--plum); border: 1.5px solid var(--cream);
+    color: var(--cream); font: 900 10px/16px var(--font); text-align: center;
+  }
+  body.air-combat #app #hud .skills .attack-pad::after, body.air-combat #app #hud .skills .jump-pad::after {
+    content: attr(data-label); position: absolute; left: 50%; top: calc(100% + 5px); translate: -50% 0; padding: 0 5px; border-radius: 7px; background: var(--cream); color: var(--plum);
+    box-shadow: 0 2px 0 rgba(58, 36, 51, .4); font: 900 10px/1.3 var(--font); white-space: nowrap; right: auto; bottom: auto; width: auto; height: auto;
+  }
+}

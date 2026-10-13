@@ -1,0 +1,200 @@
+/**
+ * The 🏆 leaderboard: two groups (this week, all time), a row of categories, the top 50 and the player's own rank pinned
+ * at the bottom. Online and signed in it reads GET api/ranking (server/ranking.mjs); in solo play (the static Pages
+ * build, or not signed in) it shows the neighbourhood board, the player and the AI neighbours (ranking-logic.ts soloBoard),
+ * so it is never empty. The rules live in ranking-logic.ts; this file is only the dialog.
+ *
+ * The dialog has two sections, Ranking and News. The News section is the news board's home (news-board.ts draws into
+ * `news.panel`); the unread count shows on the dock's Ranking button and on the News tab.
+ */
+// ranking.css is imported by main.ts (this module is a lazy chunk: its sheet must keep its place in the cascade)
+import type { GameBridge } from './game-bridge.ts';
+import { t, getLanguage, onLanguageChange } from './i18n.ts';
+import { FISH } from './model.ts';
+import { makeCast, parseStore } from './bot-logic.ts';
+import { activeSlot, neighboursKey } from './profiles.ts';
+import {
+  categoriesOf, profileTotals, advanceSoloWeek, soloWeekGains, soloBoard, weekEnds, weekStart, rankingReplyKind,
+  type Board, type BoardReply, type Category, type RankedEntry, type SoloWeekState,
+} from './ranking-logic.ts';
+
+const CATEGORY: Record<Category, [string, string]> = {
+  exp: ['✨', 'EXP earned'], harvest: ['🌾', 'Harvests'], fish: ['🐟', 'Fish caught'], kills: ['⚔️', 'Creatures defeated'],
+  boss: ['👑', 'Bosses defeated'], level: ['⭐', 'Level'], big: ['🐳', 'Biggest fish'],
+};
+const BOARDS: Array<[Board, string, string]> = [['weekly', '📅', 'This week'], ['all', '🌏', 'All time']];
+export type Section = 'ranking' | 'news';
+/** Icon, kicker and title of the dialog header, and the tab label, per section. */
+export const SECTIONS: Record<Section, { icon: string; kicker: string; title: string; tab: string }> = {
+  ranking: { icon: '🏆', kicker: 'CLIMB THE RANKS', title: 'Leaderboard', tab: 'Ranking' },
+  news: { icon: '📰', kicker: 'WHAT IS NEW IN ZOO GARDEN', title: 'News board', tab: 'News' },
+};
+/** The count as the badges show it: nothing for none, "9+" past nine. */
+export const badgeText = (count: number) => count > 9 ? '9+' : count > 0 ? String(Math.floor(count)) : '';
+/** Neighbours in the solo board: as many as bots.ts walks around (its COUNT). */
+const NEIGHBOURS = 5;
+const read = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
+const write = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* the week starts again next visit */ } };
+const weekKeyFor = () => `cute-game-ranking-week-v1-slot${activeSlot() + 1}`;
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') => { const node = document.createElement(tag); if (className) node.className = className; if (text) node.textContent = text; return node; };
+// Header of the native panels as in the bottom-sheet panels: icon tile, kicker, title. Kept local so each file loads standalone.
+const headerParts = (icon: string, kicker: string, heading: HTMLElement) => { const tile = el('span', 'social-icon', icon); tile.setAttribute('aria-hidden', 'true'); const text = el('div', 'social-title'); text.append(el('span', 'social-kicker eyebrow', t(kicker)), heading); return [tile, text]; };
+
+export const formatSize = (cm: number) => cm >= 100 ? `${(cm / 100).toFixed(2).replace(/\.?0+$/, '')} m` : `${cm} cm`;
+/** The number a row shows for its category. */
+export function formatValue(entry: Pick<RankedEntry, 'value' | 'fish' | 'level'>, cat: Category, lang = getLanguage()) {
+  const number = (n: number) => Math.floor(n).toLocaleString(lang === 'vi' ? 'vi-VN' : 'en-US');
+  if (cat === 'level') return t('Lv {level}', { level: entry.level });
+  if (cat === 'big') return `${formatSize(entry.value)}${entry.fish && FISH[entry.fish] ? ` · ${t(FISH[entry.fish].name)}` : ''}`;
+  if (cat === 'exp') return `${number(entry.value)} EXP`;
+  return number(entry.value);
+}
+function untilReset(now: number) {
+  const left = Math.max(0, weekEnds(now) - now), hours = Math.floor(left / 3_600_000), minutes = Math.floor(left / 60_000) % 60;
+  return hours >= 24 ? t('{days}d {hours}h', { days: Math.floor(hours / 24), hours: hours % 24 }) : t('{hours}h {minutes}m', { hours, minutes });
+}
+
+export function initRanking(game: GameBridge) {
+  const staticHost = import.meta.env.VITE_STATIC_HOST === 'true';
+  let section: Section = 'ranking', unreadNews = 0, board: Board = 'weekly', cat: Category = 'exp', reply: BoardReply | null = null, status: 'loading' | 'error' | 'ready' = 'loading', solo = staticHost, request = 0;
+  /** No game server behind this page (the Vite dev server, a static host): learnt from the first reply, kept for the session. */
+  let noServer = staticHost;
+  /** The static (Pages) build knows the owner's server address (VITE_ONLINE_URL, set as the repository variable ONLINE_URL): while that PC server is on, its real-player list is shown. */
+  const remote = staticHost ? String(import.meta.env.VITE_ONLINE_URL || '').replace(/\/+$/, '') : '';
+  let serverOff = false, preferLocal = false;
+
+  // ---- The player's own weekly gains in solo play: a snapshot of lifetime totals, moved on now and then ----
+  let week: SoloWeekState | null = null;
+  try { week = JSON.parse(read(weekKeyFor()) ?? 'null'); } catch { week = null; }
+  const snapshot = () => { try { week = advanceSoloWeek(week, profileTotals(game.getState()), Date.now()); write(weekKeyFor(), JSON.stringify(week)); } catch { /* no state yet */ } };
+  snapshot(); window.setInterval(() => { if (!document.hidden) snapshot(); }, 60_000);
+
+  function localBoard(): BoardReply {
+    snapshot();
+    const state = game.getState(), now = Date.now(), seed = parseStore(read(neighboursKey()), 0x5eed).seed;
+    return soloBoard(state, soloWeekGains(week!, profileTotals(state)), makeCast(seed, NEIGHBOURS), seed, board, cat, now);
+  }
+
+  // ---- The dialog ----
+  const dialog = el('dialog', 'social-dialog ranking-dialog'); dialog.id = 'ranking-dialog';
+  const header = el('header', 'social-header'), heading = el('h2'), close = el('button', 'social-close', '✕');
+  const [tile, titleBox] = headerParts(SECTIONS.ranking.icon, SECTIONS.ranking.kicker, heading), kicker = titleBox.firstElementChild!;
+  close.type = 'button'; close.addEventListener('click', () => dialog.close()); header.append(tile, titleBox, close); dialog.addEventListener('keydown', event => { if (event.key === 'Escape' && dialog.open) { event.preventDefault(); dialog.close(); } });
+  const sections = el('nav', 'ranking-sections'), newsPanel = el('div', 'ranking-news'), newsListeners = new Set<() => void>(); newsPanel.hidden = true;
+  const tabs = el('nav', 'ranking-tabs'), chips = el('nav', 'ranking-cats'), hint = el('p', 'ranking-hint'), list = el('ol', 'ranking-list'), mine = el('footer', 'ranking-mine');
+  list.setAttribute('aria-live', 'polite');
+  dialog.append(header, sections, tabs, chips, hint, list, mine, newsPanel); document.body.append(dialog);
+  dialog.addEventListener('click', event => { if (event.target === dialog) { const r = dialog.getBoundingClientRect(), e = event as MouseEvent; if (e.clientX && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) dialog.close(); } });
+
+  const button = (label: string, action: () => void, className = '') => { const node = el('button', className, label); node.type = 'button'; node.addEventListener('click', action); return node; };
+  function row(entry: RankedEntry, me: boolean) {
+    const item = el('li', `ranking-row${entry.rank <= 3 ? ' top' : ''}${me ? ' me' : ''}`);
+    const place = el('span', 'ranking-place', ['🥇', '🥈', '🥉'][entry.rank - 1] ?? `#${entry.rank}`);
+    const who = el('span', 'ranking-who'), name = el('b', '', entry.name), dot = el('i', 'ranking-dot');
+    if (entry.color) dot.style.background = entry.color;
+    name.prepend(dot); if (me) name.append(el('span', 'ranking-you', t('You')));
+    who.append(name, el('small', '', `${t('Lv {level}', { level: entry.level })}${entry.bot ? ` · ${t('neighbour')}` : ''}`));
+    item.append(place, who, el('strong', 'ranking-value', entry.value > 0 ? formatValue(entry, cat) : '—'));
+    return item;
+  }
+  function render() {
+    const look = SECTIONS[section], onNews = section === 'news';
+    tile.textContent = look.icon; kicker.textContent = t(look.kicker); heading.textContent = t(look.title); close.setAttribute('aria-label', t('Close the leaderboard')); dialog.setAttribute('aria-label', t(look.title));
+    sections.setAttribute('aria-label', t('Ranking and news'));
+    sections.replaceChildren(...(Object.keys(SECTIONS) as Section[]).map(id => {
+      const b = button(`${SECTIONS[id].icon} ${t(SECTIONS[id].tab)}`, () => { if (section !== id) show(id); }); b.dataset.section = id; b.setAttribute('aria-pressed', String(section === id));
+      if (id === 'news' && unreadNews > 0) { const badge = el('i', 'news-count', badgeText(unreadNews)); badge.setAttribute('aria-hidden', 'true'); b.append(badge); b.setAttribute('aria-label', `${t(SECTIONS[id].tab)} · ${t('{n} unread news', { n: unreadNews })}`); }
+      return b;
+    }));
+    for (const node of [tabs, chips, list]) node.hidden = onNews;
+    newsPanel.hidden = !onNews;
+    if (onNews) { hint.hidden = true; mine.hidden = true; return; }
+    tabs.replaceChildren(...BOARDS.map(([id, icon, label]) => { const b = button(`${icon} ${t(label)}`, () => { if (board === id) return; board = id; cat = categoriesOf(id)[0]; void load(); }); b.setAttribute('aria-pressed', String(board === id)); return b; }));
+    chips.replaceChildren(...categoriesOf(board).map(id => { const [icon, label] = CATEGORY[id], b = button(`${icon} ${t(label)}`, () => { if (cat === id) return; cat = id; void load(); }); b.setAttribute('aria-pressed', String(cat === id)); return b; }));
+    const now = Date.now();
+    hint.textContent = board === 'weekly' ? t('Week from Monday {date} · resets in {time}. The weekly score is what you gained since the week began.', { date: new Date(weekStart(now)).toISOString().slice(0, 10).split('-').reverse().join('/'), time: untilReset(now) }) : '';
+    hint.hidden = board !== 'weekly';
+    list.replaceChildren(); mine.replaceChildren(); mine.hidden = true;
+    if (status === 'loading') { list.append(el('li', 'ranking-empty', `⏳ ${t('Loading the leaderboard…')}`)); return; }
+    if (status === 'error' || !reply) {
+      const box = el('li', 'ranking-empty'); box.append(el('p', '', `📴 ${t('The leaderboard could not be loaded. Check your connection.')}`));
+      const acts = el('div', 'ranking-actions'); acts.append(button(t('Try again'), () => void load(), 'social-primary'), button(t('Show the neighbourhood board'), () => { solo = true; void load(); }));
+      box.append(acts); list.append(box); return;
+    }
+    const meId = reply.me?.id;
+    if (!reply.top.length) { const box = el('li', 'ranking-empty'); box.append(el('p', '', t('Nobody is on this board yet.')), el('small', '', t('Be the first!'))); list.append(box); }
+    for (const entry of reply.top) list.append(row(entry, entry.id === meId));
+    if (reply.remote) {
+      const note = el('li', 'ranking-note', t('Real players on the online server. Open "Play online with friends" on the title screen to join the board.'));
+      note.append(' ', button(t('Show the neighbourhood board'), () => { preferLocal = true; void load(); }, 'ranking-link')); list.append(note);
+    } else if (reply.solo) {
+      list.append(el('li', 'ranking-note', `${t('Neighbourhood board: you and the neighbours who live nearby.')}${remote ? ' ' + (serverOff ? t('The online server is off right now.') : t('Showing the neighbourhood board.')) : noServer ? '' : ' ' + t('Sign in under Play together to join the server leaderboard.')}`));
+      if (remote && preferLocal) { const again = el('li', 'ranking-note'); again.append(button(t('Try the online server board'), () => { preferLocal = false; serverOff = false; void load(); }, 'ranking-link')); list.append(again); }
+    } else list.append(el('li', 'ranking-note', t('Server leaderboard · refreshed about every minute')));
+    if (reply.me) {
+      const [, label] = CATEGORY[cat];
+      mine.hidden = false;
+      mine.append(el('span', '', `${t('Your rank ({category})', { category: t(label) })}: `), el('b', '', reply.me.rank ? `#${reply.me.rank}` : t('not ranked yet')), el('span', '', ` / ${t('{count} players', { count: reply.players })}`));
+      if (reply.me.rank) mine.append(el('em', '', formatValue({ value: reply.me.value, level: reply.top.find(e => e.id === meId)?.level ?? game.getState().level, fish: reply.top.find(e => e.id === meId)?.fish }, cat)));
+    }
+  }
+  async function load() {
+    const ticket = ++request;
+    if (remote && !preferLocal) {
+      status = 'loading'; render();
+      const abort = new AbortController(), timer = window.setTimeout(() => abort.abort(), 5000);
+      try {
+        const response = await fetch(`${remote}/api/ranking?board=${board}&cat=${cat}`, { credentials: 'omit', cache: 'no-store', headers: { Accept: 'application/json', 'ngrok-skip-browser-warning': '1' }, signal: abort.signal });
+        if (response.ok && /json/i.test(response.headers.get('content-type') ?? '')) {
+          const data = await response.json() as BoardReply;
+          if (ticket !== request) return;
+          if (Array.isArray(data.top)) { serverOff = false; reply = { ...data, me: undefined, remote: true, solo: false }; status = 'ready'; render(); return; }
+        }
+      } catch { /* the server is off: the neighbourhood board below */ } finally { clearTimeout(timer); }
+      if (ticket !== request) return;
+      serverOff = true;
+    }
+    if (solo) { reply = localBoard(); status = 'ready'; render(); return; }
+    status = 'loading'; render();
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL}api/ranking?board=${board}&cat=${cat}`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
+      const kind = rankingReplyKind(response.status, response.headers.get('content-type'));
+      if (ticket !== request) return;
+      // No API here (dev server or static host): the neighbourhood board, at once and from now on.
+      if (kind === 'absent' || kind === 'down') { if (kind === 'absent') noServer = true; solo = true; reply = localBoard(); status = 'ready'; render(); return; }
+      if (kind === 'error') throw new Error(String(response.status));
+      const data = await response.json() as BoardReply;
+      if (ticket !== request) return;
+      // Not signed in: the server board has no place for this player, so show the neighbourhood instead.
+      if (!data.me) { solo = true; reply = localBoard(); } else reply = data;
+      status = 'ready';
+    } catch { if (ticket !== request) return; status = 'error'; reply = null; }
+    render();
+  }
+  /** Shows a section. Ranking asks for the board again, as opening always did; News tells the news board to draw itself. */
+  function show(next: Section) {
+    section = next;
+    if (next === 'ranking' && !noServer) solo = false;
+    render(); if (!dialog.open) dialog.showModal();
+    if (next === 'ranking') void load(); else { newsPanel.scrollTop = 0; for (const listener of newsListeners) listener(); }
+  }
+  const open = () => show('ranking');
+
+  const trigger = document.querySelector<HTMLButtonElement>('#hud [data-action="ranking"]');
+  trigger?.addEventListener('click', open);
+  const count = trigger?.querySelector<HTMLElement>('.news-count');
+  const label = () => {
+    if (trigger) { trigger.title = t('Ranking and news'); trigger.setAttribute('aria-label', unreadNews ? `${t('Ranking and news')} · ${t('{n} unread news', { n: unreadNews })}` : t('Ranking and news')); }
+    if (dialog.open) render();
+  };
+  label(); onLanguageChange(label);
+  /** The news board's side of the dialog (news-board.ts NewsHost). */
+  const news = {
+    panel: newsPanel as HTMLElement,
+    open: () => show('news'),
+    shown: () => dialog.open && section === 'news',
+    setUnread(n: number) { if (n === unreadNews) return; unreadNews = n; if (count) { count.hidden = n <= 0; count.textContent = badgeText(n); } label(); },
+    onShown(listener: () => void) { newsListeners.add(listener); },
+  };
+  return { open, close: () => dialog.close(), news };
+}

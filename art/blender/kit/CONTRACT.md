@@ -1,0 +1,919 @@
+# Zoo Garden kit contract
+
+The game places these models at fixed positions with fixed collision circles
+(`src/world.ts`). A replacement must stay inside its footprint or the player
+will clip through it or get stuck. Blender is Z up with the front facing -Y;
+the glTF files are Y up with the front facing +Z. The origin is the ground
+centre and 1 unit is 1 metre.
+
+Shared look: `style.py` (palette, glossy materials, bevels, export, preview camera).
+
+## Village props (`build_props.py` → `public/assets/models/<file>.glb`)
+
+One joined mesh per file. Material names are free, but keep them stable.
+
+| File | Game entity | Max footprint (x × y), height | Triangle budget |
+| --- | --- | --- | ---: |
+| `cottage.glb` | home, collision r 2.7 | walls r ≤ 2.7, roof r ≤ 3.7, porch front ≤ 3.4; h ≤ 6.5 | 9,000 |
+| `market-stall.glb` | sell, r 1.7 | 3.2 × 2.0; h ≤ 2.9 | 5,000 |
+| `equipment-stall.glb` | shop, r 1.7 | 3.2 × 2.0; h ≤ 2.9 | 5,000 |
+| `garden-bed.glb` | plot (33 copies) | 2.12 × 2.12; h ≤ 0.34 | 900 |
+| `wishing-crystal.glb` | upgrade, r 1.4 | r ≤ 1.35; h ≤ 3.2 | 2,500 |
+| `storage-chest.glb` | chest, r 0.6 | 1.3 × 0.85; h ≤ 1.1 | 1,200 |
+| `workshop.glb` | craft, r 1.1 | 2.4 × 1.8; h ≤ 2.6 | 4,000 |
+| `kitchen.glb` | cook, r 1.0 | r ≤ 1.1; h ≤ 1.6 | 2,500 |
+| `well.glb` | scenery, r 1.2 | r ≤ 1.15; h ≤ 2.9 | 3,000 |
+| `rocket.glb` | travel, r 1.5 | pad r ≤ 2.7, body r ≤ 1.0; h ≤ 5.2 | 4,000 |
+
+Garden bed: the soil top sits at z 0.22 and the frame top at about z 0.30.
+Crops stand at (±0.4, ±0.4), so leave that area clear and run two soil ridges
+along X at y = ±0.4.
+
+## Scenery (`build_nature.py` → `public/assets/models/scenery.glb`)
+
+One GLB with one top-level mesh node per piece, each with its origin at its
+own ground centre. The game batches hundreds of copies by material, so pieces
+share materials by name. Runtime recolouring for other planets depends on
+these material names.
+
+| Node | Materials | Size | Triangles |
+| --- | --- | --- | ---: |
+| `tree_blossom` | `Bark`, `Blossom A`, `Blossom B` | h ≈ 3.6, canopy r ≈ 1.6 | ≤ 600 |
+| `tree_round` | `Bark`, `Leaf A`, `Leaf B` | h ≈ 3.6, canopy r ≈ 1.6 | ≤ 600 |
+| `tree_pine` | `Bark`, `Pine A`, `Pine B` | h ≈ 3.8, r ≈ 1.3 | ≤ 400 |
+| `bush` | `Leaf A`, `Leaf B`, `Berry` | r ≈ 0.6 | ≤ 300 |
+| `flowers` | `Stem`, `Petal *`, `Flower centre` | r ≈ 0.35 | ≤ 250 |
+| `tuft` | `Grass` | h ≈ 0.4 | ≤ 40 |
+| `rock` | `Rock` | r ≈ 0.8 | ≤ 120 |
+| `stone_step` | `Step stone` | r ≈ 0.4, h ≤ 0.08 | ≤ 60 |
+| `fence` | `Fence post`, `Fence rail` | posts at x = ±1.0, rails at z 0.4 and 0.8, h 1.0 | ≤ 150 |
+| `gate` | `Fence post`, `Fence rail`, `Sign` | posts at x = ±1.7, h 3.1 | ≤ 300 |
+| `mushroom` | `Mushroom cap`, `Mushroom spots`, `Mushroom stem` | h ≈ 0.35 | ≤ 120 |
+
+The October tree refinement exposes round-tree forks and pine trunks, with uneven
+crowns and tier edges. Round trees use 554 triangles (previously 578), pines 358
+(previously 360); blossom trees stay at 598. Materials and the ground origin,
+height and collision envelope are preserved. `scenery.glb` is 84,676 bytes.
+The runtime still merges each tree into one vertex-colored part and instances
+it by tile. Subtle stable warm/cool shades outside the village use instance
+colors, including in the occluder fade, without extra materials or textures.
+
+## Crops (`build_nature.py` → `public/assets/models/crops.glb`)
+
+Nodes `crop_sprout` plus `crop_<id>` for every crop id below. Each mature crop
+fits 0.7 × 0.7, stands at most 0.9 tall on z 0 and uses at most 520
+triangles: at most 400 for the plant plus its face. Every mature crop is a
+little character: `crop_face.py` paints a face (two oval eyes with a white
+sparkle, pink blush, a smile; ~54 triangles, the shared materials `Crop face
+ink`, `Crop face shine` and `Crop face blush`, which do not count toward the
+2–7 plant materials) on the body facing the game camera, two on berries and
+peppers, and gives leafless bodies a two-leaf sprout of hair (`CROP_FACES` in
+`build_nature.py`). The fruit trees in `fruit_crops.glb` keep their tree look;
+their fruit get the same faces (`FRUIT_FACES` in `build_fruit_crops.py`). In
+the game a ripe crop is drawn about as tall as its bed is wide
+(`CROP_BOOST` in `src/crop-cards.ts`). Icons are rendered to
+`public/assets/icons/crops/<id>.webp`.
+
+`radish carrot pumpkin mint chili candy bean star berry coffee moonflower
+magnetmelon melon clover glowshroom iceberry goldcorn dragonfruit rainbowrose`
+
+## Fishing kit (`build_fish.py` → `public/assets/models/fish.glb`)
+
+The fish swim in the 3D ponds (`src/fishing-view.ts`), so this kit follows
+different rules from the rest of the file. Fish are not placed on the ground:
+each model's origin is its **centre of mass** (the swim pivot), and the game
+keeps it just under the water surface. Heads face Blender -Y (glTF +Z), and up
+is +Z (glTF +Y). 1 unit is 1 metre, at scale 1.
+
+One GLB holds one top-level **empty per catalogue id**, named exactly the id
+(`fish_perch` … `fish_manta`, `boot`) and placed at the origin. Its children
+are:
+
+- `<id>_body`: a mesh with several materials.
+- `<id>_tail` (real fish only; the boot has none): exactly **one material**,
+  so it exports as a single primitive. Its rotation is zero and its origin is
+  the tail hinge. The game wags it with `tail.rotation.y`, about the vertical
+  axis. Every tail root sits on the hinge axis (the eel's sits inside a joint
+  ellipsoid), so a swing of ±0.6 rad never opens a gap. The manifest's `wag`
+  gives a comfortable swing per species.
+
+Budgets: at most 450 triangles per fish, tail included, with the tail itself
+at most 80. The boot allows 250. Sizes are the longest extent at scale 1:
+small 0.45–0.55, medium 0.6–0.75, big 0.8–1.1.
+
+Materials are named `Fish <id without fish_> <part>` (for example
+`Fish koi patch`), plus the shared `Fish eye` and `Fish eye white`. There are
+no textures or UVs, and every material is single sided because all parts are
+closed shapes. Roughness is 0.18–0.6. Metallic is 0 everywhere except the
+golden fish (at most 0.3).
+
+Emissive materials:
+
+- `Fish angler lure` at strength 3 (exported as
+  `KHR_materials_emissive_strength`).
+- `Fish golden body/belly/fin/crown` at 0.25–0.45.
+- `Fish jelly bell/rim/inner/tentacle` at 0.3–0.6, which makes the jelly look
+  translucent while staying opaque.
+
+| Node | Size | Triangles (body + tail) | Tail material | Tail is |
+| --- | --- | ---: | --- | --- |
+| `fish_perch` | small, 0.50 | 402 + 22 | `Fish perch fin` | forked fin |
+| `fish_clown` | small, 0.45 | 394 + 18 | `Fish clown fin` | round fin |
+| `fish_puffer` | small, 0.46 | 418 + 18 | `Fish puffer fin` | round fin |
+| `fish_carp` | medium, 0.66 | 406 + 22 | `Fish carp fin` | forked fin |
+| `fish_shark` | big, 0.97 | 374 + 26 | `Fish shark fin` | crescent, big upper lobe |
+| `fish_rainbow` | small, 0.52 | 338 + 22 | `Fish rainbow fin` | forked fin |
+| `fish_catfish` | big, 0.87 (whiskers 0.70 wide) | 422 + 18 | `Fish catfish fin` | round fin |
+| `fish_koi` | medium, 0.68 | 404 + 22 | `Fish koi fin` | forked fin |
+| `fish_eel` | big, 1.04 | 334 + 64 | `Fish eel body` | rear third of the body |
+| `fish_swordfish` | big, 1.02 | 396 + 26 | `Fish swordfish sail` | crescent |
+| `fish_jelly` | small, 0.49 | 342 + 75 | `Fish jelly tentacle` | five tentacles |
+| `fish_icepike` | medium, 0.73 | 424 + 22 | `Fish icepike fin` | forked fin |
+| `fish_whale` | big, 0.95 | 376 + 26 | `Fish whale body` | horizontal flukes |
+| `fish_kraken` | big, 0.83 | 338 + 75 | `Fish kraken body` | five tentacles |
+| `fish_golden` | medium, 0.61 | 392 + 48 | `Fish golden fin` | double fantail |
+| `fish_sunfish` | big, 0.89 | 408 + 22 | `Fish sunfish fin` | clavus |
+| `fish_angler` | medium, 0.69 | 415 + 18 | `Fish angler fin` | round fin |
+| `fish_manta` | big, 1.00 wide | 318 + 15 | `Fish manta body` | whip tail |
+| `boot` | 0.36 long, 0.33 tall | 236 | none | none |
+
+A few species are posed or built differently:
+
+- `fish_sunfish` basks on its side, rolled 85° about its length with its right
+  side up, as ocean sunfish do. The round body then reads from the high camera
+  and fits a shallow pond. Its icon shows it upright.
+- `fish_jelly` tilts its bell 6° forward. The oral arms and tentacles stream
+  back at skirt height instead of hanging down.
+
+Heights matter because the game's pond is shallow: the bed sits about 0.13
+under the surface. `art/generated/kit/fish-manifest.json` lists, per fish:
+
+- `body_top`: the top of the body above the centre.
+- `depth.body_under`: the centre depth that keeps the body submerged; fins may
+  still break the surface, which suits the shark and swordfish.
+- `display_scale`: a suggested scale for the game's zoom.
+- The tail hinge, in Blender and glTF coordinates.
+
+### Pond dressing (same GLB)
+
+Each piece is a single top-level mesh at the origin, with its origin at the
+waterline or ground.
+
+| Node | Materials | Size | Triangles | Origin |
+| --- | --- | --- | ---: | --- |
+| `bobber` | `Bobber red`, `Bobber white` | 0.13 wide, 0.20 tall (z −0.066 to 0.134) | 162 | waterline: the white half sits below it, the red half above; the line anchor is the antenna tip at z 0.134 (glTF y) |
+| `lily_pad` | `Lily pad` | r ≈ 0.35 with a narrow notch, top at z 0.014–0.019 | ≤ 60 | water surface |
+| `lily_flower` | `Lily flower`, `Lily centre` | ≈ 0.18 wide, 0.08 tall | ≤ 240 | flower base (its lowest point): set it on a pad (+0.016) or on the water |
+| `reeds` | `Reed stem`, `Reed head` | four cattails and three leaves, h ≈ 0.89 | ≤ 150 | ground |
+
+Icons: `public/assets/icons/fish/<id>.webp` are 160 × 160, transparent, 3/4
+view, each under 10 KB.
+
+## Explorer and gear (`hero_spec.py`)
+
+The explorer and everything worn or held share one space: Blender Z up, the
+explorer faces -Y (glTF +Z), metres, standing at the origin with arms hanging
+straight down. `hero_spec.py` holds the pivots and the body envelope, and
+`build_proxy_hero()` builds a stand-in for fitting until `hero.glb` exists.
+
+### `hero.glb` (`build_hero.py`)
+
+One root node `hero` at the origin. Its children are mesh objects whose
+**origins are the pivots** in `hero_spec.PIVOTS`: `body`, `head`, `arm-left`,
+`arm-right`, `leg-left`, `leg-right`. `arm-left` and `arm-right` each contain an
+empty, `hand-left` / `hand-right`, at `hero_spec.HANDS`. `head` contains a
+separate child mesh `head-leaf` (the sprout; hidden while a hat is worn). Keep
+object names on the mesh data too (`obj.data.name = obj.name`).
+
+Materials: `Hero skin`, `Hero hair`, `Hero shirt` (recoloured to the player's
+colour at runtime), `Hero shirt shade` (darkened player colour), `Hero pants`,
+`Hero shoe`, `Hero eye`, `Hero blush`, `Hero bag`, `Hero leaf`. At most 3,500
+triangles and 200 KB. Stay inside the envelope so gear fits.
+
+### Gear GLBs
+
+| File | Generator | Items | Default part | Triangles per item |
+| --- | --- | --- | --- | ---: |
+| `gear-wear.glb` | `build_wear.py` | 19 hats, 17 outfits, 5 boots | hats `head`, outfits `body` | hat 700, outfit 1,400, boots pair 600 |
+| `gear-weapons.glb` | `build_weapons.py` | 19 weapons | `hand-right` | 900 |
+| `pets.glb` | `build_weapons.py` | 7 pets | none (follows the explorer) | 1,500 |
+| `disguises.glb` | `build_hero.py` | 10 disguises | per piece | 2,500 |
+
+Each item is one top-level node named exactly the item id, at the origin with
+no transform. Inside it, every mesh object is modelled **in explorer space** at
+its worn position, and its name ends with `@<part>`, the hero part it follows:
+`@head`, `@body`, `@arm-left`, `@arm-right`, `@leg-left`, `@leg-right` or
+`@hand-right` (for example `hat_wizard@head`, `boots_cowboy_l@leg-left`,
+`armor_knight_sleeve_r@arm-right`). Untagged meshes use the default part. Boots
+always come as a left and a right piece. Outfits may add sleeves on the arms
+and wings or capes on the body. Disguises are costumes worn over the explorer:
+a head piece, a body piece and optional arm, leg and extra pieces.
+
+Weapons are gripped at `hand-right` `(0.37, -0.05, 0.72)`; the game parents
+them to that empty and may turn the wrist. Swords, hammers, scythes and the
+trident point forward (-Y), raised about 20°. Blasters point level forward.
+The staff stands upright in the fist, and the bow is held upright in front of
+the fist. Empties mark where effects start: `muzzle` for every blaster, bow and
+staff, and `rod-tip` at the end of each fishing rod.
+
+Pets are modelled standing at the origin (flying pets centred at z 0.5), 0.5–0.9
+tall, facing -Y. The game places them beside the explorer.
+
+### Item icons
+
+`public/assets/icons/items/<id>.webp`: 160 × 160, transparent, 3/4 view,
+under 8 KB, for every weapon, hat, outfit, boots, pet and disguise and for the
+non-equipment items (materials, seeds, foods, fertilizer, spore, worm bait and
+the garden bed kit). Worn gear is shown on its own; disguises are shown worn by
+the explorer. Crops and fish keep their own folders, cooked foods reuse the
+raw item's icon, and decorations are drawn by the game.
+
+### Weapons and pets (`build_weapons.py`)
+
+`gear-weapons.glb` holds 19 weapon nodes. Each has one child mesh,
+`<id>@hand-right`, with its vertices already in explorer space, so it must be
+attached to `hand-right` without moving it. Materials are named
+`Weapon <id> <part>`. They are single sided, with no textures or UVs.
+
+- **Held poses.** Swords, hammers, the scythe and the trident point forward,
+  raised 20°. Rods are raised 50° and are 1.8 long. Blasters are level. The
+  staff and the bow are upright in the fist but lean 19° out (+X), plus 9°
+  (staff) or 6° (bow) forward.
+- **Head clearance.** The head hangs only about 0.3 above the fist, so the
+  build fails if any weapon comes within 0.60 of `HEAD_CENTRE` below it, or
+  within `HAIR_RADIUS` above it. For the same reason, blasters keep their tall
+  parts forward of the grip.
+- **Handles.** Every handle axis passes through the grip point (distance 0),
+  and the handle surface is within 0.04–0.06 of it.
+- **Effect empties.** `muzzle` sits on the 5 blasters, the bow and the staff,
+  and `rod-tip` on both rods. The names are exact: the build strips Blender's
+  `.001` suffixes in the GLB. The empties have no rotation, so shots travel
+  along the explorer's facing.
+- **Glow.** Emissive strengths, exported as `KHR_materials_emissive_strength`:
+  - lava magma 3.0
+  - fire staff flame core 3.0, flame 2.6, gem 2.2
+  - obsidian edge 2.4
+  - thunder bolt 2.2
+  - rainbow emitter 1.6, rainbow bands 0.45
+  - bow star 1.2, bow string 0.6
+  - moon scythe edge 1.2, moon 1.0, gem 0.8, craters 0.5
+  - crystal sword crystal 1.1, crystal light 0.9, violet crystal 0.7
+  - golden rod tip 1.0, gem 0.9
+  - ice crystal 0.8
+  - bubble tank 0.35
+
+| Weapon | Tris | Effect empty (glTF x, y, z) |
+| --- | ---: | --- |
+| `sword_wood`, `sword_tusk`, `sword_crystal`, `sword_candy` | 624, 768, 356, 828 | none |
+| `sword_lava`, `sword_obsidian` | 628, 462 | none |
+| `hammer_thunder`, `toy_hammer`, `scythe_moon`, `trident` | 548, 808, 824, 888 | none |
+| `gun_pea`, `gun_bubble`, `gun_spike` | 856, 736, 778 | `muzzle` (0.37, 0.955, 0.65 / 0.67 / 0.54) |
+| `gun_ice`, `blaster_rainbow` | 884, 844 | `muzzle` (0.37, 0.955, 0.75 / 0.71) |
+| `bow_star` | 624 | `muzzle` (0.419, 0.853, 0.144), the arrow rest |
+| `staff_fire` | 630 | `muzzle` (0.702, 1.673, 0.201), the gem |
+| `rod`, `rod_gold` | 848, 872 | `rod-tip` (0.37, 1.884 / 1.889, 1.027 / 1.031) |
+
+`pets.glb` holds 7 pet nodes, each with a child mesh `<id>_body`. Pets stand at
+the origin and face -Y (glTF +Z). Materials are named `Pet <id> <part>`.
+
+The three flyers also carry `<id>_wing_l` and `<id>_wing_r`. Each wing has one
+material, no rotation, and its origin at the wing root; `_r` is on +X, like
+`hand-right`. To flap, rotate the wings about their forward axis, with opposite
+signs: `wing_r.rotation.z = +a` and `wing_l.rotation.z = -a` raise both, and a
+swing of about ±0.6 rad reads as a flap.
+
+Pet glow: firefly glow 2.6, firefly antenna tips 1.5, firefly wings 0.25, robot
+screen 1.8, robot antenna light 1.6.
+
+| Pet | Tris | Height | Notes |
+| --- | ---: | ---: | --- |
+| `pet_robot` | 1,398 | 0.85 | walks; glowing screen face |
+| `pet_parrot` | 1,440 | 0.69 | flies, centre z 0.50; wing roots (±0.11, 0.54, -0.04) glTF |
+| `pet_turtle` | 1,268 | 0.53 | walks |
+| `pet_sheep` | 1,408 | 0.62 | walks; cloud wool |
+| `pet_firefly` | 1,420 | 0.65 | flies, centre z 0.53; wing roots (±0.06, 0.51, -0.06) glTF |
+| `pet_dragon` | 1,414 | 0.68 | flies, centre z 0.52; wing roots (±0.10, 0.50, -0.10) glTF |
+| `bunny` | 1,300 | 0.71 | walks; mochi body |
+
+Per-item bounds, triangles, materials, grip distances and head clearance are in
+`art/generated/kit/weapons-manifest.json`.
+
+### Hero and disguises (`build_hero.py`)
+
+`hero.glb` node tree (glTF translations, relative to the parent):
+
+```
+hero (0, 0, 0)
+  body      (0, 0.85, 0)
+  head      (0, 1.12, 0)       └ head-leaf (0, 1.05, -0.02)   origin = stem base (Blender 0, 0.02, 2.17)
+  arm-left  (-0.37, 1.08, -0.02) └ hand-left  (0, -0.36, 0.07)
+  arm-right (0.37, 1.08, -0.02)  └ hand-right (0, -0.36, 0.07)
+  leg-left  (-0.18, 0.52, 0)
+  leg-right (0.18, 0.52, 0)
+```
+
+About 3,300 triangles and 79 KB, with exactly the ten `Hero …` materials. The
+default shirt is `#4AA8FF` (`COLORS[0]`) and the shade is 72 % of it. The eye
+highlights and the backpack patch use `Hero pants` (cream), and the smile uses
+`Hero eye`, so tinting `Hero pants` also tints those. The arms hang straight
+down in the file; previews and icons use the game's 0.3 rad rest splay. Where the
+real surfaces sit, for gear makers (the build fails past 2 cm outside the envelope):
+
+- Hair ≤ 0.619 from `HEAD_CENTRE`. The fringe tips reach z ≈ 1.70–1.76 at the
+  front, the side locks z ≈ 1.38 and the nape z ≈ 1.21. Eyes are centred at
+  (±0.21, z 1.585), 0.16 × 0.20, domed out to r 0.606.
+- Torso: 4–6 mm inside the envelope; the shirt hem band is +13 mm at
+  z 0.61–0.68; the front backpack straps are +12 mm at x ±0.19, z 0.74–1.12.
+- Backpack: pouch (0.38 × 0.18 × 0.42) at (0, 0.33, 0.895), with flap, pocket
+  and patch out to y 0.465 and z 0.675–1.11.
+- Arms: sleeve r ≤ 0.121, cuff r 0.118 at z 0.83. The hand is an ellipsoid at
+  (±0.37, -0.035, 0.728) with radii (0.112, 0.116, 0.12), plus a thumb toward
+  the body.
+- Legs: shorts cuff r 0.117 at z 0.418–0.565; skin r 0.083 at z 0.24–0.43. The
+  shoe is a lathe of (r, z) (0, 0) (0.075, 0) (0.112, 0.022) (0.128, 0.065)
+  (0.126, 0.13) (0.108, 0.195) (0.072, 0.24) (0, 0.258) around (±0.18, -0.08),
+  stretched × 1.15 along Y.
+
+`disguises.glb` has one node per id with identity-transform meshes in explorer
+space. Attach each mesh to the part named by its tag while the hero is at rest,
+e.g. three.js `part.attach(mesh)`, or subtract the part's pivot from its
+position. Every disguise hides the backpack: a covering box (ninja pack,
+spellbook, shield, jetpack, leafy wing mount, treasure chest), a cape, the dino
+hump or the snowball. Hide `head-leaf` while a disguise is worn (the hood, hat
+or snowball would be pierced), **except** `dz_fairy` (petal crown ring) and
+`dz_superhero` (mask only). The manifest has this as `hides_leaf`. Materials are
+named `Disguise <look> <part>`. Emissive: mecha glow 1.6, flame 1.2, bulb 0.8;
+fairy wing 0.35, wing rim 0.3; vampire gem 0.4. Clearances used: hoods and
+helmets ≥ 0.636 from `HEAD_CENTRE`; torso layers at envelope + 0.03–0.045;
+sleeves at arm + 0.024–0.035; trousers at 0.117 + 0.02–0.03; boots at shoe +
+0.022–0.03. Per-piece triangles, bounds and materials are in
+`art/generated/kit/hero-manifest.json`. `--debug DIR` renders fit sheets (back,
+mid-stride, arm raised, game camera) for the plain hero and every disguise.
+
+### Wearable gear (`build_wear.py` → `gear-wear.glb`)
+
+41 top-level empties (19 hats, 17 outfits, 5 boots), each named the item id,
+at the origin with an identity transform. Pieces, in explorer space:
+
+- Hats: one mesh `<id>@head`.
+- Outfits: `<id>@body` (torso shell plus any cape, wings, tail or hood), and
+  sleeves `<id>_sleeve_l@arm-left` / `<id>_sleeve_r@arm-right` on every outfit
+  except `armor_wings` (a sleeveless vest).
+- Boots: `<id>_l@leg-left` and `<id>_r@leg-right`. Soles sit at z −0.016.
+
+Materials are `Wear <id> <name>`, single sided, metallic 0 and roughness
+0.35–0.6. Metal is faked with light and dark bands. The GLB uses shared
+accessors: the primitives of one mesh share one POSITION/NORMAL buffer. Its
+material factors are rounded to 4 decimals. Emissive materials:
+
+- `hat_lantern glow`: strength 3.
+- `hat_halo glow`, `glow light` and `sparkle`: 2.2–2.5.
+- `boots_rocket flame` and `thruster glow`: 3–3.5.
+- `boots_lava lava` and `lava hot`: 3.
+
+Fit is checked against `hero.glb` as well as the envelope:
+
+- Hats keep ≥ 0.63 from `HEAD_CENTRE` where they wrap the cranium. The
+  exceptions are small details sunk into a hood: the frog's eye sockets, the
+  bear's muzzle, and the bunny band at 0.627.
+- No hat vertex comes within 0.60 of `HEAD_CENTRE` on the face side below
+  z 1.9 (a failing check).
+- Brimmed hats are tilted back 5–12° so the game camera sees the eyes.
+- The four hoods (`hat_leather`, `hat_bear`, `hat_space`, `hat_frog`) cover the
+  hair. Their backs flatten onto the shoulders above the backpack.
+- The halo floats at z 2.5. `hat_bunny` is a headband, so the hair shows.
+- Sleeves cover the hero's arm, which is r ≈ 0.14 with its cuff down to
+  z 0.79. They run from a cuff at z 0.8 up over a shoulder dome to z 1.24.
+- Torso shells are envelope + 0.035–0.046, pulled in 4.5% at the back so the
+  backpack stays visible. Robes and coats (`armor_pirate`, `armor_kimono`,
+  `armor_angel`) flare down to z 0.32–0.34, clear of swinging legs.
+- Capes and wings clear the backpack: the superhero cape drapes over it, and
+  wing roots sit at y 0.47. Hiding the backpack is optional. The wolf tail
+  hangs below it (z 0.2–0.62), and the hoodie's hood lies on top of it.
+- Flippers reach y −0.8 in front of the foot. The rocket thruster points back
+  and down from the heel.
+
+The manifest is `art/generated/kit/wear-manifest.json`. Per item it lists
+triangles, pieces (part, triangles, materials, and Blender and glTF bounds),
+the emissive materials and, for hats, face and head clearance. Budgets:
+hat 700, outfit 1,400, boots pair 600, whole file ≤ 700 KB. The current file
+is 680 KB. Icons are `public/assets/icons/items/<id>.webp`, each ≤ 6 KB.
+
+## Space kit (`build_space.py` → `space.glb`)
+
+`public/assets/models/space.glb` holds the piloted flight between planets. It
+has one top-level mesh node per piece, named exactly as below, and each
+transform is the identity. The ship and pad keep the rocket prop's material
+names (`Rocket white`, `Rocket red`, `Sun` band, `Gold`, `Glass`, `Charcoal`,
+`Pad`, `Pad dark`, `Hazard`, `Pad light`), so they match `rocket.glb`.
+
+| Node | Origin | Size | Triangles | Materials |
+| --- | --- | --- | ---: | --- |
+| `ship` | bottom of the engine bell, z 0 (the fin feet also touch z 0) | h 4.80, hull r 0.93, porthole rim r 0.99, fins r 1.42 | 2,080 + flame 280 (≤ 2,600) | rocket prop's |
+| `pad` | ground centre | r 2.64, h 0.345 | 1,576 (≤ 1,800) | `Pad`, `Pad dark`, `Hazard`, `Pad light` |
+| `stardust` | star centre | point tips at r 0.5, 0.42 thick | 100 (≤ 140) | `Stardust`, `Stardust rim` |
+| `asteroid_rock` | centre | about 2.1 × 1.9 × 1.8 | 148 (≤ 160) | `Asteroid rock`, `Asteroid crater` |
+| `asteroid_ice` | centre | about 2.1 × 1.9 × 2.0 | 104 (≤ 160) | `Asteroid ice`, `Asteroid frost` |
+| `asteroid_lava` | centre | about 2.0 × 1.8 × 1.8 | 144 (≤ 170) | `Basalt`, `Lava glow` |
+
+- **Ship.** It is the prop rocket without its pad, and its nose points up
+  (glTF +Y). The porthole faces glTF +Z. To fly level, rotate it −90° about
+  glTF X: the nose then points −Z and the porthole faces up.
+- **Flame.** `ship` has one child mesh, `flame`, with an identity transform.
+  Its origin is the bell exit (the ship origin). It is a yellow core
+  (`Rocket flame core`) inside a fluted orange flame (`Rocket flame`), both
+  emissive at strength 3. The flame hangs 1.6 below its origin (glTF y −1.6…0.1)
+  and is at most r 0.5. Toggle `flame.visible`, and scale `flame.scale.y` to
+  stretch it downward.
+- **Pad.** The ship stands on `pad_top` = **0.31** (the deck). Put the ship
+  origin there, e.g. `ship.position.y = pad.position.y + 0.31`. The lights are
+  low emissive domes (`Pad light`, 1.4), and a yellow centre target shows once
+  the ship has gone.
+- **Stardust.** A puffy five-point star lying flat (it faces glTF +Y). One
+  point aims at glTF −Z, which is screen-up from the game camera. Spin it
+  about Y. `Stardust` glows at 2.5 and `Stardust rim` at 1.2.
+- **Asteroids.** The game scales them by 1.6–4.5. The rock has four
+  raised-rim craters, mostly on top. The ice has scattered frost facets and
+  five crystals with frosted points. The lava rock is dark basalt with two
+  glowing pools and seams (`Lava glow`, 2.5).
+
+The game tone-maps with three.js Neutral, which pulls strong emission toward
+white. The emission colours therefore keep green low, so the flame still reads
+orange and the core yellow at strength 3. The manifest is
+`art/generated/kit/space-manifest.json`. Per node it lists triangles,
+materials, Blender and glTF bounds and the emissive materials, plus
+`pad_top`, the flame details and the file size (about 129 KB, limit 250 KB).
+The build fails on a missing node or flame, a broken budget, a ship base off
+z 0 (±0.02) or a pad top outside 0.1–0.35. Previews:
+`art/previews/kit/space.webp` and `space-flight.webp`.
+
+## Home wilds (`build_wilds.py` → `wilds.glb`)
+
+Swamp, forest-floor and canyon scenery for the home planet. The rules match
+the Scenery kit: one GLB with one top-level mesh node per piece, named exactly
+as below, with no transform. Each origin is the piece's own ground centre
+(z 0), and the front faces -Y in Blender (+Z in glTF). The game instances these
+pieces hundreds of times and batches them by material, so a material name
+always means the same material. `Bark` and `Mushroom cap/spots/stem` are the
+exact `scenery.glb` definitions. "A" is the darker shade and "B" the lighter.
+
+| Node | Look | Size (built) | Triangles (budget) | Materials |
+| --- | --- | --- | ---: | --- |
+| `tree_swamp` | squat swamp tree: twisted trunk on 4 root arches, 4 dark drooping lobes round a lighter crown, 8 hanging moss ribbons | h 3.41; canopy r ≈ 1.4 (1.63 to the diagonal lobes); trunk r 0.30 at the ground; roots land at r ≈ 1.0 | 496 (500) | `Swamp bark`, `Swamp leaf A`, `Swamp leaf B`, `Moss` |
+| `log` | fallen log along X; both ends sawn 16° toward the sky, showing a growth ring; two moss patches and a small pale mushroom on the front | 1.94 long (x ±0.97), r 0.28, h 0.56 | 158 (160) | `Bark`, `Log end`, `Moss` |
+| `toadstools` | 3 red toadstools with white spots, leaning apart | footprint r 0.41; h 0.52 / 0.36 / 0.23 | 156 (160) | `Mushroom cap`, `Mushroom spots`, `Mushroom stem` |
+| `rock_red` | canyon mesa with 3 strata (dark, light, dark) stepping in at two ledges, a sandy top, and a fallen chunk at its foot | r 1.32 (main mesa about 2.2 × 1.9), h 1.40 | 147 (160) | `Red rock A`, `Red rock B` |
+| `tree_dead` | bare, pale desert tree: the trunk becomes a central leader, 2 forked limbs (5 tips), 2 twigs and 3 root flares | h 2.98, branch spread r 1.08, trunk r 0.29 at the ground | 194 (220) | `Dead wood` |
+| `dry_bush` | dry straw-gold scrub: a fountain of 20 spiky blades | r 0.56, h 0.52 | 120 (120) | `Dry grass` |
+| `crystals` | 5 glowing violet hexagonal prisms on a dusky rock | h 1.12, footprint r 0.48 | 125 (160) | `Crystal`, `Crystal base` |
+| `fern` | 4 broad, arching dark fronds round 3 upright light ones, with notched edges | r 0.64, h 0.58 | 140 (160) | `Fern A`, `Fern B` |
+| `reeds` | 6 reed blades and 3 cattails (1.0 / 0.86 / 0.72) | h 1.00, footprint r 0.33 | 114 (120) | `Reed`, `Cattail` |
+
+Materials:
+
+- **Colours:** new materials use vivid toy colours:
+  - `Swamp bark` `#6B3D27`
+  - `Swamp leaf A` `#127A5B`, `Swamp leaf B` `#2AAE72`
+  - `Moss` `#9AD13A`
+  - `Log end` `#F0B46E`
+  - `Red rock A` `#D2482A`, `Red rock B` `#F58E3C`
+  - `Dead wood` `#C9BBAA`
+  - `Dry grass` `#EFBE3A`
+  - `Crystal` `#9F72FF`, `Crystal base` `#6B648F`
+  - `Fern A` `#1C9A47`, `Fern B` `#5BCB3A`
+  - `Reed` `#4FAE36`, `Cattail` `#8A4A22`
+- **Glow:** `Crystal` is the only emissive material: `#6A36FF` at strength 1.5, exported as `KHR_materials_emissive_strength`.
+- **Double sided:** the sheet materials `Moss`, `Dry grass`, `Fern A`, `Fern B` and `Reed`. Everything else is a closed or ground-sealed solid with back faces culled.
+
+`art/generated/kit/wilds-manifest.json` lists, per node:
+
+- triangles and materials
+- Blender and glTF bounds
+- footprint radius and trunk radius at the ground
+- emissive materials
+
+It also lists every material's colour, roughness and sidedness, and the file size. The file is 68 KB; the limit is 200 KB.
+
+The build exits non-zero on any of these:
+
+- a missing node
+- a broken triangle budget
+- a ground (min z) beyond ±0.02
+- an off-centre footprint
+- a size more than 15 % over its target (the toadstools also have a hard height cap of 0.55)
+- material names other than those listed
+- an unexpected emissive strength
+- a file over 200 KB
+
+It also reads the exported GLB back to check node names, transforms, materials and glTF bounds. The output is deterministic: two runs give byte-identical GLB and manifest files.
+
+Previews:
+
+- `art/previews/kit/wilds.webp`: every piece, labelled, next to the explorer.
+- `wilds-scene.webp`: a swamp, forest and canyon patch at the game camera and zoom, with `scenery.glb` trees for comparison.
+
+## Bright worlds (`build_worlds_bright.py` → `worlds-bright.glb`)
+
+Scenery for the Candy, Toy, Cloud, Jungle and Ocean planets, installed as
+`public/assets/models/worlds-bright.glb`. The rules match the Scenery kit: one
+top-level mesh node per piece, named exactly as below, with no transform. Each
+origin is the piece's own ground centre (z 0), and the front faces -Y in
+Blender (+Z in glTF). Pieces are instanced 40–270 times per planet and batched
+by material, so a material name always means the same material in this file.
+Collision r is the circle the game blocks at ground level. "Ground r" is the
+built radius of everything below z 0.3.
+
+| Node | Planet | Look | Size (built) | Collision r (ground r) | Triangles (budget) | Materials |
+| --- | --- | --- | --- | --- | ---: | --- |
+| `candy_tree` | candy | twisted white stick with pink stripes; round candy ball whose 8 pink/mint stripes pinwheel from the top; 8 sugar buttons | h 3.40, canopy r 1.27 | 0.35 (0.27) | 388 (420) | `Candy stick`, `Candy swirl A`, `Candy swirl B` |
+| `candy_cane` | candy | upright cane, 2 red and 2 white helical stripes, hook toward +X, sugar drift at the foot | h 2.18, x −0.30…0.76, y ±0.30 | 0.3 (0.31) | 246 (260) | `Candy red`, `Candy white` |
+| `gumdrops` | candy | 3 matte sugared gumdrops: pink, lime, orange | 0.85 × 0.79, h 0.44 | — | 150 (160) | `Gumdrop A`, `Gumdrop B`, `Gumdrop C` |
+| `donut` | candy | giant donut on its edge, leaning back 22° so the iced face looks at the camera; drippy pink icing, 10 sprinkles | 1.74 × 1.02, h 1.54 | 0.9 (0.74) | 395 (420) | `Donut dough`, `Donut icing`, `Sprinkle A`, `Sprinkle B` |
+| `cupcake` | candy | pleated wrapper (20 flat facets), 3-tier swirled frosting, cherry | 1.40 × 1.37, h 1.48 | 0.6 (0.47) | 298 (320) | `Cupcake wrapper`, `Frosting`, `Cherry` |
+| `toyblock` | toy | 2 blocks with 1 on top, each turned a little; painted faces with wooden chamfered edges; raised star, circle, heart and triangle emblems on the front, back, outer sides and top | 1.96 × 1.04, h 1.66 | 1.3 (1.02) | 213 (220) | `Toy red`, `Toy blue`, `Toy yellow`, `Toy wood` |
+| `toyball` | toy | beach ball, 6 segments (A B C A B C), pole tipped toward the camera | r 0.89, h 1.74 | 0.9 (0.66) | 252 (260) | `Ball A`, `Ball B`, `Ball C` |
+| `cloudtree` | cloud | slender leaning white trunk, a cloud wisp at its foot, crown plus 5 puffs (white tops over sky-blue bellies) | h 3.54, canopy 2.70 × 2.60 | 0.4 (0.40) | 435 (450) | `Cloud trunk`, `Cloud puff A`, `Cloud puff B` |
+| `skyrock` | cloud | faceted pale chunk, wider above its foot, with a rocky lip round a scalloped grass cap; 3 glowing crystals | 1.75 × 1.84, h 1.31 (grass top 0.99) | 0.8 (0.83) | 196 (220) | `Sky rock`, `Sky grass`, `Crystal` |
+| `jungletree` | jungle | trunk on 5 buttress roots; 3 scalloped canopy tiers (light tops, dark rims); 7 hanging vines | h 4.98, canopy 4.40 × 4.02 | 0.6 (0.66) | 523 (600) | `Jungle bark`, `Jungle leaf A`, `Jungle leaf B`, `Vine` |
+| `palm` | ocean | trunk of 7 stacked segments curving to +X; 8 serrated drooping fronds; 3 coconuts in the frond gaps | h 4.67, x −1.12…3.30, y ±2.1 | 0.35 (0.30) | 406 (450) | `Palm trunk`, `Palm leaf`, `Coconut` |
+| `coral` | ocean | branching coral (6 arms), lumpy brain coral, curved sea fan | 1.37 × 1.09, h 0.82 | — | 245 (260) | `Coral A`, `Coral B`, `Coral C` |
+
+Colours:
+
+- **Candy:**
+  - `Candy stick` `#FFF5EE`, `Candy swirl A` `#FF2E8C`, `Candy swirl B` `#2FE0B4`
+  - `Candy red` `#F0203A`, `Candy white` `#FFF7F1`
+  - `Gumdrop A/B/C` `#FF3A8C` / `#8CE01E` / `#FF8A12` (roughness 0.82)
+  - `Donut dough` `#E8963E`, `Donut icing` `#FF3FA0`, `Sprinkle A/B` `#2AA4FF` / `#FFE12A`
+  - `Cupcake wrapper` `#FFC02A`, `Frosting` `#4FE2BE`, `Cherry` `#E3102E`
+- **Toy:** `Toy red/blue/yellow` `#EE2D2D` / `#2462EA` / `#FFC21A`, `Toy wood` `#E6AE66`, `Ball A/B/C` `#F5333D` / `#FFD428` / `#1FA6F2`.
+- **Cloud:** `Cloud trunk` `#ECF2FF`, `Cloud puff A/B` `#FCFEFF` / `#8FD2FF`, `Sky rock` `#CBC2EC`, `Sky grass` `#5CD446`.
+- **Jungle:** `Jungle bark` `#8A5634`, `Jungle leaf A/B` `#14803A` / `#3FC23E`, `Vine` `#9BE03A`.
+- **Ocean:** `Palm trunk` `#C68646`, `Palm leaf` `#30C24A`, `Coconut` `#6E4226`, `Coral A/B/C` `#FF2A72` / `#FF6414` / `#9A36FF`.
+
+Other material rules:
+
+- **Glow:** `Crystal` is the only emissive material: `#5CE8FF` with emission `#6FF0FF` at strength 1.5, exported as `KHR_materials_emissive_strength`. `wilds.glb` has its own violet `Crystal`. The two are different materials in different files, so don't key a tint on that name across kits.
+- **Double sided:** `Palm leaf` and `Coral C` (the sea fan), which are sheets. Everything else is a closed or ground-sealed solid with back faces culled.
+- **Corals:** the coral sits on its foot, so place it on the sea floor. The deep pink, orange and violet were chosen to read under the game's water (`#6fd8fb`, opacity 0.38) over sand.
+
+The build exits non-zero on any of these:
+
+- a missing node
+- a broken triangle budget
+- a base (min z) beyond ±0.02
+- an x or y extent more than 15 % over the contract size, or a height outside ±15 %
+- ground r more than 15 % over the collision r
+- material names other than those listed
+- a file over 350 KB
+
+The checks run before install. `--only NODE[,NODE]` checks a subset and never writes the GLB or manifest.
+
+`art/generated/kit/worlds-bright-manifest.json` lists, per node:
+
+- planet, triangles, budget and materials
+- emissive materials
+- Blender and glTF bounds
+- ground radius, collision r and contract size
+
+It also lists every material's colour, roughness, sidedness and emission, and the file size. The file is 128,608 bytes for 3,747 triangles. Two runs give byte-identical GLB and manifest files.
+
+Previews (`--render`):
+
+- `art/previews/kit/worlds-bright.webp`: every piece, labelled, at true scale from the game camera.
+- `worlds-bright-scenes.webp`: one vignette per planet on that planet's ground colour, at the game camera and zoom (36 px per metre) with the explorer. The ocean vignette has an island and a coral lagoon under the game's water. A sixth panel shows every piece beside the explorer.
+
+## Harsh worlds (`build_worlds_harsh.py` → `worlds-harsh.glb`)
+
+`public/assets/models/worlds-harsh.glb` dresses the Ice, Lava and Shadow
+planets (Shadow is lit only around the player). It holds one top-level mesh
+node per piece, named exactly as below. Every node sits at the file origin with
+an identity transform, and its origin is its own ground centre (z 0). Pieces
+face -Y in Blender (glTF +Z), and the snowman's face looks that way. The game
+instances each piece 36–270 times, so materials are few and shared by name:
+the same name is the same material. `Bark` is identical to the one in
+`scenery.glb`, and the build checks this. Every material is single sided, with
+no textures or UVs.
+
+| Node | Planet | Size (h, overall r) | Ground r / collision r | Triangles | Materials |
+| --- | --- | --- | --- | ---: | --- |
+| `snow_pine` | ice | 4.00, 1.48 | 0.48 / 0.45 (snow drift) | 408 (≤ 420) | `Bark`, `Snow pine`, `Snow` |
+| `ice_spire` | ice | 2.76, 0.62 | 0.47 / 0.55 | 120 (≤ 160) | `Ice`, `Ice glow` |
+| `snow_rock` | ice | 0.90, 0.94 | 0.80 / 0.8 | 156 (≤ 160) | `Frost rock`, `Snow` |
+| `snowman` | ice | 1.64, 0.71 (arms); bottom ball r 0.45 | 0.26 / 0.45 | 416 (≤ 420) | `Snow`, `Coal`, `Carrot`, `Scarf`, `Twig` |
+| `lava_rock` | lava | 0.95, 0.91 | 0.84 / 0.85 | 133 (≤ 170) | `Basalt`, `Lava glow` |
+| `obsidian` | lava | 1.36, 0.57 | 0.38 / 0.5 | 132 (≤ 160) | `Obsidian`, `Obsidian edge` |
+| `ash_tree` | lava | 3.20, 0.91 (branches); trunk r 0.29 | 0.33 / 0.35 | 181 (≤ 260) | `Charcoal wood`, `Ember` |
+| `mini_volcano` | lava | 2.60, 2.14 (base r 2.0) | 2.13 / none | 320 (≤ 320) | `Basalt`, `Volcano slope`, `Lava glow` |
+| `deadtree` | shadow | 3.40, 1.19 (branches); trunk r 0.28 | 0.34 / 0.35 | 266 (≤ 280) | `Shadow wood`, `Shadow glow` |
+
+"Ground r" is the widest vertex at z ≤ 0.1. The snowman touches the ground
+only under its bottom ball, whose widest point (r 0.45 at z 0.42) matches its
+collision circle.
+
+- **Snow pine.** Three teal-green tiers. Each tier has a steep skirt and a thick
+  snow ledge whose rounded drips hang over the skirt, with a snowy tip and a
+  small snow drift round the trunk foot.
+- **Ice spire.** A six-sided crystal with four leaning side shards, flat
+  shaded. The pyramid tips are `Ice glow`.
+- **Snow rock.** A half-buried periwinkle boulder under a domed snow cap with
+  drips.
+- **Snowman.** Three balls, a coal face and buttons, a carrot nose, a red scarf
+  with one hanging end, and twig arms (the left one waving).
+- **Lava rock.** A faceted basalt boulder. Four zigzag cracks glow; they meet
+  in a star on top and taper to points lower down.
+- **Obsidian.** Five glossy black-purple shards. The vertical edges are narrow
+  violet chamfers (`Obsidian edge`) that run up to each tip.
+- **Ash tree.** A charcoal trunk with three limbs and two twigs. The leader and
+  two limb tips smoulder (`Ember`), as do a snapped stub and one crack low on
+  the trunk.
+- **Mini volcano.** A basalt rim and crater around a glowing pool. Four raised
+  lava drips spill through notches in the rim and end in points, and two
+  basalt boulders sit at the foot. It makes the world border ring (no
+  collision).
+- **Dead tree.** A twisted violet trunk. Three branches and the leader end in
+  curls, and three glowing teardrop buds hang from the curls.
+
+Glow (exported as `KHR_materials_emissive_strength`): `Lava glow` 2.5,
+`Ember` 2.0, `Shadow glow` 1.5, `Ice glow` 1.2. All other materials do not
+glow. To survive Neutral tone mapping, the warm glows keep green low.
+`Lava glow` uses `build_space.py`'s colours. `Basalt` is darker than
+`space.glb`'s so the rocks read on the lava ground (`#6e5a60`).
+
+The manifest is `art/generated/kit/worlds-harsh-manifest.json`. Per node it
+lists the planet, triangles, vertices, materials, emissive materials, Blender
+and glTF bounds, overall and ground radius, the collision radius and the
+budget. It also lists every material's colour, roughness and glow, and the
+file size (about 97 KB, limit 300 KB).
+
+The build fails on any of these:
+
+- a missing or extra node, a node with a transform, or wrong materials
+  (checked again in the exported GLB);
+- a broken triangle budget;
+- min z more than 0.02 from 0;
+- a height outside ±15%, or an overall or ground radius more than 15% over
+  size;
+- a wrong glow strength, a double-sided material, or a `Bark` that differs from
+  `scenery.glb`'s.
+
+Output is deterministic: two runs give byte-identical files. `--render` writes
+`art/previews/kit/worlds-harsh.webp` and `worlds-harsh-scenes.webp`. The first
+is a labelled contact sheet from the game camera on each planet's ground. The
+second shows one vignette per planet at game zoom, with the explorer for scale
+and Shadow lit only around the explorer.
+
+## Farm pen (`build_farm.py` → `farm.glb`)
+
+`public/assets/models/farm.glb` holds a farm-animal pen for beside the garden:
+nine animal models, eleven pen pieces and five products. Blender is Z up with the front
+facing -Y (glTF Y up, front +Z), 1 unit is 1 metre, and every top-level node
+sits at the origin with no transform. Its origin is the piece's ground centre.
+Materials are shared by name across the file (`Farm <name>`, for example
+`Farm feather`, `Farm cow patch`, `Farm wood dark`). They are flat colours,
+single sided, with no textures, UVs or glow. The expanded file is about 439 KB (limit 640 KB). FarmPenView loads and batches its animated parts.
+
+### Animals
+
+Each animal is a root empty named the id, with one child mesh per part, named
+`<id>_<part>`. A child's translation is the part's **pivot**, and its vertices
+are relative to that pivot, so turning the child turns the part about its joint.
+Children have no rotation or scale. Multi-material parts load as several meshes
+in three.js (`GLTFLoader` may add `_1`, `_2` to the names). Each of them carries
+the same pivot, so match parts by the `<id>_<part>` prefix and turn them all.
+The right-hand parts (`_r`, `_fr`, `_br`) are on +X, as with `hand-right`.
+
+| Node | Parts | Size (w × l × h) | Triangles (≤ 2,600) |
+| --- | --- | --- | ---: |
+| `chicken` | `body`, `head`, `wing_l`, `wing_r`, `leg_l`, `leg_r`, `tail` | 0.38 × 0.59 × 0.58 (comb top; body top 0.40) | 1,332 |
+| `chick` | same as `chicken` | 0.24 × 0.33 × 0.32 | 1,074 |
+| `cow` | `body`, `head`, `leg_fl`, `leg_fr`, `leg_bl`, `leg_br`, `tail` | 0.97 × 2.16 × 1.75 (back 1.40, horn tips 1.75) | 1,490 |
+| `calf` | same as `cow` | 0.72 × 1.43 × 1.16 (back 0.87) | 1,420 |
+
+Pivots (glTF x, y, z):
+
+- `chicken`: body (0, 0.13, -0.04), head (0, 0.34, 0.08), wings
+  (±0.135, 0.31, 0.03), legs (±0.062, 0.13, -0.04), tail (0, 0.31, -0.19).
+- `chick`: body (0, 0.05, -0.02), head (0, 0.16, 0.03), wings
+  (±0.09, 0.14, 0.005), legs (±0.042, 0.05, -0.02), tail (0, 0.13, -0.1).
+- `cow`: body (0, 0.68, -0.06), head at the neck (0, 1.24, 0.6), front legs
+  (±0.25, 0.68, 0.36), back legs (±0.25, 0.68, -0.44), tail (0, 1.3, -0.72).
+- `calf`: body (0, 0.43, -0.05), head (0, 0.8, 0.38), front legs
+  (±0.15, 0.43, 0.21), back legs (±0.15, 0.43, -0.29), tail (0, 0.8, -0.46).
+
+Animation, in glTF/three.js terms:
+
+- **Head:** `rotation.x > 0` lowers it (pecking, grazing). `rotation.y` turns
+  it, and a nod of about 0.5 rad stays joined to the body.
+- **Legs:** `rotation.x > 0` swings the foot backward. Swing diagonal pairs
+  together for cattle, or alternate the two bird legs; ±0.4 rad reads as a walk.
+- **Wings:** as the pet wings. `wing_r.rotation.z = +a` and
+  `wing_l.rotation.z = -a` raise both; ±0.6–1.0 rad reads as a flap.
+- **Tail:** `rotation.y` wags it about the vertical.
+- **Body:** bob `position.y` or squash it about its pivot (hips height).
+
+The cow carries a bell under its chin and spots that hug the body. The calf has
+horn nubs, a cream forelock and cream spots. The heads and their eyes, blush
+and smile reuse the pets' chibi face (`build_weapons.py`).
+
+### Pen pieces
+
+| Node | Shape | Size (w × d × h) | Triangles (≤ 800) |
+| --- | --- | --- | ---: |
+| `pen_fence` | two posts at x = ±1.0 and rails at z 0.42 and 0.74; segments tile every 2.0 m, sharing their end posts | 2.13 × 0.13 × 0.97 | 128 |
+| `pen_gate` | one segment wide, posts at x = ±1.0. Children `pen_gate_frame` (posts with red ball caps, crossbeam at z 1.36, hanging egg sign) and `pen_gate_door` (red slats in a white frame, 1.8 wide, z 0.08–1.0). The door's pivot is its hinge at glTF (-0.9, 0, 0); `rotation.y` opens it. | 2.19 × 0.21 × 1.68 | 712 |
+| `feed_trough` | wooden trough on end boards, full of grain | 1.20 × 0.58 × 0.50 | 344 |
+| `water_trough` | oval tub of light and dark staves with two iron hoops; water at z 0.39 | 1.25 × 0.81 × 0.44 | 480 |
+| `coop` | red hen house on stilts with white corner trims, golden thatch roof, round window and an arched doorway (sill at z 0.37) with a ramp down to the front | 1.80 × 1.87 × 1.77 | 796 |
+| `hay_bale` | rounded bale with two red twine bands and a few loose straws; stacks at z 0.5 | 1.14 × 0.57 × 0.57 | 368 |
+
+The coop's footprint is centred on its origin, ramp included, so the house
+itself sits about 0.25 behind it.
+
+### Products
+
+| Node | Look | Size (w × h) | Triangles (≤ 300) | Icon |
+| --- | --- | --- | ---: | --- |
+| `egg` | cream egg with brown speckles | 0.09 × 0.12 | 216 | `icons/items/egg.webp` |
+| `milk` | glass bottle of milk with a red label and a blue cap | 0.15 × 0.30 | 280 | `icons/items/milk.webp` |
+| `egg_basket` | woven basket with three eggs and an arched handle | 0.34 × 0.30 | 294 | `icons/items/egg_basket.webp` |
+
+Products are single meshes with their base at z 0, at world scale (a hen is
+0.58 tall), so they can sit on the ground or in a hand as they are. Their icons
+are in `public/assets/icons/items/`: 160 × 160, transparent, 3/4 view, under
+8 KB, rendered as `build_items.py` renders its icons.
+
+### Build
+
+```powershell
+blender -b --factory-startup --python art/blender/kit/build_farm.py -- --install --render
+```
+
+The build fails when a piece breaks any of these rules:
+
+- names, parts or pivots in the GLB differ from the scene;
+- a piece goes over its triangle budget;
+- a piece leaves the ground (min z beyond ±0.02);
+- a height or half extent is more than 12 % off its target;
+- a footprint is off its origin;
+- a material is not named `Farm …` or is emissive, or the file has textures;
+- the GLB is over 640 KB or an icon is over 8 KB.
+
+Output is deterministic. The manifest
+(`art/generated/kit/farm-manifest.json`, copied into `art/asset-manifest.json`
+under `farm` by `--install`) lists triangles, bounds, parts, pivots (Blender
+and glTF) and material colours. `--render` writes:
+
+- `art/previews/kit/farm.webp`: every piece beside the explorer, from the game
+  camera.
+- `farm-pen.webp`: a 10 × 6 m pen with every piece in use.
+- `farm-poses.webp`: each animal at rest and posed through its parts.
+- `farm-icons.webp`: the icon sheet.
+
+`--debug DIR` adds close-ups of every piece.
+
+## Creatures (`build_creatures.py` → `creatures.glb`)
+
+`public/assets/models/creatures.glb` redraws the wild creatures (src/enemy-types.ts) with believable anatomy in the
+toon style; `src/creature-art.ts` loads it the first time a creature spawns and re-dresses creatures that spawned
+before it arrived. Creatures it lacks, and every creature while it is missing, keep the procedural shapes.
+
+- One root node per creature, named its `ENEMY_TYPES` id, at the origin. One child per part, `<id>_<part>`; the
+  child's translation is the part's hinge (glTF), its vertices relative to it, no rotation. Right parts (`_fr`,
+  `_br`, `_r`) are on +X.
+- Parts match the old family's animated parts, so draws do not grow: legged `body, leg_fl, leg_fr, leg_bl, leg_br`
+  (crab legs hold two legs each), winged `body, wing_l, wing_r`, solid `body`. The game merges each part into one
+  vertex-coloured mesh and names the hinges `leg0` (back left) … `leg3`, `wing-l`, `wing-r`.
+- Heights stay within 20 % of the old shapes (before `enemyScale`; bosses are drawn 1.85x). Budgets: 2,500
+  triangles per common creature, 5,000 per boss. Flat colours named `Creature <name>`, single sided, no textures.
+- Positions and normals are quantised (`KHR_mesh_quantization`, int16 / int8; each part node carries the
+  dequantising scale), about 855 KB for 26 creatures (limit 900 KB).
+
+Redrawn: mushroom, mushking, boar, bee, wolf, frog, crab, chomper, cactus, bear, treant, croc, gummy, jelly,
+snowball, penguin, icebloom, magmaslime, minislime, firelizard, magmacrab, chameleon, flytrap, cloudsheep, yeti,
+mammoth. Previews: `art/previews/kit/creatures.webp`, `creatures-planets.webp`, `creatures-poses.webp`.
+
+## Garden helper (`build_helper.py` → `helper.glb`)
+
+`public/assets/models/helper.glb` holds Sprout, the garden helper: a tiny
+gardening robot with a leaf sprout and a watering can, 0.53 m to the leaf tip
+(about a quarter of the explorer). Same rules as the farm animals: Blender Z up,
+front -Y (glTF Y up, front +Z), metres, origin at the ground centre.
+
+One root empty `helper` with one child mesh per part, `helper_<part>`:
+`body`, `head`, `arm_l`, `arm_r` (holds the can), `leg_l`, `leg_r`. A child's
+translation is the part's **pivot** (shoulder, hip, neck, waist) and its
+vertices are relative to it; no rotation or scale. Multi-material parts load as
+several meshes; match by the `helper_<part>` prefix. Materials are `Helper
+<name>`, flat colours, no textures or glow. Budget 2,600 triangles (the October realism pass; was 1,500),
+about 46 KB. The game shows it at 1.5x (0.8 m) so it reads at the game camera. The runtime (`src/helper-view.ts`) bakes each part's colours into
+one geometry and draws all six with one shared toon material, with no shadow
+casting (a blob decal sits underneath). The build also renders
+`public/assets/icons/helper.webp` (160 × 160) for the hire panel.
+
+### October farm and fruit additions
+
+The farm generator imports build_farm_expansion.py. Duck and duckling use the bird hinges; pig, piglet and dog use the quadruped hinges. Each remains below 1,500 triangles. The dog (build_farm_dog.py, 1,460 triangles, 0.80 m tall) is an original chibi puppy cousin of the wilds' wolf: upright ears with pink insides, a cheek ruff, big eyes, a curled fluffy tail, pale paws and a sky-blue collar with a gold tag. Its hinges (glTF): body (0, 0.28, -0.03), head (0, 0.40, 0.20), front legs (±0.10, 0.18, 0.15), back legs (±0.10, 0.18, -0.17), tail (0, 0.35, -0.23). The game recolours it per breed through `Farm dog` and `Farm dog ear` (coat and a darker shade of it) and `Farm dog light` (muzzle, chest, ruff, paws and tail tip: the breed's second colour); the pen and the follower (dog-follow.ts) draw it at 1.35x. Duck eggs and truffles remain below 300 triangles and have transparent 160px WebP icons. Five species shelters are named chicken_shelter, duck_shelter, cow_shelter, pig_shelter and dog_shelter, each below the 800-triangle prop budget. Their saved anchors determine the five-metre species bonus; wandering never changes it.
+
+The separate build_fruit_crops.py generator exports fruit_crops.glb (limit 600 KB), with crop_apple, crop_grape, crop_mango, crop_pineapple, crop_coconut, crop_durian, crop_lychee and crop_peach. These are whole mature plants with grounded origins and identity root transforms, 0.98–1.27m high, below 2,600 triangles each. Grapes use a trellis, pineapple a leaf rosette, coconut a palm; other fruit has small orchard trees. Crop cards capture these nodes through the existing crop kit. Previews are art/previews/kit/farm-expansion.webp and fruit-crops.webp.
+
+The fruit generator also renders all eight harvested-fruit inventory icons to public/assets/icons/crops/ at 160 x 160 with transparent WebP backgrounds. The fruit-icons.webp contact sheet verifies full-size and 52px readability; the eight files total about 29 KB.
+
+### Titan inventory images
+
+`build_titan_icons.py` imports the shipped `titans.glb` and renders all nine `hat_t_*` and nine `pet_t_*` meshes with the same item studio. The 18 transparent 160×160 WebP files live under `public/assets/icons/items/`, each below 18 KB (about 85 KB total). The generator verifies alpha and dimensions and updates the `titan_icons` manifest entry. `art/previews/kit/titan-icons.webp` shows full-size and 52px views. No runtime model is altered by rendering these images.
+
+## Delvers' Vault (`build_dungeon.py` → `dungeon.glb`)
+
+One GLB with one top-level empty per piece, named exactly as below, each with a single joined child mesh
+`<name>_body`; origin at the ground centre, front facing Blender -Y (glTF +Z), metres. The game loads it lazily
+(near the vault circle, at the keeper, for a run, or when a vault pet is worn) and draws simple shapes until then.
+
+| Node | Use (`src/dungeon-view.ts`) | Size | Triangles |
+| --- | --- | --- | ---: |
+| `dg_floor` | arena floor, radius 26.5, top at z 0; rune rings at r 5.5 / 13.5 / 21.5 | r 26.5 | ≤ 4,000 |
+| `dg_wall` | 24 pillars and low walls at r 24.5–26 (collision is the game's own ring at r 25.2) | h ≤ 4 | ≤ 7,000 |
+| `dg_portal` | portal ring on a pedestal at the arena centre | r ≤ 2.2, h ≤ 4.3 | ≤ 2,500 |
+| `dg_dress_<room>` | rim props for `grotto`, `belfry`, `coral`, `forge`, `observatory` (radius 19–23) | — | ≤ 5,000 |
+| `dg_lobby`, `dg_keeper` | the circle (r 4.2) by the south gate and Vault Keeper Wren | keeper h ≈ 1.8 | ≤ 2,500 |
+| `dg_<creature>` | 10 creatures at true size (the game's per-type scale is undone) | 0.6–1.4 m | ≤ 1,800 |
+| `dg_<guardian>` | 5 guardians at true size (the game's boss scale 1.85 is undone) | 3.4–4.6 m | ≤ 5,000 |
+| `pet_dg_<guardian>` | 5 companions | h 0.7 | ≤ 3,000 |
+| `item_dg_seal` | Rune Seal, for its icon only | — | ≤ 1,200 |
+
+Per-room tints are applied by material name: `Vault floor`, `Vault inlay`, `Vault tile`, `Vault stone`,
+`Vault stone dark`, `Vault glow`. Run with `-- --icons` to render the five pet icons and the seal icon
+(256×256 transparent WebP, ≤ 30 KB) to `public/assets/icons/items/`. The Delver's Chest is a garden decoration
+drawn by `src/decorations-art.ts` (`deco_dgchest`). `art/previews/kit/dungeon.webp` shows the creatures and guardians.
+## The Cinderpeak Colossus (`build_colossus.py` → `public/assets/models/colossus.glb`)
+
+The daily world boss and its trophies, in one file with three roots. Unlike other kits the giant keeps its joint
+hierarchy: `src/colossus-art.ts` loads it whole (not through `KitLibrary`, which flattens) and poses the empties.
+
+| Root | Contents | Size | Triangles |
+| --- | --- | --- | ---: |
+| `colossus` | empties `colossus_leg_l`/`_r` (hips, glTF (±3.7, 7, -0.3)), `colossus_body` (pelvis, (0, 7.2, -0.3)) with children `colossus_head` (neck, +(0, 6.4, 1.2)) and `colossus_arm_l`/`_r` (shoulders, +(±5.7, 5.2, 0.3)); one mesh `<empty>_mesh` under each | 17 m to the crown, 18.8 m to the horn tips; feet centred 8.5 m left and right (the game draws it at 0.85, so 7.2 m: the roar's safe spots) | 3,668 (budget 25,000) |
+| `hat_colossus` | one mesh `hat_colossus@head`, explorer space z 2.02-2.48 | circlet and two horns, 0.86 m across | 412 |
+| `pet_colossus` | one mesh, the giant decimated and shrunk to 0.7 m | 0.7 m tall | 1,579 |
+
+Front is Blender -Y (glTF +Z). Leg_l is the giant's left (+X), the foot `colossusFeet()[0]` in `colossus-patterns.ts`.
+Materials: `Colossus basalt`, `Colossus rock` (flat-shaded faceted stone), `Colossus obsidian` (spikes), `Colossus horn`,
+`Colossus lava` (emissive 4, the jagged cracks and the belly heart) and `Colossus ember` (emissive 8, eyes and heart core).
+The generator also renders 256×256 transparent WebP bag icons for `hat_colossus`, `pet_colossus` and
+`colossus_shard` (an icon-only obsidian cluster) into `public/assets/icons/items/`, writes
+`art/generated/kit/colossus-manifest.json` and the preview `art/previews/kit/colossus.webp` (with a 1.95 m explorer post).
+
+## Flag Rush (`build_ctf.py` → `public/assets/models/ctf.glb`)
+
+The Multiworld Gate by the south gate and the Capture the Flag isle (`src/ctf-view.ts`). One top-level empty per piece
+with one joined child `<name>_body`; origin at the ground centre, front Blender -Y (glTF +Z), metres. Loaded lazily
+(near the gate or for a match); simple shapes stand in until then. The isle's ground, river water and paths are drawn
+at runtime (a canvas texture), not in the file.
+
+| Node | Use | Size | Triangles |
+| --- | --- | --- | ---: |
+| `ctf_gate` | the gate: plinth r 2.3, ring r 1.85 leaning back 28° about z 0.5 (so the top-down camera sees its face) | h ≈ 4.7 | ≤ 4,000 |
+| `ctf_gate_swirl` | the swirl disc in the ring's plane; the game spins it about the ring's leaned axis (`GATE_LEAN`) | r 1.55 | ≤ 2,000 |
+| `ctf_keeper` | Gatekeeper Orrin (cloak, hood, star staff) at (-6.8, 24) | h ≈ 2.1 | ≤ 2,500 |
+| `ctf_stand`, `ctf_flag` | flag stand (r 1.25) and flag (pole 2.6 m, cloth along -Y; the game turns it 90°) | — | ≤ 1,200 / 600 |
+| `ctf_pad` | jump pad (r 1.35); the trigger is the game's r 1.4 | h ≈ 0.45 | ≤ 1,500 |
+| `ctf_bridge` | plank bridge across the river, 8 m along X, 5.4 m wide (bridges are 5.6 m in the rules) | — | ≤ 1,200 |
+| `ctf_post`, `ctf_rock`, `ctf_tree` | base fence post, cover rock (≈ r 1.05, scaled to the rule radius), border tree; drawn instanced | — | ≤ 120 / 400 / 500 |
+| `ctf_banner` | base banner, cloth faces glTF +Z | h ≈ 2.9 | ≤ 700 |
+| `ctf_power_ring` | the ring a power-up floats over | r 0.95 | ≤ 400 |
+| `ctf_pw_<kind>` | `zip`, `bubble`, `pumpkin`, `wisp`, `bigcap`, `frost`, `apple` (~0.8 m, the game scales 1.25) | — | ≤ 1,500 |
+
+Team colour by material name: `CTF team` (blue `#3f8cff`, red `#ff5a5f`, neutral pads gold) and `CTF team glow`.
+Run with `-- --icons` for 160×160 transparent WebP icons in `public/assets/icons/ctf/` (the seven power-ups, `flag`,
+`gate`, `keeper`). The file is about 250 KB; `art/previews/kit/ctf.webp` shows every piece.
+
+## Rescue Call (`build_rescue.py` → `public/assets/models/rescue.glb`)
+
+The SOS portal by the south square and the Hold the Line fields (`src/rescue-view.ts`, docs/RESCUE-CALL-PLAN.md). One
+top-level empty per piece with a joined child `<name>_body`; the turning turrets also have `<name>_head`, whose origin is
+the pivot the game aims about (the game reparents the head's meshes under a pivot group). Origin at the ground centre,
+front Blender -Y (glTF +Z), metres. Loaded lazily (when a call opens the portal or a mission starts); simple shapes stand
+in until then and the field is redrawn when the file arrives. The field's ground, dirt paths and the camp's sand are a
+runtime canvas texture, not in the file. Every repeated piece is drawn instanced; each defence is baked to one or two
+draws per pad (`bakeModel`). One material per colour across the file (`RS <hex>`).
+
+| Node | Use | Size | Triangles |
+| --- | --- | --- | ---: |
+| `rs_portal`, `rs_portal_swirl` | the cracked SOS portal (ring r 1.7 leaning back 28° about z 0.4, two lantern posts, a horn on top) and its swirl disc; the game spins the swirl | h ≈ 4.4 | 1,092 / 452 |
+| `rs_pad` | an octagonal build pad (r 1.25) | h 0.21 | 584 |
+| `rs_post` | a squad guard post (shield on a stake) | h 1.2 | 206 |
+| `rs_chevron` | a flat lane arrow, drawn instanced along every route pointing at your end | 0.6 m | 24 |
+| `rs_camp` | the squad's camp: tent, campfire (glowing), supplies, banner | 4 × 4 m | 346 |
+| `rs_farmhouse` | the friend's farmhouse with a silo and a fence; roof `RS roof` tinted per planet | 6 × 5 m | 548 |
+| `rs_popcorn_1..3` | popcorn turret: striped tub + head (popcorn heap, 1–3 barrels), gold rim at 3 | h ≈ 1.4 | 384 / 492 / 696 |
+| `rs_tesla_1..3` | tesla coil: tripod + head (copper coils, glowing ball, a halo at 3); the head spins | h ≈ 1.9 | 640 / 736 / 1,000 |
+| `rs_cannon_1..3` | deck cannon: wooden carriage + head (barrel, brass at 3) | h ≈ 0.9 | 340 / 384 / 480 |
+| `rs_wall_1..3` | sandbag wall: 1–3 rows, posts from 2, a steel plate at 3; laid across the blocked lane | 2.8 m | 100 / 220 / 424 |
+| `rs_frost_1..3` | frost lantern: post with an arm; head = the hanging glowing lantern (icicles from 2, a snowflake crown at 3), sways | h ≈ 2.1 | 368 / 400 / 472 |
+| `rs_helmet`, `rs_scarf`, `rs_banner` | raider props for stronger waves (scarf from wave 3, helmet from 5, banner from 7; brutes and the boss wear the helmet), sized for a 0.8 m head and scaled by the game | — | 144 / 196 / 52 |
+| `rs_blocks`, `rs_ball`, `rs_crate`, `rs_candyrock`, `rs_bush`, `rs_tree` | field decor; `RS leaf` tinted per planet | — | 168 / 560 / 92 / 376 / 120 / 60 |
+
+Run with `-- --icons` for 160×160 transparent WebP icons in `public/assets/icons/rescue/` (`popcorn`, `tesla`,
+`cannon`, `wall`, `frost` from their level-2 look, `portal`, `farmhouse`, `camp`). The file is about 400 KB;
+`art/previews/kit/rescue.webp` shows every piece. Raiders are the planets' own creatures (creatures.glb or the
+procedural shapes) at their normal size, drawn instanced per kind with a light raider tint.

@@ -1,0 +1,95 @@
+/**
+ * What the AI neighbours say (bots.ts shows it in a speech bubble). Every line is English; the Vietnamese
+ * for it is looked up by that English text (locales/vi-bot-lines.ts, loaded only for Vietnamese players). Pools hold about a dozen lines per
+ * scenario and are dealt like cards (TalkBag: no repeat until three quarters of a pool has been used). `{name}` is the
+ * player's name and `{me}` the bot's own.
+ */
+export type BotScenario = 'GREET' | 'ASK' | 'THANKS' | 'LATER' | 'GIFT' | 'FRIEND' | 'FLYBY' | 'WANDER' | 'WITHDRAW';
+export const BOT_LINES: Record<BotScenario, ReadonlyArray<string>> = {
+  GREET: [
+    'Hi {name}! Your garden looks wonderful.',
+    'Hello there! What a lovely day for a walk.',
+    '{name}! I have heard so many good things about you.',
+    'Good to see you, {name}. You always look so cheerful.',
+    'Hey! I love your outfit. Very stylish.',
+    'Hello, {name}! The whole world is brighter with you in it.',
+    'What a kind-looking explorer. Hi!',
+    'I was hoping I would run into you today.',
+    '{name}, you work so hard. I admire that.',
+    'Hi, hi! Is that a new crop I see? Impressive.',
+    'You have the friendliest smile in the whole valley.',
+    'Hello, {name}! Nice to meet a real gardener.',
+  ],
+  ASK: [
+    'Would you like to be friends, {name}?',
+    'I would love to be your friend. What do you say?',
+    'Friends? I think we would get along great.',
+    'Let us be friends! I even have a little gift for you.',
+    'You seem like a good person. Can we be friends?',
+    'Be my friend, {name}? I promise to be a good one.',
+    'Can I visit your garden sometime, as a friend?',
+    'Shall we be friends? You can visit my house too.',
+  ],
+  THANKS: [
+    'Yay! We are friends now!',
+    'Thank you, {name}! You made my day.',
+    'Wonderful! I knew you were kind.',
+    'Best news today. Friends forever, {name}!',
+    'I am so happy! Come and visit me any time.',
+    'A new friend! My heart is doing a little dance.',
+    'You will never be lonely in this valley now.',
+    'Deal! Friends help friends, always.',
+  ],
+  LATER: [
+    'No problem at all. Maybe another time!',
+    'That is okay, {name}. I will say hi again soon.',
+    'Take your time. I am not going anywhere.',
+    'Fair enough. Have a lovely day, though!',
+    'No worries! You are still great.',
+    'Another day, then. Keep growing that garden!',
+  ],
+  GIFT: [
+    'Here, a present for my new friend. I hope you love it!',
+    'I want you to have this. It looks even better on you.',
+    'A friend gift! It is rare, so take good care of it.',
+    'Open it later, or right now. I am too excited!',
+    'This one is special. Just like you.',
+    'Wear it proudly, {name}. You deserve it.',
+    'Friends share the good stuff. This is for you!',
+    'I saved this for someone kind. That is you.',
+  ],
+  FRIEND: [
+    'My friend! Great to see you again.',
+    '{name}! How is the garden growing?',
+    'You are my favourite neighbour, you know.',
+    'Come visit my house when you have time!',
+    'Look who it is! Today just got better.',
+    'I told everyone about you. All good things.',
+    'Keep being awesome, {name}.',
+    'Good to see my friend. Take a snack from me!',
+    'You make this valley feel like home.',
+    'Hi {name}! I was just thinking about you.',
+  ],
+  FLYBY: [
+    'Whoosh! Coming through!',
+    'Look up, friend! The view is amazing from here.',
+    'Flying is the best way to get to the garden!',
+    'Up, up and away!',
+    'Wheee! Hello down there!',
+  ],
+  WITHDRAW: [
+    'Whoa, that boss is too tough for me! It is all yours, {name}!',
+    'I will leave this one to you. Good luck!',
+    'Retreat! Retreat! You go get it, hero!',
+    'Too big for me. Show them what you can do!',
+    'I got in one good hit. The rest is yours!',
+  ],
+  WANDER: [
+    'Such a lovely valley.',
+    'Hmm, is it time for a snack yet?',
+    'I think the flowers are waving at me.',
+    'La la la...',
+    'Nice weather for a walk.',
+    'Oh, a butterfly!',
+  ],
+};
