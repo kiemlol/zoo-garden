@@ -24,8 +24,10 @@ export function cropStage(crop: string | null | undefined, progress: number): Cr
 export const STAGE_SCALE: readonly [number, number, number, number] = [0, 1.4, .55, 1.25];
 /** The camera's pitch, the direction the atlas is baked from. */
 export const VIEW_PITCH = Math.atan2(CAMERA.offset[1], CAMERA.offset[2]);
-/** CSS pixels per metre across the view plane at the camera target on a portrait phone (844 px tall, default zoom). */
-export function phonePxPerMetre(height = 844) { return height / (2 * Math.hypot(...CAMERA.offset) * CAMERA.portraitScale * Math.tan(CAMERA.fov * Math.PI / 360)); }
+/** Fixed art calibration from the original portrait framing. Keep crop sizes unchanged when camera defaults change. */
+const CROP_REFERENCE_ZOOM = 1.3;
+/** CSS pixels per metre used to bake the original crop atlas. */
+export function phonePxPerMetre(height = 844) { return height / (2 * Math.hypot(...CAMERA.offset) * CROP_REFERENCE_ZOOM * Math.tan(CAMERA.fov * Math.PI / 360)); }
 /** The October crop update enlarges young and ripe plants by 25%; sprouts keep their previous size. */
 export const CROP_PRESENTATION_SCALE = 1.25;
 /** Ripe plants read 50 px before the compact garden scale (44 px with CROP_SCALE=.88). */

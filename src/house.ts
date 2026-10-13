@@ -50,8 +50,8 @@ export const WALL = { thick: .2, full: 2.6, low: .55 } as const;
 /** Clearance the explorer keeps from walls (navigation's default clearance for the explorer). */
 export const CLEARANCE = .36;
 export const HOUSE = {
-  /** Camera zoom indoors (the outdoor default is 1): closer, so rooms read like a dollhouse; a little wider on landscape screens. */
-  zoom: .8 * 1.08, wideZoom: .9 * 1.08,
+  /** Camera zoom indoors, identical in landscape and portrait. */
+  zoom: .87, wideZoom: .87,
   /** Where you stand after coming in, facing into the living room. */
   spawn: spreadPoint({ x: 0, z: 5.2 }) as Point,
   /** Inside the front door: tapping it or walking into it leaves. */

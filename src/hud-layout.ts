@@ -17,6 +17,7 @@ export function initHudLayout() {
   layouts.get(menu)?.();
   let lastWidth = -1, lastBottom = -1, lastTrackerBottom=-1, frame=0;
   const tracker=document.querySelector<HTMLElement>('#hud .tracker-stack');
+  const food=document.querySelector<HTMLElement>('#quick-eat-menu'), foodAnchor=document.querySelector<HTMLElement>('.quick-eat');
   const measure = () => {
     frame=0;
     const dock=menu.getBoundingClientRect();if(!dock.width||!dock.height)return;
@@ -27,11 +28,37 @@ export function initHudLayout() {
     if(trackerBottom!==lastTrackerBottom){lastTrackerBottom=trackerBottom;root.setProperty('--tracker-bottom',trackerBottom+'px');}
     if (width !== lastWidth && width > 0) { lastWidth = width; root.setProperty('--dock-w', width + 'px'); }
     if (bottom !== lastBottom && bottom > 0) { lastBottom = bottom; root.setProperty('--menu-bottom', bottom + 'px'); }
+    if(food&&!food.hidden&&foodAnchor){
+      const anchor=foodAnchor.getBoundingClientRect(),visual=window.visualViewport;
+      let topEdge=Math.max(dock.top,visual?.offsetTop??0), rightEdge=Math.min(dock.left-8,window.innerWidth-12);
+      const leftEdge=Math.max(12,document.querySelector<HTMLElement>('#hud .player-card')?.getBoundingClientRect().left??12);
+      const boxes=(selectors:string[])=>selectors.flatMap(selector=>{const el=document.querySelector<HTMLElement>(selector);if(!el||el.hidden)return [];const box=el.getBoundingClientRect();return box.width&&box.height?[box]:[];});
+      const upper=boxes(['#hud .minimap','#hud .home-button']),lower=boxes(['#hud .skills','#hud .movement-joystick']);
+      let width=Math.min(240,Math.max(0,rightEdge-leftEdge)),left=rightEdge-width;
+      const overlaps=(box:DOMRect)=>box.right>left&&box.left<rightEdge;
+      const visibleBottom=(visual?visual.offsetTop+visual.height:window.innerHeight)-12;
+      let bottomEdge=Math.min(visibleBottom,...lower.filter(overlaps).map(box=>box.top-12));
+      const belowMap=Math.max(topEdge,...upper.filter(overlaps).map(box=>box.bottom+8));
+      if(bottomEdge-belowMap>=88)topEdge=belowMap;
+      else {
+        // Very short screens open just left of the map/Home column, so the list
+        // can be tall without covering either thumb control or those buttons.
+        rightEdge=Math.min(rightEdge,...upper.map(box=>box.left-8));
+        width=Math.min(240,Math.max(0,rightEdge-leftEdge));left=rightEdge-width;
+        bottomEdge=Math.min(visibleBottom,...lower.filter(overlaps).map(box=>box.top-12));
+      }
+      for(const box of boxes(['#hud .player-card','#hud .tracker-panels']))if(overlaps(box))topEdge=Math.max(topEdge,box.bottom+8);
+      const height=Math.max(44,Math.min(320,bottomEdge-topEdge)),top=Math.max(topEdge,Math.min(anchor.bottom+6,bottomEdge-height));
+      for(const [name,value]of Object.entries({left,top,width,height})){const key='--food-'+name,valuePx=value+'px';if(root.getPropertyValue(key)!==valuePx)root.setProperty(key,valuePx);}
+    }
+
   };
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(measure);};
   const resize=typeof ResizeObserver!=='undefined'?new ResizeObserver(schedule):null;resize?.observe(menu);if(tracker)resize?.observe(tracker);
+  document.querySelectorAll<HTMLElement>('#hud .skills, #hud .movement-joystick, #hud .minimap, .quick-eat').forEach(el=>resize?.observe(el));
   const watch=typeof MutationObserver!=='undefined'?new MutationObserver(schedule):null;
   watch?.observe(menu,{childList:true});
+  if(food)watch?.observe(food,{childList:true,attributes:true,attributeFilter:['hidden']});
   menu.querySelectorAll('#social-slot, #platform-slot').forEach(slot=>watch?.observe(slot,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden']}));
   const hud=menu.closest('#hud');if(hud)watch?.observe(hud,{attributes:true,attributeFilter:['hidden','class']});
   window.addEventListener('resize',schedule);window.addEventListener('orientationchange',schedule);window.visualViewport?.addEventListener('resize',schedule);

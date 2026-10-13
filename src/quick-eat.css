@@ -21,18 +21,22 @@
 .quick-eat-pick::before { content: ''; position: absolute; inset: -6px -4px; }
 #quick-eat-menu {
   /* Opens beside the button, above the joystick and fight buttons while it is up. */
-  position: absolute; left: calc(100% + 6px); top: 0; z-index: 30; display: grid; gap: 4px; width: 200px; max-height: min(320px, calc(100dvh - 200px)); overflow: auto;
+  position: fixed; left: var(--food-left, 12px); top: var(--food-top, 80px); z-index: 30; display: grid; gap: 4px;
+  width: var(--food-width, min(240px, calc(100vw - 24px))); max-height: var(--food-height, min(320px, calc(var(--visible-h, 100dvh) - 200px)));
+  box-sizing: border-box; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
   padding: 6px; border-radius: 16px; border: 3px solid #fff; background: #fffaf0; box-shadow: 0 10px 26px rgba(30, 30, 20, .28);
 }
+#app.food-open #hud { z-index: 4; }
+#app #hud .tracker-stack.food-open { z-index: 40; }
 #quick-eat-menu[hidden] { display: none; }
 #quick-eat-menu button {
-  display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 6px; min-height: 40px; padding: 4px 8px; border-radius: 11px;
+  display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 6px; min-height: 44px; padding: 4px 8px; border-radius: 11px;
   border: 2px solid transparent; background: #fff; color: var(--ink, #3a2433); text-align: left; font-weight: 800;
 }
 #quick-eat-menu button[aria-pressed="true"] { border-color: #ff6f86; background: #fff0f2; }
 #quick-eat-menu button > span { display: grid; place-items: center; width: 28px; height: 28px; font-size: 20px; }
 #quick-eat-menu button > span img { width: 28px; height: 28px; }
-#quick-eat-menu small { font-size: 12px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; }
+#quick-eat-menu small { font-size: 12px; line-height: 1.15; overflow-wrap: anywhere; }
 #quick-eat-menu b { font-size: 11px; color: #c0425a; white-space: nowrap; }
 @media (max-width: 600px), (max-height: 500px) {
   #quick-eat { width: 46px; height: 46px; }

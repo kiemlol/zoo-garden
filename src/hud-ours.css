@@ -24,10 +24,11 @@
   --dock: max(44px, calc(var(--b) + 8px));
   /* Set by hud-layout.ts once the dock is measured; one column until then. */
   --dock-w: var(--dock);
+  --dock-edge: clamp(4px, .6vw, 8px);
   /* Height kept free under the dock for the fight cluster. */
   --dock-room: 132px;
   /* The right edge of everything that hangs left of the dock, and the top of the map: level with the dock's first button. */
-  --col: calc(var(--edge) + var(--safe-right) + var(--dock-w) + 8px);
+  --col: calc(var(--dock-edge) + var(--safe-right) + var(--dock-w) + 8px);
   --map-top: calc(var(--edge) + var(--safe-top) + (var(--dock) - var(--b)) / 2);
   /* The portrait tile, and the hero plate's height with it: borders 4, padding 3 + 5, the name line 14, a gap of 2. */
   --face: calc(var(--b) + 8px);
@@ -109,7 +110,7 @@ svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible;
 
 /* ------------------------------------------------------------------ The dock */
 #app #hud .top-actions {
-  position: absolute; left: auto; right: calc(var(--edge) + var(--safe-right)); top: calc(var(--edge) + var(--safe-top));
+  position: absolute; left: auto; right: calc(var(--dock-edge) + var(--safe-right)); top: calc(var(--edge) + var(--safe-top));
   bottom: calc(var(--dock-room) + var(--safe-bottom)); width: auto; max-width: none;
   display: grid; grid-auto-flow: column; grid-template-rows: repeat(auto-fill, var(--dock)); grid-auto-columns: var(--dock);
   /* Columns are added leftwards from the screen edge. */

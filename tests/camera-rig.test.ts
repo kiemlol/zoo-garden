@@ -1,23 +1,32 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import {cameraOffset,clampZoom,followBlend,groundAt,lightAxes,shadowBox,viewFootprint} from '../src/camera-rig.ts';
+import {defaultCameraZoom,cameraOffset,clampZoom,followBlend,groundAt,lightAxes,shadowBox,viewFootprint} from '../src/camera-rig.ts';
 
 const near=(a:number,b:number,eps=.05)=>assert.ok(Math.abs(a-b)<=eps,`${a} should be ${b} ±${eps}`);
 const DESKTOP=1440/900,PHONE=390/844,LANDSCAPE=844/390;
 
-test('the camera sits where the reference puts it: 21.7 m away at a 51.5° pitch, 1.3x further back in portrait',()=>{
-  const desk=cameraOffset(DESKTOP);assert.deepEqual(desk.toArray(),[0,17,13.5]);near(desk.length(),21.71,.01);near(Math.atan2(desk.y,desk.z)*180/Math.PI,51.5,.1);
-  const phone=cameraOffset(PHONE);near(phone.y,22.1,1e-9);near(phone.z,17.55,1e-9);
-  assert.deepEqual(cameraOffset(LANDSCAPE).toArray(),[0,17,13.5]);
-  near(cameraOffset(DESKTOP,1.5).length(),21.71*1.5,.02);
+test('camera zoom is 87% indoors, 80% landscape and 110% portrait, with no extra portrait scale',()=>{
+  for(const aspect of [DESKTOP,LANDSCAPE,1])near(defaultCameraZoom(aspect,false),.8,1e-12);
+  for(const aspect of [PHONE,.9])near(defaultCameraZoom(aspect,false),1.1,1e-12);
+  for(const aspect of [DESKTOP,PHONE,LANDSCAPE,.9]){
+    near(defaultCameraZoom(aspect,true),.87,1e-12);
+    for(const zoom of [.8,.87,1.1])near(cameraOffset(aspect,zoom).length(),Math.hypot(17,13.5)*zoom,1e-9);
+  }
+  assert.deepEqual(cameraOffset(DESKTOP).toArray(),[0,17,13.5]);
+  assert.deepEqual(cameraOffset(PHONE).toArray(),[0,17,13.5]);
 });
 
-test('the view shows the reference ground: ±12.6 m across the explorer row, 14.2 m up and 7.8 m down on a desktop; ±4.75, 18.5 and 10.2 m on a portrait phone',()=>{
-  near(groundAt(DESKTOP,1,1,0).x,12.64);near(groundAt(DESKTOP,1,-1,0).x,-12.64);near(groundAt(DESKTOP,1,0,1).z,-14.19);near(groundAt(DESKTOP,1,0,-1).z,7.83);
-  near(groundAt(PHONE,1,1,0).x,4.75);near(groundAt(PHONE,1,0,1).z,-18.45);near(groundAt(PHONE,1,0,-1).z,10.18);
-  // The explorer is the centre of the screen, with no look-ahead.
-  near(groundAt(DESKTOP,1,0,0).x,0,1e-6);near(groundAt(DESKTOP,1,0,0).z,0,1e-6);
+test('ground projection matches the actual lens and resolved zoom in both orientations',()=>{
+  const raycaster=new T.Raycaster(),hit=new T.Vector3(),ground=new T.Plane(new T.Vector3(0,1,0),0);
+  for(const aspect of [DESKTOP,PHONE,.9])for(const indoor of [false,true]){
+    const zoom=defaultCameraZoom(aspect,indoor),lens=new T.PerspectiveCamera(40,aspect,.5,300);
+    lens.position.copy(cameraOffset(aspect,zoom));lens.lookAt(0,0,0);lens.updateMatrixWorld();
+    for(const [x,y]of [[-1,0],[1,0],[0,-1],[0,1],[0,0]]){
+      raycaster.setFromCamera(new T.Vector2(x,y),lens);raycaster.ray.intersectPlane(ground,hit);
+      const point=groundAt(aspect,zoom,x,y);near(point.x,hit.x,1e-9);near(point.z,hit.z,1e-9);
+    }
+  }
 });
 
 test('the camera follows at 9/s, 5/s in cut-scenes, and zoom reaches 0.65-1.5 by wheel and 0.6-1.6 by pinch',()=>{

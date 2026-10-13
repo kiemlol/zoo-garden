@@ -27,7 +27,7 @@ import { Effects } from './fx.ts';
 import { applyDye } from './dye-render.ts';
 import { baseOf } from './dye-skins.ts';
 import { deathBagModel, deathBagEntityId } from './death-bags-view.ts';
-import { CAMERA, SHADOW, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
+import { CAMERA, SHADOW, defaultCameraZoom, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
 import { QUALITY, type QualityProfile } from './graphics.ts';
 import { CropCards, CROP_PRESENTATION_SCALE, SOIL_Y, cropStage, popScale, stageScale, type BedCrop } from './crop-cards.ts';
 import { GardenBeds } from './garden-beds.ts';
@@ -235,18 +235,23 @@ export class World {
     this.ring = mesh(new T.RingGeometry(0.7, 0.8, 32), '#fff09d'); this.ring.rotation.x = -Math.PI / 2; this.ring.position.y = 0.12; this.ring.visible = false; this.scene.add(this.ring);
     this.fx = new Effects(this.scene, this.camera);
     this.target = new TargetMarker(); this.decals = new TelegraphDecals(); this.scene.add(this.target.root, this.decals.root);
-    this.build(state.planet); this.refreshPlayer(); this.resize(); window.addEventListener('gameviewportresize', () => this.resize());
+    this.build(state.planet); this.refreshPlayer(); this.resize(); window.addEventListener('gameviewportresize', () => { if(!this.resizeFrame)this.resizeFrame=requestAnimationFrame(()=>{this.resizeFrame=0;this.resize();}); });
   }
+  private rendererWidth=0; private rendererHeight=0; private resizeFrame=0;
   resize() {
     const w = innerWidth, h = innerHeight, aspect = w / h;
-    // The reference camera (camera-rig.ts): portrait phones sit 1.3x further back and see about ±4.75 m across.
-    this.camera.aspect = aspect; this.camera.updateProjectionMatrix(); this.renderer.setSize(w, h);
+    // The indoor scene wins over orientation and any saved outdoor zoom.
+    this.zoom = defaultCameraZoom(aspect, !!this.interior);
+    this.camera.aspect = aspect; this.camera.updateProjectionMatrix();
+    // A same-size canvas assignment clears the drawing buffer and resets GPU state.
+    if(w!==this.rendererWidth||h!==this.rendererHeight){this.renderer.setSize(w,h);this.rendererWidth=w;this.rendererHeight=h;}
     cameraOffset(aspect, this.zoom, this.viewOffset);
     // The shadow box hugs the ground in view, in the light's own axes: sharp up close, wide enough when zoomed out.
     const shadow=this.sun?.shadow?.camera;
     // How far from the camera target the ground in view reaches, plus a creature's size: beyond it nothing can be seen.
-    this.viewReach=Math.max(...viewFootprint(aspect,this.zoom).map(p=>Math.hypot(p.x,p.z)))+6;
-    if(shadow){Object.assign(shadow,shadowBox(viewFootprint(aspect,this.zoom),this.sunAxes??=lightAxes(this.sunOffset)));shadow.updateProjectionMatrix();}
+    const footprint=viewFootprint(aspect,this.zoom);
+    this.viewReach=Math.max(...footprint.map(p=>Math.hypot(p.x,p.z)))+6;
+    if(shadow){Object.assign(shadow,shadowBox(footprint,this.sunAxes??=lightAxes(this.sunOffset)));shadow.updateProjectionMatrix();}
   }
   setQuality(low: boolean) { this.renderer.setPixelRatio(low ? 1 : Math.min(devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = !low; this.resize(); }
   /** Apply a graphics profile: render resolution, shadow map size (0 turns shadows off) and particle density. */
@@ -1210,7 +1215,13 @@ export class World {
     return findRoute(this.position,target,this.collisionObstacles(),this.navigationOptions()).map(p=>new T.Vector3(p.x,0,p.z));
   }
   /** The thing the context button acts on: the current target while it is still in reach (so the prompt and the target frame agree and a press never swaps creatures mid-fight), else the nearest valid entity in reach. */
-  nearest() {const s=this.selected;if(s&&this.validTarget(s)&&Math.hypot(s.x-this.position.x,s.z-this.position.z)<s.radius+2)return s;/* The cottage door wins over a helper standing in front of it (a friend coming out used to take the Interact button, so the house seemed locked). */const gap=(e:Entity)=>Math.hypot(e.x-this.position.x,e.z-this.position.z)-e.radius-(e.kind==='home'?1.6:0);return this.entities.filter(e=>this.validTarget(e)).sort((a,b)=>gap(a)-gap(b)).find(e=>Math.hypot(e.x-this.position.x,e.z-this.position.z)<e.radius+2);}
+  nearest() {
+    const s=this.selected;if(s&&this.validTarget(s)&&Math.hypot(s.x-this.position.x,s.z-this.position.z)<s.radius+2)return s;
+    // Same door priority and stable tie order, without filtering/sorting the whole world every HUD tick.
+    let nearest:Entity|undefined,best=Infinity;
+    for(const e of this.entities){if(!this.validTarget(e))continue;const distance=Math.hypot(e.x-this.position.x,e.z-this.position.z);if(distance>=e.radius+2)continue;const gap=distance-e.radius-(e.kind==='home'?1.6:0);if(gap<best){best=gap;nearest=e;}}
+    return nearest;
+  }
   /** True when something was in reach to act on. */
   interactNearest() {const e=this.nearest();if(e)this.select(e);return !!e;}
   burst(x:number,z:number,color:string,count=14) {

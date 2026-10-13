@@ -7,7 +7,6 @@ import type { World, Enemy } from './world.ts';
 import type { EnemyDefinition } from './enemy-types.ts';
 import { terrainHeight } from './environments.ts';
 import { planetLook } from './look.ts';
-import { cameraOffset } from './camera-rig.ts';
 import { COLOSSUS_ID, COLOSSUS_MINIONS, COLOSSUS_MINION_SHARD, COLOSSUS_NAME, COLOSSUS_SCHEDULE as W, COLOSSUS_STATS as S, COLOSSUS_TYPE, clockText, colossusClock, colossusMaxHp, NEIGHBOUR_HIT_CAP, roarHours } from './colossus-content.ts';
 import { COLOSSUS_CALLOUTS, beginColossusAttack, colossusCadence, colossusDamage, colossusSkill, colossusTelegraphs, headMultiplier, headPoint, sanitizeColossusAttack, stepColossusAttack, throughDefence, type ColossusAttack, type ColossusEffect, type ColossusHit, type ColossusSource } from './colossus-patterns.ts';
 import { colossusContributors, grantColossusReward, grantRoarBonus } from './colossus-rewards.ts';
@@ -44,8 +43,6 @@ export const COLOSSUS_DEFINITION: EnemyDefinition = {
 };
 type Driven = Enemy & { driver?: { incoming(e: Enemy, amount: number, hazard: boolean): number } };
 const SKY = new T.Color('#2a1420'), DUSK_SKY_LIGHT = new T.Color('#c87a6a'), DUSK_SUN = new T.Color('#ff9a62'), sky = new T.Color(), fogColor = new T.Color();
-/** The arena camera pulls back this much (× the player's zoom) near the Colossus, so more of the giant fits in view. */
-const ARENA_ZOOM = 1.4, ARENA_RANGE = 48;
 /** Closer than this (about the giant's sight, S.sight), the real model is fetched; far away the fog hides it anyway. */
 const ART_RANGE = 70;
 const BOT_PREFIX = 'bot:';
@@ -75,7 +72,6 @@ export class ColossusEvent {
   private crackUntil = 0; private scorchUntil = 0; private burnUntil = 0; private burnTick = 0; private stunUntil = 0;
   private throwing: { fromX: number; fromZ: number; toX: number; toZ: number; t: number; land: boolean } | null = null;
   private weakAt = -1; private dark = 0; private lightPlanet = ''; private lastPhase = '';
-  private zoomK = 1; private fittedK = 1; private fitAt = 0;
   /** Online: the last state the server sent (null until one arrives). */
   private server: (ColossusServerState & { at: number }) | null = null;
   private serverAttacks: ColossusAttack[] = [];
@@ -169,11 +165,8 @@ export class ColossusEvent {
     }
     this.stepMinions();
     this.darken(dt, awake && (!e || e.hp > 0) && this.weak === 1);
-    const close = !!this.enemy && this.enemy.hp > 0 && w.planet === 'home' && !w.interior && Math.hypot(w.position.x - this.enemy.x, w.position.z - this.enemy.z) < ARENA_RANGE;
-    this.zoomK += ((close ? ARENA_ZOOM : 1) - this.zoomK) * Math.min(1, dt * 1.6);
-    if (Math.abs(this.zoomK - 1) < .002) this.zoomK = 1;
   }
-  /** Drawing: just before the frame is drawn (world.beforeRender): pose, attacks, camera, banner. */
+  /** Drawing: just before the frame is drawn (world.beforeRender): pose, attacks, banner. */
   frame() {
     const w = this.h.world, e = this.enemy;
     this.view.begin();
@@ -188,23 +181,7 @@ export class ColossusEvent {
     }
     this.view.end();
     if (this.view.root.parent !== w.scene) w.scene.add(this.view.root);
-    this.frameCamera();
     this.updateBanner();
-  }
-
-  /**
-   * The arena camera: the offset is recomputed every frame from the player's own zoom, and the shadow box and view reach
-   * are refitted now and then while it moves (world.resize, with the zoom borrowed for the call). It runs just before
-   * the frame is drawn, so the canvas resize inside never shows.
-   */
-  private frameCamera() {
-    const w = this.h.world, k = this.zoomK, now = this.time;
-    if (k === 1 && this.fittedK === 1) return;
-    cameraOffset(innerWidth / innerHeight, w.zoom * k, w.viewOffset);
-    if (Math.abs(k - this.fittedK) > .04 && now - this.fitAt > .3 || k === 1 && this.fittedK !== 1) {
-      const zoom = w.zoom; w.zoom = zoom * k; w.resize(); w.zoom = zoom; this.fittedK = k; this.fitAt = now;
-      cameraOffset(innerWidth / innerHeight, w.zoom * k, w.viewOffset);
-    }
   }
 
   // ---- Offline fight ----

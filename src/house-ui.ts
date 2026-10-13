@@ -1,3 +1,4 @@
+import { viewWidth, viewHeight } from './viewport.ts';
 /**
  * The cottage in the game shell: the outdoor door that swings open, the fade in and out, the "Outside"
  * button, walking in and out through the door, the wardrobe and mirror (your own gear) and the "Dress"
@@ -161,7 +162,7 @@ export function initHouse(d: HouseDeps) {
     if (fade !== veilFade && dimHold <= 0) { veilFade = fade; veil.style.opacity = String(fade); veil.style.display = fade > 0 ? 'block' : 'none'; }
     life.frame(dt);
     if (house.inside) {
-      house.frame(innerWidth / innerHeight); house.view.update(dt, world.time);
+      house.frame(viewWidth() / viewHeight()); house.view.update(dt, world.time);
       // A closed panel ends its look previews (friend-looks-ui.ts drafts); the room shows the drafts while it is open.
       if (d.modal() !== 'dress' && looks.clear()) friendClock = 0;
       if ((friendClock -= dt) <= 0) { friendClock = .25; house.syncFriends(looks.shown(friendList())); }

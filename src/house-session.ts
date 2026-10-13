@@ -7,7 +7,8 @@
  * at home it waits by the animal pen (pet-pen.ts).
  */
 import * as T from 'three';
-import { groundAt } from './camera-rig.ts';
+import { groundAt, cameraPitch } from './camera-rig.ts';
+import { viewWidth, viewHeight } from './viewport.ts';
 import type { Entity, World } from './world.ts';
 import { FRIEND_SPOTS, HOUSE, furnitureObstacles, walkable } from './house.ts';
 import { ACTIVITIES, type ActivityId } from './house-activities.ts';
@@ -24,13 +25,19 @@ export interface ActivityEntity extends Entity { activity: ActivityId }
  * Where the camera looks indoors: at the explorer, but slid so the view never runs far past the house
  * (a dollhouse on a dark table, not a corner of floor and a lot of black). Centred when the view is wider.
  */
+let focusAspect=NaN, focusZoom=NaN, focusPitch=NaN, focusEdges = {left: 0, right: 0, far: 0, near: 0};
 export function houseFocus(p: { x: number; z: number }, aspect: number, zoom: number, out = new T.Vector3()) {
-  const b = HOUSE.bounds, left = groundAt(aspect, zoom, -1, 0).x, right = groundAt(aspect, zoom, 1, 0).x, far = groundAt(aspect, zoom, 0, 1).z, near = groundAt(aspect, zoom, 0, -1).z;
+  const pitch=cameraPitch();
+  if(aspect!==focusAspect||zoom!==focusZoom||pitch!==focusPitch){
+    focusAspect=aspect;focusZoom=zoom;focusPitch=pitch;
+    focusEdges = {left: groundAt(aspect, zoom, -1, 0).x, right: groundAt(aspect, zoom, 1, 0).x, far: groundAt(aspect, zoom, 0, 1).z, near: groundAt(aspect, zoom, 0, -1).z};
+  }
+  const b = HOUSE.bounds, {left, right, far, near} = focusEdges;
   // When the view is wider than the house the limits cross: then it drifts a little with the explorer around the middle.
   const clamp = (v: number, lo: number, hi: number) => { const mid = (lo + hi) / 2, reach = lo > hi ? (lo - hi) / 4 : (hi - lo) / 2; return Math.min(mid + reach, Math.max(mid - reach, v)); };
   return out.set(clamp(p.x, b.x0 - .6 - left, b.x1 + .6 - right), 0, clamp(p.z, b.z0 - 2.2 - far, b.z1 + .6 - near));
 }
-const innerAspect = () => typeof innerWidth === 'number' && innerHeight > 0 ? innerWidth / innerHeight : 16 / 9;
+const innerAspect = () => viewHeight() > 0 ? viewWidth() / viewHeight() : 16 / 9;
 export class HouseSession {
   view = new HouseView();
   private saved: { entities: Entity[]; obstacles: World['obstacles']; zoom: number } | null = null;
@@ -57,7 +64,7 @@ export class HouseSession {
     this.view.scene.add(host.marker, host.ring, host.remoteRoot); host.fx?.attach(this.view.scene);
     host.position.set(HOUSE.spawn.x, 0, HOUSE.spawn.z); host.facing = Math.PI; host.destination = null; host.route = []; host.selected = null;
     host.marker.visible = false; host.ring.visible = false;
-    host.zoom = innerAspect() > 1 ? HOUSE.wideZoom : HOUSE.zoom; host.resize();
+    host.zoom = HOUSE.zoom; host.resize();
     host.cameraTarget.copy(houseFocus(host.position, innerAspect(), host.zoom, this.focus)); host.cameraFocus = this.focus;
     void this.view.refine();
   }
@@ -109,7 +116,7 @@ export class HouseSession {
   /** Where its label sits: low on the middle of that box. */
   labelAt(e: Entity) { const b = this.boxOf(e); return b ? labelSpot(b) : null; }
   /** Its box on screen (CSS pixels), grown to a finger's width for small things. */
-  screenBox(e: Entity): ScreenRect | null { const b = this.boxOf(e), cam = this.host?.camera; return b && cam ? screenRect(b, cam, innerWidth, innerHeight) : null; }
+  screenBox(e: Entity): ScreenRect | null { const b = this.boxOf(e), cam = this.host?.camera; return b && cam ? screenRect(b, cam, viewWidth(), viewHeight()) : null; }
   /** The label's screen box for an entity id while it shows (main.ts sets this; labels never take taps themselves). */
   labelBox: (id: string) => ScreenRect | null = () => null;
   private spots: Array<Hotspot<Entity>> = [];

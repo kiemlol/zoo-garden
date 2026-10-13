@@ -66,7 +66,7 @@ test('the dock: cells are never under 44 px, it folds into columns from the righ
   const dock = css.match(/#app #hud \.top-actions \{([^}]*)\}/)![1];
   assert.match(dock, /grid-auto-flow: column; grid-template-rows: repeat\(auto-fill, var\(--dock\)\); grid-auto-columns: var\(--dock\);/);
   assert.match(dock, /direction: rtl;/);
-  assert.match(dock, /right: calc\(var\(--edge\) \+ var\(--safe-right\)\); top: calc\(var\(--edge\) \+ var\(--safe-top\)\);/);
+  assert.match(dock, /right: calc\(var\(--dock-edge\) \+ var\(--safe-right\)\); top: calc\(var\(--edge\) \+ var\(--safe-top\)\);/);
   assert.match(dock, /bottom: calc\(var\(--dock-room\) \+ var\(--safe-bottom\)\);/);
   // The room kept under the dock on touch screens is the paw's height plus a margin.
   assert.match(css, /@media \(pointer: coarse\), \(max-width: 900px\), \(max-height: 520px\) \{ :root \{ --dock-room: calc\(var\(--sk\) \* 2\.38 \+ 44px\); \} \}/);
@@ -101,7 +101,7 @@ test('the paw: four toes on an arc over the pad, at least one toe width apart an
 test('safe areas: every edge-anchored piece adds the matching inset', () => {
   assert.match(css, /--safe-left: env\(safe-area-inset-left, 0px\); --safe-right: env\(safe-area-inset-right, 0px\);/);
   assert.match(css, /#app #hud \.player-card \{\s*left: calc\(var\(--edge\) \+ var\(--safe-left\)\); top: calc\(var\(--edge\) \+ var\(--safe-top\)\);/);
-  assert.match(css, /--col: calc\(var\(--edge\) \+ var\(--safe-right\) \+ var\(--dock-w\) \+ 8px\);/);
+  assert.match(css, /--col: calc\(var\(--dock-edge\) \+ var\(--safe-right\) \+ var\(--dock-w\) \+ 8px\);/);
   // The map hangs level with the dock's first button, where the energy tag used to be.
   assert.match(css, /--map-top: calc\(var\(--edge\) \+ var\(--safe-top\) \+ \(var\(--dock\) - var\(--b\)\) \/ 2\);/);
   assert.doesNotMatch(css, /--row2\b/);
