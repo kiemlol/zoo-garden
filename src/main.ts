@@ -270,7 +270,7 @@ app.innerHTML = `
     <div class="space-help">Hold to steer <i>•</i> <kbd>W</kbd> <kbd>A</kbd> <kbd>D</kbd> fly <i>•</i> <kbd>Shift</kbd> boost <i>•</i> <kbd>S</kbd> brake <i>•</i> <kbd>L</kbd> land</div>
   </div>
   <div id="warp-flash"></div>
-  ${titleCardHtml({name:saved?.name??'',color:state.color,colors:M.COLORS,colorNames:['Sky blue','Rose pink','Leaf green','Honey yellow','Lavender','Terracotta'],returning:!!saved,language:languageSelector('welcome'),profiles:profilePicker(),online:import.meta.env.VITE_ONLINE_URL?`<a id="online-link" class="online-link" hidden href="${esc(String(import.meta.env.VITE_ONLINE_URL))}">🌐 ${t('Play online with friends')} →</a>`:'',esc,t})}
+  ${titleCardHtml({accountEntry:import.meta.env.VITE_STATIC_HOST!=='true',name:saved?.name??'',color:state.color,colors:M.COLORS,colorNames:['Sky blue','Rose pink','Leaf green','Honey yellow','Lavender','Terracotta'],returning:!!saved,language:languageSelector('welcome'),profiles:profilePicker(),online:import.meta.env.VITE_ONLINE_URL?`<a id="online-link" class="online-link" hidden href="${esc(String(import.meta.env.VITE_ONLINE_URL))}">🌐 ${t('Play online with friends')} →</a>`:'',esc,t})}
   <div id="dialog-layer" hidden><section id="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><header><span id="dialog-icon" aria-hidden="true"></span><div><span id="dialog-kicker" class="eyebrow">MAKE YOURSELF AT HOME</span><h2 id="dialog-title"></h2></div><button class="close-button" data-action="close" aria-label="Close dialog">×</button></header><div id="dialog-body"></div></section></div>
   <div id="toasts" role="status" aria-live="polite"></div><div id="floating-text"></div><div id="bubble-layer"></div><div id="damage-flash"></div>
 `;
@@ -451,7 +451,7 @@ function profilePicker(){
 function welcomeDialog(){
   openDialog('welcome',t('Welcome to the game!'),`<p class="intro">${t('Hi boss! I am Pepper, your cook. Welcome to the game!')}</p><p>${t('Guess what? You are lucky today! I played the lottery and won 1,000,000 energy. Do you want it?')}</p><div class="button-row"><button class="primary" data-action="welcome-take">${t('Yes, take it!')}</button><button class="soft-button" data-action="welcome-pass">${t('No, thanks')}</button></div>`,t('YOUR COOK'),'🍳');
 }
-async function start() {settle();showTrimNote();await migrateDogStays();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;if(state.welcome==='pending')welcomeDialog();void compileAsyncSafe(world.renderer,world.scene,world.camera); // warm the village's shaders off the first walk
+async function start() {if(started)return;settle();showTrimNote();await migrateDogStays();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;if(state.welcome==='pending')welcomeDialog();void compileAsyncSafe(world.renderer,world.scene,world.camera); // warm the village's shaders off the first walk
   applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
@@ -1662,6 +1662,7 @@ function rebuildHomePresentation(planet:M.PlanetId){
 }
 const sharedKills=new Set<string>();
 export const gameBridge:GameBridge={
+  enterGame:start,
   getState:()=>state,getWorld:()=>world,
   getPresence:()=>({y:house.poseY(world.position.y+world.jump.height),x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,visible:!document.hidden,visual:world.visualSnapshot(),dog:(()=>{const dog=world.ownDog?.();return dog!==null&&dog!==undefined&&M.dogWorn(state.gear)&&dogFollows(world.planet,world.position,!!world.interior)?dog:null;})()}),
   getOfflineState:()=>{try{return M.parseSave(localStorage.getItem(activeKey()));}catch{return null;}},

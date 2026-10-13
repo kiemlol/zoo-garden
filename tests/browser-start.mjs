@@ -7,3 +7,10 @@ export async function dismissWelcome(page) {
     await page.waitForSelector('#dialog-layer', { state: 'hidden' });
   }
 }
+
+// The online edition now opens on account entry. HUD fixtures explicitly select
+// the existing local adventure before exercising controls.
+export async function chooseOffline(page) {
+  await page.waitForFunction(() => !!document.querySelector('.auth-solo') || (!!document.querySelector('#title-screen') && !document.querySelector('#title-screen').inert && !document.querySelector('#title-screen').classList.contains('account-entry')), null, { timeout: 60000 });
+  const offline=page.locator('.auth-solo');if(await offline.isVisible())await offline.click();
+}

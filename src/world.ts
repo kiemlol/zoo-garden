@@ -235,7 +235,7 @@ export class World {
     this.ring = mesh(new T.RingGeometry(0.7, 0.8, 32), '#fff09d'); this.ring.rotation.x = -Math.PI / 2; this.ring.position.y = 0.12; this.ring.visible = false; this.scene.add(this.ring);
     this.fx = new Effects(this.scene, this.camera);
     this.target = new TargetMarker(); this.decals = new TelegraphDecals(); this.scene.add(this.target.root, this.decals.root);
-    this.build(state.planet); this.refreshPlayer(); this.resize(); window.addEventListener('resize', () => this.resize());
+    this.build(state.planet); this.refreshPlayer(); this.resize(); window.addEventListener('gameviewportresize', () => this.resize());
   }
   resize() {
     const w = innerWidth, h = innerHeight, aspect = w / h;

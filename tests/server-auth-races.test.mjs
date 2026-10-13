@@ -200,3 +200,15 @@ test('removing a friendship ends an active garden visit and stops private home u
   await connection.message(value => value.type === 'chatAck' && value.requestId === requestId, afterRemoval);
   assert.equal(connection.messages.slice(afterRemoval).some(value => value.type === 'home'), false);
 });
+
+test('anonymous or forged account identities cannot submit gameplay or upgrade to multiplayer',async t=>{
+  const f=await fixture(t),alice=await f.register('auth_gate_qa');
+  const anonymous=await f.request(null,'actions',{type:'settings',payload:{name:'Forged'},accountId:alice.id,username:'auth_gate_qa'});
+  assert.equal(anonymous.status,401);
+  const forgedCookie=`${alice.cookie.split('=')[0]}=${alice.id}`;
+  assert.equal((await f.request(forgedCookie,'auth/session')).body.account,null);
+  assert.equal((await f.request(forgedCookie,'actions',{type:'settings',payload:{name:'Forged'}})).status,401);
+  const anonymousSocket=f.connect(''),forgedSocket=f.connect(forgedCookie);
+  assert.deepEqual(await anonymousSocket.opened(),{opened:false,status:401});assert.deepEqual(await forgedSocket.opened(),{opened:false,status:401});
+  assert.equal((await f.request(alice.cookie,'auth/session')).body.account.name,alice.profile.name);
+});

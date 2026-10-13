@@ -47,7 +47,9 @@ export function initStoredNote(host: Host, parent: HTMLElement) {
     /** Per frame: inside the circle with something noted for 1.5 s → show it. */
     frame(dt: number) {
       if (host.covered?.()) { homeFor = 0; if (!el.hidden && !el.classList.contains('leaving')) hide(); return; }
-      homeFor = host.home() ? homeFor + dt : 0; if (homeFor > 1.5 && !busy && host.state().awayStore) void show();
+      const atHome=host.home();
+      if(!atHome&&!el.hidden&&!el.classList.contains('leaving'))hide();
+      homeFor = atHome ? homeFor + dt : 0; if (homeFor > 1.5 && !busy && host.state().awayStore) void show();
     },
     show,
   };

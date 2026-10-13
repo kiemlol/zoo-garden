@@ -9,11 +9,13 @@ import {VI_ONLINE} from '../src/locales/vi-online.ts';
 import {gameplayKey} from '../src/gameplay-controls.ts';
 
 class Element {
-  constructor(tag='div'){this.tagName=tag;this.children=[];this.listeners=new Map();this.attributes=new Map();this.dataset={};this.classList={add(){}};this.open=false;this.style={};this.value='';this.selectionStart=null;this.selectionEnd=null;}
-  append(...children){this.children.push(...children);}
+  constructor(tag='div'){this.tagName=tag;this.children=[];this.listeners=new Map();this.attributes=new Map();this.dataset={};this.classList={add(){},remove(){},toggle(){}};this.open=false;this.style={};this.value='';this.selectionStart=null;this.selectionEnd=null;}
+  append(...children){for(const child of children)child.parent=this;this.children.push(...children);}
   prepend(...children){this.children.unshift(...children);}
   closest(){return ['input','textarea','select'].includes(this.tagName)?this:null;}
   replaceChildren(...children){this.children=[...children];}
+  removeAttribute(name){this.attributes.delete(name);}
+  remove(){if(this.parent)this.parent.children=this.parent.children.filter(child=>child!==this);}
   setAttribute(name,value){this.attributes.set(name,value);}
   addEventListener(name,handler){this.listeners.set(name,handler);}
   querySelectorAll(selector){return elements(this).slice(1).filter(node=>selector==='input'?node.tagName==='input':selector.startsWith('.')?node.className===selector.slice(1):false);}
@@ -88,7 +90,7 @@ async function fixture({failFirstAction=false,responseFor,initialActions}={}){
   document.body=body;document.createElement=tag=>Object.assign(new Element(tag),{ownerDocument:document});document.createTextNode=textContent=>Object.assign(new Element('text'),{textContent});document.querySelector=selector=>selector==='#social-slot'?slot:null;
   const setTimeout=(fn,delay)=>{const id=++timerId;timers.set(id,{fn,delay});return id;},clearTimeout=id=>timers.delete(id);
   window.setTimeout=setTimeout;window.clearTimeout=clearTimeout;
-  const i18n={t:(text,params={})=>(language==='vi'?VI_ONLINE[text]||text:text).replace(/\{(\w+)\}/g,(match,key)=>key in params?String(params[key]):match),onLanguageChange:fn=>{languageListeners.push(fn);return()=>{};}};
+  const i18n={getLanguage:()=>language,switchLanguage:value=>{language=value;for(const fn of languageListeners)fn();},t:(text,params={})=>(language==='vi'?VI_ONLINE[text]||text:text).replace(/\{(\w+)\}/g,(match,key)=>key in params?String(params[key]):match),onLanguageChange:fn=>{languageListeners.push(fn);return()=>{};}};
   class Socket extends Element {
     static OPEN=1;readyState=1;sent=[];failSend=false;
     constructor(url){super();this.url=String(url);sockets.push(this);}
@@ -97,7 +99,7 @@ async function fixture({failFirstAction=false,responseFor,initialActions}={}){
     close(code=1000){this.readyState=3;this.listeners.get('close')?.({code});}
   }
   const world=new Proxy({},{get:(object,key)=>Reflect.get(object,key)??(()=>{})}),bridge={getState:()=>state,getPresence:()=>({planet:state.planet,x:0,z:0}),getWorld:()=>world,getOfflineState:()=>newGame('Offline'),setPersistence(){},setActionHandler(fn){this.perform=fn;},applyAuthoritativeState(value){state=value;},clearNetworkDrops(){spawned.length=0;},spawnNetworkDrop(drop){spawned.push(drop);},removeNetworkDrop(){},releaseNetworkDrop(){},applyAuthorityHealth(){},setNetworkHooks(){},applyState:value=>{state=value;},showNotice:text=>notices.push(text),setVisiting:(...args)=>visits.push(args),onFrame(fn){this.frame=fn;},onAction(){}};
-  const exports={};vm.runInNewContext(compiled,{exports,document,window,clearTimeout,setTimeout,URL,structuredClone,crypto:{randomUUID},location:{href:'https://game.example/',protocol:'https:'},localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)},WebSocket:Socket,require:name=>name==='./i18n.ts'?i18n:name==='./gameplay-controls.ts'?{gameplayKey}:{newGame,parseSave},fetch:async(url,options)=>{requests.push({url,options});if(url.endsWith('/actions')&&failFirstAction){failFirstAction=false;throw new Error('Connection reset');}const response=await responseFor?.(url,options,session);if(response)return response;return {ok:true,json:async()=>url.includes('/auth/')?structuredClone(session):url.endsWith('/actions')?{ok:true,authorityVersion:1,profile:structuredClone(session.profile),revision:++session.revision,result:true}:{ok:true}};}});
+  const exports={};vm.runInNewContext(compiled,{exports,document,window,AbortController,clearTimeout,setTimeout,URL,structuredClone,crypto:{randomUUID},location:{href:'https://game.example/',protocol:'https:'},localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)},WebSocket:Socket,require:name=>name==='./i18n.ts'?i18n:name==='./gameplay-controls.ts'?{gameplayKey}:{newGame,parseSave},fetch:async(url,options)=>{requests.push({url,options});if(url.endsWith('/actions')&&failFirstAction){failFirstAction=false;throw new Error('Connection reset');}const response=await responseFor?.(url,options,session);if(response)return response;return {ok:true,json:async()=>url.includes('/auth/')?structuredClone(session):url.endsWith('/actions')?{ok:true,authorityVersion:1,profile:structuredClone(session.profile),revision:++session.revision,result:true}:{ok:true}};}});
   exports.initOnline(bridge);await flush();slot.children[0].click();
   const all=()=>elements(body),find=name=>all().find(node=>node.name===name),button=label=>{const node=all().find(node=>node.tagName==='button'&&node.textContent===label);assert.ok(node,`Missing button ${label}`);return node;};
   const join=({party=null,planet='home',socket=sockets.at(-1)}={})=>socket.message({type:'joined',host:session.account?.id,planet,party,room:`${party||'public'}:${planet}`,players:session.account?[session.account]:[]});

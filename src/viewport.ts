@@ -7,11 +7,22 @@
  */
 const live = typeof window !== 'undefined' && typeof window.addEventListener === 'function';
 let width = 0, height = 0;
-function sync() { width = window.innerWidth; height = window.innerHeight; }
+function sync() {
+  const previousWidth=width,previousHeight=height;
+  width = window.innerWidth; height = window.innerHeight;
+  const visual=window.visualViewport, unzoomed=!visual||Math.abs(visual.scale-1)<.01;
+  const root=document.documentElement;
+  root.style.setProperty('--visible-h',`${unzoomed&&visual?visual.height:height}px`);
+  root.style.setProperty('--visible-top',`${unzoomed&&visual?visual.offsetTop:0}px`);
+  // Keyboard/URL bars resize the visible area; canvas coordinates continue using the layout viewport.
+  root.dataset.shortViewport=String((unzoomed&&visual?visual.height:height)<=520);
+  if(previousWidth&& (previousWidth!==width||previousHeight!==height))window.dispatchEvent(new Event('gameviewportresize'));
+}
 if (live) {
   sync();
   for (const type of ['resize', 'orientationchange']) window.addEventListener(type, sync);
   window.visualViewport?.addEventListener('resize', sync);
+  window.visualViewport?.addEventListener('scroll', sync);
 }
 const global = globalThis as unknown as { innerWidth?: number; innerHeight?: number };
 export const viewWidth = () => live ? width : global.innerWidth ?? 0;

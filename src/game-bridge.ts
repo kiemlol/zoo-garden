@@ -19,6 +19,8 @@ export interface NetworkHooks {
 }
 export interface NetworkDrop {id:string;ownerId:string;item:string;count:number;room:string;planet:string;x:number;z:number;owner:string;releaseAt:number;expiresAt:number;thrown?:boolean}
 export interface GameBridge {
+  /** Enter the existing game after the server profile has been applied. */
+  enterGame?():Promise<void>;
   spawnNetworkDrop(drop:NetworkDrop,actor:string):void;removeNetworkDrop(id:string):void;releaseNetworkDrop(id:string):void;clearNetworkDrops():void;
   applyAuthorityHealth(delta:number,died:boolean):void;
   getState():SaveState;applyState(next:SaveState):void;getWorld():World;getPresence():GamePresence;

@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
-import { dismissWelcome } from './browser-start.mjs';
+import { dismissWelcome, chooseOffline } from './browser-start.mjs';
 
 const url = process.env.HUD_LAYOUT_URL;
 const skip = !url && 'set HUD_LAYOUT_URL to a running DEV server';
@@ -17,6 +17,7 @@ async function play(view, run) {
     const page = await (await browser.newContext(view)).newPage();
     await page.routeWebSocket(u => new URL(u).searchParams.has('token'), () => {});
     await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+      await chooseOffline(page);
     await page.waitForSelector('#title-screen button.primary', { state: 'visible', timeout: 60000 });
     await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
     await run(page);

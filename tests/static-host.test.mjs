@@ -7,9 +7,11 @@ import {VI_ONLINE} from '../src/locales/vi-online.ts';
 import {gameplayKey} from '../src/gameplay-controls.ts';
 
 class Element {
-  constructor(tag='div'){this.tagName=tag;this.children=[];this.listeners=new Map();this.attributes=new Map();this.dataset={};this.classes=new Set();this.classList={add:name=>this.classes.add(name)};this.open=false;this.style={};this.value='';this.selectionStart=null;this.selectionEnd=null;}
-  append(...children){this.children.push(...children);}
+  constructor(tag='div'){this.tagName=tag;this.children=[];this.listeners=new Map();this.attributes=new Map();this.dataset={};this.classes=new Set();this.classList={add:name=>this.classes.add(name),remove:name=>this.classes.delete(name),toggle:(name,on)=>on?this.classes.add(name):this.classes.delete(name)};this.open=false;this.style={};this.value='';this.selectionStart=null;this.selectionEnd=null;}
+  append(...children){for(const child of children)child.parent=this;this.children.push(...children);}
   replaceChildren(...children){this.children=[...children];}
+  removeAttribute(name){this.attributes.delete(name);}
+  remove(){if(this.parent)this.parent.children=this.parent.children.filter(child=>child!==this);}
   setAttribute(name,value){this.attributes.set(name,value);}
   addEventListener(name,handler){this.listeners.set(name,handler);}
   querySelectorAll(selector){return elements(this).slice(1).filter(node=>selector==='input'?node.tagName==='input':selector.startsWith('.')?node.className===selector.slice(1):false);}
@@ -35,14 +37,14 @@ async function online({staticHost='true',base='/cute_game/',slotPresent=true,lan
   document.body=body;document.createElement=tag=>Object.assign(new Element(tag),{ownerDocument:document});document.createTextNode=value=>Object.assign(new Element('text'),{textContent:value});document.querySelector=selector=>selector==='#social-slot'&&slotPresent?slot:null;
   window.setTimeout=()=>1;
   const languageListeners=[],sockets=[];
-  const i18n={t:(source,params={})=>(language==='vi'?VI_ONLINE[source]||source:source).replace(/\{(\w+)\}/g,(match,key)=>key in params?String(params[key]):match),onLanguageChange:handler=>{languageListeners.push(handler);return()=>{};}};
+  const i18n={getLanguage:()=>language,switchLanguage:value=>{language=value;for(const fn of languageListeners)fn();},t:(source,params={})=>(language==='vi'?VI_ONLINE[source]||source:source).replace(/\{(\w+)\}/g,(match,key)=>key in params?String(params[key]):match),onLanguageChange:handler=>{languageListeners.push(handler);return()=>{};}};
   class Socket extends Element {static OPEN=1;readyState=1;sent=[];constructor(){super();sockets.push(this);}send(value){this.sent.push(JSON.parse(value));}message(value){this.listeners.get('message')?.({data:JSON.stringify(value)});}}
   let registrations=0;
   let state={name:'Clover',color:'#789abc',planet:'home'};
   const bridge=staticHost==='true'?new Proxy({},{get(){throw new Error('Static hosting must not replace the local game or save hooks');}}):{onFrame(){registrations++;},onAction(){registrations++;},getState:()=>state,getPresence:()=>({planet:'home',x:0,z:0}),getWorld:()=>new Proxy({},{get:()=>()=>{}}),setPersistence(){},setActionHandler(){},applyAuthoritativeState(){},clearNetworkDrops(){},spawnNetworkDrop(){},applyState:value=>{state=value;},setNetworkHooks(){},showNotice(){}};
   const exports={};
   vm.runInNewContext(await compile('online.ts',{VITE_STATIC_HOST:staticHost,BASE_URL:base}),{
-    exports,document,window,
+    exports,document,window,AbortController,clearTimeout:()=>{},
     require:name=>{if(name==='./i18n.ts')return i18n;if(name==='./gameplay-controls.ts')return {gameplayKey};assert.equal(name,'./model.ts');return {};},
     fetch:async(url,options)=>{requests.push({url,options});return loginError&&url.endsWith('auth/login')?{ok:false,status:401,json:async()=>({error:loginError})}:{ok:true,json:async()=>session};},
     WebSocket:staticHost==='true'?class{constructor(){throw new Error('Unexpected socket connection');}}:Socket,

@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
-import { dismissWelcome } from './browser-start.mjs';
+import { dismissWelcome, chooseOffline } from './browser-start.mjs';
 
 const url = process.env.HUD_LAYOUT_URL;
 const VIEWS = {
@@ -29,6 +29,7 @@ for (const [name, view] of Object.entries(VIEWS)) {
       // Isolate layout measurements from development hot reload while other modules are rebuilt.
       await page.routeWebSocket(socketUrl=>new URL(socketUrl).searchParams.has('token'),()=>{});
       await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+      await chooseOffline(page);
       await page.waitForSelector('#title-screen button.primary', { state: 'visible', timeout: 60000 });
       await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
       await page.fill('#name-input', 'Layout');
@@ -47,7 +48,7 @@ for (const [name, view] of Object.entries(VIEWS)) {
       });
       await page.waitForTimeout(2500);
       const r = await page.evaluate(() => {
-        const box = el => { const b = el.getBoundingClientRect(); return b.width && b.height && getComputedStyle(el).visibility !== 'hidden' ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
+        const box = el => { const b = el.getBoundingClientRect(); const dock=el.closest('.top-actions');if(dock&&getComputedStyle(dock).overflowY==='auto'){const c=dock.getBoundingClientRect();if(b.top<c.top-.5||b.bottom>c.bottom+.5)return null;} return b.width && b.height && getComputedStyle(el).visibility !== 'hidden' ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null; };
         const all = sel => [...document.querySelectorAll(sel)].filter(el => !el.closest('[hidden]')).map(box).filter(Boolean);
         const panels = { player: all('.player-card'), buttons: all('.top-actions button'), minimap: all('.minimap'), trackers: all('.tracker-stack > :not([hidden]):not(.quick-eat)'), skills: all('.skill'), heel: all(document.body.classList.contains('air-combat') ? '#hud .jump-pad' : '#hud .attack-pad'), toe: document.body.classList.contains('air-combat') ? all('#hud .attack-pad') : [], toasts: all('.toast'), prompt: all('#context-prompt button'), pad: all('#touch-controls button'), joystick:all('#movement-joystick'), home: all('.home-button') };
         const W = innerWidth, H = innerHeight; let hits = 0, n = 0;
@@ -163,6 +164,7 @@ test('the discovery pill never shows over the fight buttons or the stick at phon
     const page = await (await browser.newContext(VIEWS['phone 390x844'])).newPage();
     await page.routeWebSocket(socketUrl=>new URL(socketUrl).searchParams.has('token'),()=>{});
     await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+      await chooseOffline(page);
     await page.waitForSelector('#title-screen button.primary', { state: 'visible', timeout: 60000 });
     await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
     await page.fill('#name-input', 'Pill'); await page.click('#title-screen button.primary');
@@ -195,6 +197,7 @@ async function openGame(view, name = 'Layout') {
   const page = await (await browser.newContext(view)).newPage();
   await page.routeWebSocket(socketUrl => new URL(socketUrl).searchParams.has('token'), () => {});
   await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+      await chooseOffline(page);
   await page.waitForSelector('#title-screen button.primary', { state: 'visible', timeout: 60000 });
   await page.waitForFunction(() => !document.querySelector('#title-screen').inert, null, { timeout: 30000 });
   await page.fill('#name-input', name); await page.click('#title-screen button.primary');
@@ -283,6 +286,7 @@ for (const size of Object.keys(SIZES)) for (const lang of ['en', 'vi']) {
       const page = await context.newPage();
       await page.routeWebSocket(socketUrl => new URL(socketUrl).searchParams.has('token'), () => {});
       await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+      await chooseOffline(page);
       await page.waitForSelector('[data-action="start"]', { timeout: 60000 });
       await page.evaluate(() => document.querySelector('[data-action="start"]').click());
       await page.waitForFunction(() => !!window.__zoo?.world, null, { timeout: 30000 }); await page.waitForTimeout(6000);
@@ -369,6 +373,7 @@ for (const [size, lang] of [['1280x720', 'en'], ['390x844', 'vi'], ['320x568', '
       const page = await context.newPage();
       await page.routeWebSocket(socketUrl => new URL(socketUrl).searchParams.has('token'), () => {});
       await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+      await chooseOffline(page);
       await page.waitForSelector('[data-action="start"]', { timeout: 60000 });
       await page.evaluate(() => document.querySelector('[data-action="start"]').click());
       await page.waitForFunction(() => !!window.__zoo?.world && !!window.__zoo.news, null, { timeout: 30000 }); await page.waitForTimeout(5000);

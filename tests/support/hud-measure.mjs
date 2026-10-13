@@ -4,7 +4,11 @@ export const SIZES = { '1600x900': [1600, 900, false], '1280x720': [1280, 720, f
 
 /** Runs in the page: the visible box of every HUD piece, by group. */
 export function measureHud() {
-  const seen = el => { if (!el) return false; const cs = getComputedStyle(el); if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) return false; if (el.closest('[hidden]')) return false; const b = el.getBoundingClientRect(); return b.width > 1 && b.height > 1; };
+  const seen = el => { if (!el) return false; const cs = getComputedStyle(el); if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) return false; if (el.closest('[hidden]')) return false; const b = el.getBoundingClientRect(); if(b.width<=1||b.height<=1)return false;
+    // A scrollable menu intentionally keeps more buttons than fit on screen.
+    // Measure fully visible controls; reachability of the others is checked by scrolling.
+    const dock=el.closest('.top-actions');if(dock&&getComputedStyle(dock).overflowY==='auto'){const c=dock.getBoundingClientRect();if(b.top<c.top-.5||b.bottom>c.bottom+.5)return false;}
+    return true; };
   const box = el => { const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
   const all = sel => [...document.querySelectorAll(sel)].filter(seen).map(box);
   const groups = {

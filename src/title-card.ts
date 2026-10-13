@@ -12,11 +12,11 @@ import { installButtonHtml } from './install-app.ts';
  */
 export interface TitleCardParts {
   name: string; color: string; colors: readonly string[]; colorNames: readonly string[]; returning: boolean;
-  language: string; profiles: string; online?: string; esc: (value: string) => string; t: (text: string) => string;
+  language: string; profiles: string; accountEntry?: boolean; online?: string; esc: (value: string) => string; t: (text: string) => string;
 }
 export function titleCardHtml(p: TitleCardParts) {
   const { esc, t } = p;
-  return `<div id="title-screen" class="title-live"><div class="title-shade"></div>`
+  return `<div id="title-screen" class="title-live${p.accountEntry ? ' account-entry' : ''}"><div class="title-shade"></div><div class="auth-loading" role="status"><strong>🌱 ZooPet</strong><span>${esc(t('Preparing your adventure…'))}</span></div>`
     + `<div class="title-stack"><div class="title-logo"><h1><span class="brand-sprout" aria-hidden="true">🌱</span>Zoo <em data-i18n-skip>Garden</em></h1><p class="title-tagline">${esc(t('Grow a garden · Catch fish · Battle monsters · Fly to new planets'))}</p></div>`
     + `<div class="welcome-card title-card"><div class="welcome-form"><label for="name-input" class="vh">${esc(t('Your name'))}</label><div class="title-row"><input id="name-input" aria-label="${esc(t('Your character name'))}" maxlength="20" value="${esc(p.name)}" placeholder="${esc(t('Your name'))}" autocomplete="off">`
     + `<fieldset class="color-picker"><legend>${esc(t('Pick your favorite color'))}</legend>${p.colors.map((c, i) => `<button type="button" data-action="color" data-color="${c}" style="--swatch:${c}" class="${p.color === c ? 'selected' : ''}" aria-label="${esc(t(p.colorNames[i] ?? c))}" aria-pressed="${p.color === c}"></button>`).join('')}</fieldset></div>`
