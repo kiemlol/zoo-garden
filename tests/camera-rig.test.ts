@@ -6,15 +6,15 @@ import {defaultCameraZoom,cameraOffset,clampZoom,followBlend,groundAt,lightAxes,
 const near=(a:number,b:number,eps=.05)=>assert.ok(Math.abs(a-b)<=eps,`${a} should be ${b} ±${eps}`);
 const DESKTOP=1440/900,PHONE=390/844,LANDSCAPE=844/390;
 
-test('camera zoom is 87% indoors, 80% landscape and 110% portrait, with no extra portrait scale',()=>{
+test('camera zoom is 87% indoors, 80% landscape and 110% portrait, with the original portrait calibration',()=>{
   for(const aspect of [DESKTOP,LANDSCAPE,1])near(defaultCameraZoom(aspect,false),.8,1e-12);
   for(const aspect of [PHONE,.9])near(defaultCameraZoom(aspect,false),1.1,1e-12);
   for(const aspect of [DESKTOP,PHONE,LANDSCAPE,.9]){
     near(defaultCameraZoom(aspect,true),.87,1e-12);
-    for(const zoom of [.8,.87,1.1])near(cameraOffset(aspect,zoom).length(),Math.hypot(17,13.5)*zoom,1e-9);
+    for(const zoom of [.8,.87,1.1])near(cameraOffset(aspect,zoom).length(),Math.hypot(17,13.5)*zoom*(aspect<.8?1.3:1),1e-9);
   }
   assert.deepEqual(cameraOffset(DESKTOP).toArray(),[0,17,13.5]);
-  assert.deepEqual(cameraOffset(PHONE).toArray(),[0,17,13.5]);
+  near(cameraOffset(PHONE,1.1).length(),Math.hypot(17,13.5)*1.1*1.3,1e-9);
 });
 
 test('ground projection matches the actual lens and resolved zoom in both orientations',()=>{

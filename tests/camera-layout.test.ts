@@ -6,12 +6,12 @@ import {houseFocus} from '../src/house-session.ts';
 import {cameraPitch,setCameraPitch,groundAt} from '../src/camera-rig.ts';
 import {HOUSE} from '../src/house.ts';
 
-test('resize resolves indoor/orientation zoom, ignores stale zoom and resizes the canvas only when its dimensions change',()=>{
+test('resize resolves indoor/orientation zoom, preserves manual zoom between transitions and resizes the canvas only when its dimensions change',()=>{
  const previous={width:globalThis.innerWidth,height:globalThis.innerHeight};let resized=0;
  const w=Object.assign(Object.create(World.prototype),{camera:new T.PerspectiveCamera(),viewOffset:new T.Vector3(),renderer:{setSize(){resized++;}}}) as World;
  try{
- for(const [width,height,inside,expected]of [[844,390,false,.8],[390,844,false,1.1],[844,390,true,.87],[390,844,true,.87],[844,390,true,.87],[844,390,false,.8],[390,844,false,1.1]] as const){
-  globalThis.innerWidth=width;globalThis.innerHeight=height;w.interior=inside?{} as NonNullable<World['interior']>:null;w.zoom=1.6;w.resize();assert.equal(w.zoom,expected);assert.ok(Math.abs(w.viewOffset.length()-Math.hypot(17,13.5)*expected)<1e-9);const count=resized;w.resize();assert.equal(resized,count);
+ for(const [width,height,inside,expected]of [[844,390,false,.8],[390,844,false,1.1],[844,390,true,.87],[390,844,true,.87],[844,390,true,.87],[844,390,true,1.6],[844,390,false,.8],[390,844,false,1.1]] as const){
+  globalThis.innerWidth=width;globalThis.innerHeight=height;w.interior=inside?{} as NonNullable<World['interior']>:null;w.zoom=1.6;w.resize();assert.equal(w.zoom,expected);assert.ok(Math.abs(w.viewOffset.length()-Math.hypot(17,13.5)*expected*(width/height<.8?1.3:1))<1e-9);const count=resized;w.zoom=1.23;w.resize();assert.equal(w.zoom,1.23);assert.equal(resized,count);
  }
  assert.equal(resized,6);
  }finally{globalThis.innerWidth=previous.width;globalThis.innerHeight=previous.height;}

@@ -3,10 +3,10 @@ import * as T from 'three';
 /**
  * The game camera, after the reference (zoo-pet bundle @1042127, @1060136, @1060358, @1054243): a 40°
  * perspective lens at target + (0, 17, 13.5), 21.7 m away at a 51.5° pitch, looking straight at the
- * smoothed explorer (no look-ahead). Zoom is already resolved from the viewport and indoor state; no extra portrait multiplier. The
+ * smoothed explorer (no look-ahead). Portrait screens below aspect 0.8 keep the original 1.3× distance calibration. The
  * steep pitch keeps fighters apart on screen instead of stacking the explorer over its target.
  */
-export const CAMERA = { fov: 40, near: .5, far: 300, offset: [0, 17, 13.5], follow: 9, cutSceneFollow: 5 } as const;
+export const CAMERA = { fov: 40, near: .5, far: 300, offset: [0, 17, 13.5], portraitAspect: .8, portraitScale: 1.3, follow: 9, cutSceneFollow: 5 } as const;
 /** Zoom multiplies the camera distance: the wheel reaches 0.65-1.5, a pinch 0.6-1.6. */
 export const ZOOM = { wheel: [.65, 1.5], pinch: [.6, 1.6], wheelStep: .001, button: .1 } as const;
 /** Linear fog in the sky colour from 45 m, well beyond the fight radius, so fights are never hazy. */
@@ -46,8 +46,8 @@ export function defaultCameraZoom(aspect: number, inside: boolean) {
   return inside ? CAMERA_ZOOM.indoor : aspect >= 1 ? CAMERA_ZOOM.landscape : CAMERA_ZOOM.portrait;
 }
 
-export function cameraOffset(_aspect: number, zoom = 1, out = new T.Vector3()) {
-  const scale = zoom;
+export function cameraOffset(aspect: number, zoom = 1, out = new T.Vector3()) {
+  const scale = zoom * (aspect < CAMERA.portraitAspect ? CAMERA.portraitScale : 1);
   return out.set(viewOffset[0], viewOffset[1], viewOffset[2]).multiplyScalar(scale);
 }
 

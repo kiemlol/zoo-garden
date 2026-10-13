@@ -4,7 +4,10 @@
 
 Đã duyệt vòng lặp chính, camera Three.js, chuyển cảnh nhà, các chế độ phụ, HUD, minimap, bảng xếp hạng/News, thức ăn, graphics governor, batching/instancing và các test liên quan. Theo xác nhận của chủ dự án, 87 / 80 / 110 là **phần trăm zoom**, không phải mét trong thế giới 3D.
 
-Camera dùng `cameraOffset` (vector cơ sở `(0,17,13.5)`) nhân với zoom; FOV vẫn 40°. Trước đây portrait còn nhân thêm 1,3× khi aspect < 0,8, nhà chọn hai zoom khác nhau và Colossus ghi đè offset từng frame. Nay `defaultCameraZoom(aspect, inside)` trả `.87` trong nhà, `.8` khi width >= height, `1.1` khi width < height. `World.resize()` dùng trạng thái `World.interior` của hệ thống nhà hiện có, cập nhật offset, phép chiếu, view reach và shadow bounds cùng một giá trị. Khi ra nhà, zoom được tính lại theo viewport hiện tại, không khôi phục hướng màn hình cũ. Wheel/pinch không đổi zoom; nút ± trong Settings bị vô hiệu hóa và hiển thị ba mức cố định. Phần zoom tự động của Colossus được bỏ để không ghi đè chính sách này; combat và dữ liệu boss không đổi.
+Camera dùng `cameraOffset` (vector cơ sở `(0,17,13.5)`) nhân với zoom; FOV vẫn 40°. **Đã sửa lại theo phản hồi:** 87% / 80% / 110% là mặc định, không khóa lựa chọn của người chơi. Khôi phục hệ số portrait 1,3× khi aspect < 0,8 như bản gốc để cùng số phần trăm có cùng cách tính khoảng cách; việc bỏ hệ số này trong `b8af119` khiến camera 110% nhìn gần hơn bản cũ.
+
+`defaultCameraZoom(aspect, inside)` trả `.87` trong nhà, `.8` khi width >= height, `1.1` khi width < height. `World.resize()` chỉ áp dụng mặc định lần đầu, khi vào/ra nhà hoặc đổi hướng màn hình; đổi góc nhìn, quality, kích thước cùng hướng và thao tác zoom giữ nguyên mức người chơi đã chọn. Settings ±, con lăn và pinch hai ngón tay được khôi phục đúng giới hạn cũ. Khi ra nhà, mặc định ngoài trời được tính theo hướng hiện tại. Hệ thống nhà hiện có tiếp tục cung cấp `World.interior`; không thêm cơ chế nhận diện nhà.
+
 
 Bảng xếp hạng trước đây dành quá nhiều chiều cao cho header và bộ lọc trong landscape thấp. Layout mới cho hai nhóm bộ lọc nằm cạnh nhau khi còn chiều rộng, dành row `minmax(0,1fr)` riêng cho danh sách và row riêng cho footer. Danh sách/News cuộn riêng; hàng không shrink và tên dài có thể xuống dòng. Weekly/all-time, loại thống kê và dữ liệu không đổi.
 
@@ -23,7 +26,7 @@ Dock chức năng dùng token riêng `--dock-edge:clamp(4px,.6vw,8px)` cộng sa
 
 Vòng lặp đã có delta time, giới hạn số bước simulation, reset thời gian khi tab quay lại và một RAF chính; không thay tốc độ, cooldown hay physics. Render resolution điện thoại đã có cap 1,25× và governor tự động; scenery/crops đã dùng batching/instancing. Không thêm engine, đổi shader hoặc giảm mật độ cảnh/chất lượng hình ảnh.
 
-## Đo trước/sau
+## Đo trước/sau của lượt sửa HUD/hiệu năng b8af119
 
 Chromium headless tại 844×390, touch/mobile, Graphics Low, cùng save fixture, cùng vị trí, zoom ngoài trời `.8`, trong nhà `.87`, 10 giây mỗi cảnh. Trình duyệt dùng SwiftShader (render phần mềm); đây **không phải** FPS của Android/iPhone thật. NPC/hiệu ứng vẫn chạy nên draw calls và CPU có dao động; không coi một lượt là bằng chứng cải thiện GPU hay FPS tổng thể.
 
@@ -64,7 +67,7 @@ HUD_LAYOUT_URL=http://127.0.0.1:5173 PLAYWRIGHT_MODULE=/path/to/playwright/index
 HUD_LAYOUT_URL=http://127.0.0.1:5173 PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs PERF_SECONDS=45 node promo/perf-responsive.mjs /tmp/zoo-perf.json
 ```
 
-## Kết quả build và test
+## Kết quả build và test của lượt sửa b8af119
 
 `npm run build` thành công (typecheck + Vite + offline cache); vẫn có cảnh báo chunk >500 kB đã có trước đó. Suite cuối: **1.800 test, 1.742 pass, 51 skip, 7 fail**. Bảy lỗi được tái hiện trực tiếp trên worktree ở commit `ad9b642`: 3 air-switch, 1 HUD markup, 3 keyboard-routing; không sửa combat để né các assertion này.
 
@@ -75,6 +78,13 @@ Browser camera/panels cuối **pass**: 320×568, 390×844, 430×932, 667×320, 8
 Smoke test mở/đóng/mở lại bảng thức ăn đã pass; scroll trở về 0.
 
 Ảnh chụp kiểm tra: `/tmp/zoopet-ranking-fixed.png`, `/tmp/zoopet-food-fixed.png`.
+
+## Kiểm tra bổ sung khi khôi phục zoom thủ công
+
+- Build/typecheck thành công.
+- 19/19 test camera, ray projection, zoom defaults/manual refresh và nhà thành công.
+- Browser test `tests/camera-zoom-browser.test.mjs` pass: Settings ± hoạt động; wheel đổi zoom; touch thật bằng Chromium CDP kiểm tra hai ngón tay mở rộng/thu lại; portrait 110% có offset bằng `hypot(17,13.5) × 1.1 × 1.3`; refresh giữ zoom tự chọn; vào nhà mặc định 87%, zoom trong nhà được phép; xoay và ra nhà áp dụng mặc định tương ứng. Không có pageerror.
+- Đã cập nhật assertion trong camera/panels test để phản ánh calibration cũ. Không chạy lại toàn bộ suite hoặc đo lại FPS cho bản sửa zoom; số đo phía trên thuộc lượt sửa b8af119.
 
 ## Phần còn cần kiểm tra trên thiết bị thật
 

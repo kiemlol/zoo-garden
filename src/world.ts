@@ -238,10 +238,14 @@ export class World {
     this.build(state.planet); this.refreshPlayer(); this.resize(); window.addEventListener('gameviewportresize', () => { if(!this.resizeFrame)this.resizeFrame=requestAnimationFrame(()=>{this.resizeFrame=0;this.resize();}); });
   }
   private rendererWidth=0; private rendererHeight=0; private resizeFrame=0;
+  private cameraLayout?: {landscape:boolean;inside:boolean};
   resize() {
     const w = innerWidth, h = innerHeight, aspect = w / h;
-    // The indoor scene wins over orientation and any saved outdoor zoom.
-    this.zoom = defaultCameraZoom(aspect, !!this.interior);
+    // Apply defaults only on entry/exit or orientation changes. Graphics, pitch,
+    // URL bars and manual zoom refreshes preserve the player's chosen distance.
+    const landscape=aspect>=1,inside=!!this.interior,last=this.cameraLayout;
+    if(!last||last.landscape!==landscape||last.inside!==inside)this.zoom=defaultCameraZoom(aspect,inside);
+    this.cameraLayout={landscape,inside};
     this.camera.aspect = aspect; this.camera.updateProjectionMatrix();
     // A same-size canvas assignment clears the drawing buffer and resets GPU state.
     if(w!==this.rendererWidth||h!==this.rendererHeight){this.renderer.setSize(w,h);this.rendererWidth=w;this.rendererHeight=h;}
