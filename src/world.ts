@@ -47,7 +47,7 @@ import * as M from './model.ts';
 import {EnvironmentSimulation,createEnvironmentLayout,environmentWalkable,inWater,terrainHeight,zoneAt,type EnvironmentStatus,type EnvironmentEvent,type LightningState} from './environments.ts';
 import {EnvironmentView} from './environment-art.ts';
 import {buildDecoration} from './decorations-art.ts';
-import {bossCalloutText,bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,BOSS_CALLOUTS,BOSS_TELEGRAPH_COLORS,CALLOUT_RANGE,CREATURE_TELEGRAPHS,telegraphProgress,hitControl,liftHeight,keepsChasing,BOSS_RESISTED,RESIST_SLOW,KNOCK_IMPULSE,BOSS_KNOCK,BOSS_REACH,BOSS_SKILLS,LEASH,type BossSkill} from './boss-patterns.ts';
+import {ZONE_DIFFICULTY,bossCalloutText,bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,BOSS_CALLOUTS,BOSS_TELEGRAPH_COLORS,CALLOUT_RANGE,CREATURE_TELEGRAPHS,telegraphProgress,hitControl,liftHeight,keepsChasing,BOSS_RESISTED,RESIST_SLOW,KNOCK_IMPULSE,BOSS_KNOCK,BOSS_REACH,BOSS_SKILLS,LEASH,type BossSkill} from './boss-patterns.ts';
 import {addOutlines,setOutlinesEnabled,showOutlines} from './outline.ts';
 import {viewWidth,viewHeight} from './viewport.ts';
 import {deferFlash,flashMaterialsOf,flashMaterialsSoFar} from './flash-materials.ts';
@@ -239,7 +239,7 @@ export class World {
   }
   private rendererWidth=0; private rendererHeight=0; private resizeFrame=0;
   private cameraLayout?: {landscape:boolean;inside:boolean};
-  resize() {
+  resize(cameraScale=1) {
     const w = innerWidth, h = innerHeight, aspect = w / h;
     // Apply defaults only on entry/exit or orientation changes. Graphics, pitch,
     // URL bars and manual zoom refreshes preserve the player's chosen distance.
@@ -249,11 +249,12 @@ export class World {
     this.camera.aspect = aspect; this.camera.updateProjectionMatrix();
     // A same-size canvas assignment clears the drawing buffer and resets GPU state.
     if(w!==this.rendererWidth||h!==this.rendererHeight){this.renderer.setSize(w,h);this.rendererWidth=w;this.rendererHeight=h;}
-    cameraOffset(aspect, this.zoom, this.viewOffset);
+    const viewZoom=this.zoom*(inside?1:cameraScale);
+    cameraOffset(aspect, viewZoom, this.viewOffset);
     // The shadow box hugs the ground in view, in the light's own axes: sharp up close, wide enough when zoomed out.
     const shadow=this.sun?.shadow?.camera;
     // How far from the camera target the ground in view reaches, plus a creature's size: beyond it nothing can be seen.
-    const footprint=viewFootprint(aspect,this.zoom);
+    const footprint=viewFootprint(aspect,viewZoom);
     this.viewReach=Math.max(...footprint.map(p=>Math.hypot(p.x,p.z)))+6;
     if(shadow){Object.assign(shadow,shadowBox(footprint,this.sunAxes??=lightAxes(this.sunOffset)));shadow.updateProjectionMatrix();}
   }
@@ -878,7 +879,7 @@ export class World {
   }
   spawnSpecies(type:string,x:number,z:number,index:number){
     const def=ENEMY_TYPES[type];if(!def)return null;
-    const zone=this.planet==='home'?zoneAt({x,z}):this.planet,difficulty=({home:0,forest:1,meadow:1,swamp:2,canyon:3,candy:3,ice:4,lava:5,toy:2,jungle:3,ocean:4,cloud:5,shadow:6} as Record<string,number>)[zone],scale=[1,1,1.7,2.6,3.6,4.8,6.2][difficulty];
+    const zone=this.planet==='home'?zoneAt({x,z}):this.planet,difficulty=ZONE_DIFFICULTY[zone]??1,scale=[1,1,1.7,2.6,3.6,4.8,6.2][difficulty];
     // Hard difficulty (difficulty.ts hardScale): the same multipliers the server applies to its roster. In a room the
     // host's difficulty decides (online.ts sets roomDifficulty), so every browser spawns what the server expects.
     const hard=hardScale(this.roomDifficulty??this.state),tough=this.networkRole||def.boss||def.titan?1:creatureLevelScale(this.state.level),health=Math.round(def.hp*scale*(def.titan?7:def.boss&&type!=='dragon'?5.2:def.boss?2:1)*hard.hp*tough),damage=def.damage*scale*(def.titan?1.6:def.boss?1.35:1)*hard.damage*tough,xp=Math.round(def.xp*(.6+scale*.4));

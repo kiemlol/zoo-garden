@@ -13,7 +13,7 @@ export const BOSS_SKILLS:Record<string,readonly BossSkill[]>={
   shadowlord:['eclipse','rain','spin','barrage','quake'],
 };
 Object.assign(BOSS_SKILLS,TITAN_MOVE_SETS);
-export const ZONE_DIFFICULTY:Record<string,number>={home:0,forest:1,meadow:1,swamp:2,canyon:3,candy:3,ice:4,lava:5,toy:2,jungle:3,ocean:4,sky:5,cloud:5,dark:6,shadow:6};
+export const ZONE_DIFFICULTY:Record<string,number>={home:0,forest:2,meadow:1,swamp:3,canyon:4,candy:3,ice:4,lava:5,toy:2,jungle:3,ocean:4,sky:5,cloud:5,dark:6,shadow:6};
 const DIFFICULTY_MULTIPLIERS=[1,1,1.7,2.6,3.6,4.8,6.2];
 export function creatureScale(difficulty:number,boss=false,worldBoss=false){
   const rank=Math.min(6,Math.max(0,Math.floor(difficulty))),base=DIFFICULTY_MULTIPLIERS[rank];

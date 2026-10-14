@@ -9,8 +9,8 @@ import { CAGES, FRIENDS, FRIEND_IDS, FRIEND_SLOTS, friendSlot, type Friend, type
  * Rescued friends, pure and testable (friend-crew.ts walks and poses them; FRIENDS-CONTRACT.md is the shared seam).
  *
  * Cages (which bosses, from the boss tables — enemyRoster HP):
- * - Sprout waits by the treant, the weakest home boss (1,820 HP, level 7; the mushroom king has the same level but 2,470 HP).
- * - Clover waits by the bear, the strongest home boss (5,408 HP, level 13). The titan turtle (27,300 HP) is not counted:
+ * - Sprout waits by the treant in Mushroom Forest. This cage identity stays fixed when zone levels change.
+ * - Clover waits by the bear in Redrock Canyon. The titan turtle is not counted:
  *   titans are their own tier (titan-content.ts, a 600 s world boss), not one of the zone bosses.
  * - Pepper waits by the robot on the Toy planet: the first planet the explorer can land on (level 4), and it has a single
  *   boss, so the cage is easy to find. Her cage only appears once any boss on a planet other than home has been beaten.

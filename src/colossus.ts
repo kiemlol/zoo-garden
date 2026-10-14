@@ -6,6 +6,7 @@ import * as M from './model.ts';
 import type { World, Enemy } from './world.ts';
 import type { EnemyDefinition } from './enemy-types.ts';
 import { terrainHeight } from './environments.ts';
+import {cameraOffset} from './camera-rig.ts';
 import { planetLook } from './look.ts';
 import { COLOSSUS_ID, COLOSSUS_MINIONS, COLOSSUS_MINION_SHARD, COLOSSUS_NAME, COLOSSUS_SCHEDULE as W, COLOSSUS_STATS as S, COLOSSUS_TYPE, clockText, colossusClock, colossusMaxHp, NEIGHBOUR_HIT_CAP, roarHours } from './colossus-content.ts';
 import { COLOSSUS_CALLOUTS, beginColossusAttack, colossusCadence, colossusDamage, colossusSkill, colossusTelegraphs, headMultiplier, headPoint, sanitizeColossusAttack, stepColossusAttack, throughDefence, type ColossusAttack, type ColossusEffect, type ColossusHit, type ColossusSource } from './colossus-patterns.ts';
@@ -71,6 +72,7 @@ export class ColossusEvent {
   /** Effects on the explorer (local in both modes; online the server counts the damage). */
   private crackUntil = 0; private scorchUntil = 0; private burnUntil = 0; private burnTick = 0; private stunUntil = 0;
   private throwing: { fromX: number; fromZ: number; toX: number; toZ: number; t: number; land: boolean } | null = null;
+  private zoomK=1;private fittedK=1;private fittedZoom=NaN;private fitAt=0;
   private weakAt = -1; private dark = 0; private lightPlanet = ''; private lastPhase = '';
   /** Online: the last state the server sent (null until one arrives). */
   private server: (ColossusServerState & { at: number }) | null = null;
@@ -165,6 +167,9 @@ export class ColossusEvent {
     }
     this.stepMinions();
     this.darken(dt, awake && (!e || e.hp > 0) && this.weak === 1);
+    const close=!!e&&e.hp>0&&w.planet==='home'&&!w.interior&&Math.hypot(w.position.x-e.x,w.position.z-e.z)<48;
+    this.zoomK+=((close?1.4:1)-this.zoomK)*Math.min(1,dt*1.6);
+    if(Math.abs(this.zoomK-1)<.002)this.zoomK=1;
   }
   /** Drawing: just before the frame is drawn (world.beforeRender): pose, attacks, banner. */
   frame() {
@@ -181,7 +186,18 @@ export class ColossusEvent {
     }
     this.view.end();
     if (this.view.root.parent !== w.scene) w.scene.add(this.view.root);
+    this.frameCamera();
     this.updateBanner();
+  }
+
+  /** Fit the original arena view without changing the player's base zoom or resizing canvas buffers. */
+  private frameCamera(){
+    const w=this.h.world,k=w.planet==='home'&&!w.interior&&this.h.playing()?this.zoomK:1;
+    if(k===1&&this.fittedK===1)return;
+    cameraOffset(w.camera.aspect,w.zoom*k,w.viewOffset);
+    if(this.fittedZoom!==w.zoom||Math.abs(k-this.fittedK)>.04&&this.time-this.fitAt>.3||k===1&&this.fittedK!==1){
+      w.resize(k);this.fittedK=k;this.fittedZoom=w.zoom;this.fitAt=this.time;
+    }
   }
 
   // ---- Offline fight ----
@@ -428,7 +444,7 @@ export class ColossusEvent {
     let mode: 'none' | 'soon' | 'awake' | 'done' = 'none', left = clock.left;
     if (online && s) { if (s.on && !s.killed) mode = 'awake'; else if (s.soon) mode = 'soon'; else if (s.on && s.killed) mode = 'done'; if (s.startsAt && mode === 'soon') left = s.startsAt - now; if (s.endsAt && mode === 'awake') left = s.endsAt - now; }
     else if (!online && !colossusSleeps()) { if (clock.phase === 'soon') mode = 'soon'; else if (clock.phase === 'active') mode = this.killedDay === clock.day ? 'done' : 'awake'; }
-    if (!this.h.playing()) mode = 'none';
+    if (!this.h.playing()||this.h.world.planet!=='home') mode = 'none';
     const hp = e && e.hp > 0 ? e.hp / e.maxHp : (online && s?.maxHp ? (s.hp ?? 0) / s.maxHp : 1);
     // Close by, the boss bar already shows its health: the banner steps back (hidden on phones, no meter on desktop).
     const bar = document.getElementById('boss-bar'), near = mode === 'awake' && !!bar && !bar.hidden && !!e && Math.hypot(this.h.world.position.x - e.x, this.h.world.position.z - e.z) < 36;

@@ -63,7 +63,7 @@ test('zone banner text names the wild zone, its level and boss instead of the ho
   assert.deepEqual(zoneInfo('Clover Village', 'home'), { detail: 'A peaceful place · health restores here', chip: 'Safe' });
   const canyon = zoneInfo('Redrock Canyon', 'home');
   assert.match(canyon.detail, /Prickly Cactus/);
-  assert.match(canyon.chip, /Lv 7\+/); assert.match(canyon.chip, /King Bear/);
+  assert.match(canyon.chip, /Lv 10\+/); assert.match(canyon.chip, /King Bear/);
   const ice = zoneInfo('Frost Peaks', 'ice');
   assert.ok(ice.detail.length > 0); assert.match(ice.chip, /Lv 10\+/);
 });

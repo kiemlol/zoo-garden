@@ -16,9 +16,10 @@ function rescued(id: F.FriendId) {
   assert.equal(F.rescue(s, id, T0), true); s.planet = 'home'; assert.deepEqual(F.arriveHome(s, { x: 0, z: 5 }), [id]); return s;
 }
 
-test('the cages sit by the weakest and the strongest home boss, read from the boss table', () => {
-  const bosses = enemyRoster('home').filter(e => e.boss && !e.titan).sort((a, b) => a.baseMaxHp - b.baseMaxHp);
-  assert.equal(F.CAGES.sprout.boss, bosses[0].type); assert.equal(F.CAGES.clover.boss, bosses.at(-1)!.type);
+test('cages keep their original boss identities after zone level rebalancing', () => {
+  const bosses = enemyRoster('home').filter(e => e.boss && !e.titan);
+  assert.equal(F.CAGES.sprout.boss, 'treant'); assert.equal(F.CAGES.clover.boss, 'bear');
+  for(const id of ['sprout','clover'] as const)assert.ok(bosses.some(e=>e.type===F.CAGES[id].boss));
   assert.ok(enemyRoster('toy').some(e => e.boss && e.type === F.CAGES.pepper.boss));
 });
 

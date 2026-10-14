@@ -57,3 +57,10 @@ test('main.ts panels group with the right order: shop and workshop gear-first; b
     const body=fnBody(fn);assert.ok(body.includes(`IG.${order}`),`${fn} uses ${order}`);assert.ok(body.includes(`IG.groupedHtml(`)&&body.includes(`'${panel}'`),`${fn} renders groups`);assert.ok(!body.includes('sortByPower'),fn);
   }
 });
+
+test('optional detail follows only the selected group; absent groups retain the footer fallback',()=>{
+ const groups=IG.groupItems(['carrot','hat_straw','pet_robot'],id=>id,IG.BAG_ORDER),detail='<div class="item-detail">info</div>',render=group=>IG.groupedHtml('bag',groups,id=>id,'inventory-grid',{group,html:detail});
+ for(const g of groups){const html=render(g.id),start=html.indexOf(`data-group="${g.id}"`),end=html.indexOf('</section>',start)+10;assert.equal(html.indexOf(detail),end);assert.equal(html.split(detail).length,2);}
+ assert.ok(render('missing').endsWith(detail));assert.equal(IG.groupedHtml('bag',[],id=>id,'inventory-grid',{group:'pet',html:detail}),detail);
+ assert.ok(!IG.groupedHtml('shop',groups,id=>id).includes('item-detail'));
+});

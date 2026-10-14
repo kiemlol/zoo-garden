@@ -25,6 +25,9 @@ export function initHudLayout() {
     const metrics=scrolling?{width:Math.ceil(dock.width),bottom:Math.ceil(dock.bottom)}:dockMetrics(dock, Array.from(menu.querySelectorAll<HTMLElement>('button'), b => b.getBoundingClientRect()));
     const {width,bottom}=metrics,root=document.documentElement.style;
     const trackerBox=tracker?.getBoundingClientRect(),trackerBottom=trackerBox?.height?Math.ceil(trackerBox.bottom):0;
+    const movement=document.querySelector<HTMLElement>('#hud .movement-joystick')?.getBoundingClientRect(),hudBottom=menu.closest('#hud')?.getBoundingClientRect().bottom??window.innerHeight;
+    const moveClearance=movement?.height?hudBottom-movement.top+8:168;
+    if(root.getPropertyValue('--move-clearance')!==moveClearance+'px')root.setProperty('--move-clearance',moveClearance+'px');
     if(trackerBottom!==lastTrackerBottom){lastTrackerBottom=trackerBottom;root.setProperty('--tracker-bottom',trackerBottom+'px');}
     if (width !== lastWidth && width > 0) { lastWidth = width; root.setProperty('--dock-w', width + 'px'); }
     if (bottom !== lastBottom && bottom > 0) { lastBottom = bottom; root.setProperty('--menu-bottom', bottom + 'px'); }

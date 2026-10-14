@@ -20,7 +20,7 @@ test('six large flying forest birds append after every existing home creature id
   assert.equal(FOREST_RAPTOR_COUNT,6); assert.equal(birds.length,6);
   assert.deepEqual(roster.slice(146,151).map(e=>e.type),['bear','treant','croc','mushking','titan_turtle']);
   assert.deepEqual(birds.map(e=>e.id),Array.from({length:6},(_,i)=>`home:enemy:${151+i}`));
-  assert.ok(birds.every(e=>e.zone==='forest'&&e.baseMaxHp===160&&!e.boss&&!e.dormant));
+  assert.ok(birds.every(e=>e.zone==='forest'&&e.baseMaxHp===Math.round(ENEMY_TYPES.forest_raptor.hp*1.7)&&!e.boss&&!e.dormant));
   const w=world();w.build('home');
   for(const bird of birds){const e=w.enemies.find(value=>value.id===bird.id)!;assert.equal(e.type,bird.type);assert.equal(e.maxHp,bird.baseMaxHp);assert.equal(e.xp,bird.xp);assert.ok(e.x<0);assert.equal(e.definition?.flying,true);assert.equal(e.definition?.behavior,'charger');}
   // w18: hawks are drawn at half their old 1.45 scale (creature-sizes.ts); they now stand under the explorer.

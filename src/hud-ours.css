@@ -559,3 +559,46 @@ body.air-combat { --fight-width: calc(var(--sk) * 3.784); }
 @media (pointer: coarse) {
   #app #hud #quest-summary.can-walk { min-height: 44px; }
 }
+
+/* Landscape combat information owns a compact strip at the safe top edge.
+   Two visible panels split the strip; status and map retain their side columns. */
+@media (min-aspect-ratio: 1/1) {
+  :root {
+    --combat-strip-left: calc(var(--hero-w) + var(--edge) + var(--safe-left) + 8px);
+    --combat-strip-right: calc(var(--col) + var(--mm) + 12px);
+    --combat-strip-width: max(0px, calc(100vw - var(--combat-strip-left) - var(--combat-strip-right)));
+  }
+  #app #hud #boss-bar {
+    left: var(--combat-strip-left); right: var(--combat-strip-right); top: calc(3px + var(--safe-top)); bottom: auto;
+    width: auto; transform: none; padding: 3px 6px; min-height: 28px; gap: 4px;
+  }
+  #app #hud #boss-bar > span { width: 22px; height: 22px; font-size: 14px; }
+  #app #hud #boss-name { font-size: 11px; }
+  #app #hud #boss-bar .boss-meter { height: 8px; margin-top: 2px; }
+  #app #hud .colossus-banner, #app.target-on #hud .colossus-banner {
+    left: var(--combat-strip-left); right: var(--combat-strip-right); top: calc(3px + var(--safe-top));
+    width: auto; transform: none; padding: 3px 6px; gap: 4px; border-radius: 12px;
+  }
+  #app.boss-on #hud .colossus-banner { left: calc(var(--combat-strip-left) + var(--combat-strip-width) / 2 + 4px); }
+  #app:has(#colossus-banner:not([hidden])) #hud #boss-bar { right: calc(var(--combat-strip-right) + var(--combat-strip-width) / 2 + 4px); }
+  #app #hud .colossus-banner.near { display: flex; }
+  #app #hud .colossus-banner .cb-icon { width: 22px; height: 22px; font-size: 14px; }
+  #app #hud .colossus-banner b { font-size: 11px; }
+  #app #hud .colossus-banner small { font-size: 9px; }
+  #app #hud .colossus-banner .cb-meter { height: 5px; margin-top: 2px; }
+  #app #hud .colossus-banner .cb-pct { font-size: 10px; }
+  #app #hud #target-frame, #app.boss-on #hud #target-frame {
+    left: calc(8px + var(--safe-left)); right: auto; top: auto;
+    bottom: var(--move-clearance, 168px);
+    width: clamp(140px, 18vw, 170px); transform: none; padding: 3px 5px; gap: 4px; border-radius: 12px;
+  }
+  #app #hud.joystick-right #target-frame { left: calc(8px + var(--safe-left)); right: auto; bottom: calc(32px + var(--safe-bottom) + var(--sk) * 2.38 + 8px); }
+  #app #hud #target-frame .target-icon { width: 24px; height: 24px; font-size: 14px; }
+  #app #hud #target-frame .target-head strong { font-size: 11px; }
+  #app #hud #target-frame .target-level { font-size: 9px; line-height: 13px; padding: 0 3px; }
+  #app #hud #target-frame .target-meter { height: 10px; margin-top: 2px; }
+  #app #hud #target-frame .target-hp { font-size: 9px; }
+}
+@media (min-aspect-ratio: 1/1) and (max-width: 720px) {
+  #app.boss-on #hud .colossus-banner .cb-icon { display: none; }
+}

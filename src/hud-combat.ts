@@ -1,3 +1,5 @@
+import { ZONE_DIFFICULTY } from './boss-patterns.ts';
+export { ZONE_DIFFICULTY } from './boss-patterns.ts';
 import { viewWidth, viewHeight } from './viewport.ts';
 import { t } from './i18n.ts';
 import * as T from 'three';
@@ -62,7 +64,7 @@ export function lootText(items: readonly { icon: string; name: string; count: nu
 }
 
 /** Difficulty by home zone or planet; creature levels are difficulty × 3 − 2 (world.spawnSpecies). */
-export const ZONE_DIFFICULTY: Record<string, number> = { home: 0, forest: 1, meadow: 1, swamp: 2, canyon: 3, candy: 3, ice: 4, lava: 5, toy: 2, jungle: 3, ocean: 4, cloud: 5, shadow: 6 };
+
 const HOME_ZONES: Record<string, { id: string; boss: string }> = { 'Mushroom Forest': { id: 'forest', boss: 'treant' }, 'Blue Lake Meadow': { id: 'meadow', boss: 'mushking' }, 'Chomper Swamp': { id: 'swamp', boss: 'croc' }, 'Redrock Canyon': { id: 'canyon', boss: 'bear' } };
 const names = (types: readonly string[]) => types.map(type => t(ENEMY_TYPES[type]?.name ?? '')).filter(Boolean).slice(0, 3).join(', ');
 /** Zone banner text: the detail names what lives there, the chip rates it ('★★ · Lv 4+ · King Bear'). */

@@ -76,9 +76,9 @@ export const groupTitle = (g: { icon: string; label: string }, count: number) =>
  * The grouped list as markup: per group a header button (data-action="toggle-group") and a grid of `grid` class holding
  * `row(entry)` for each entry. Panels with a single group still show its header, so every list reads the same way.
  */
-export function groupedHtml<T>(panel: string, groups: readonly ItemGroup<T>[], row: (entry: T) => string, grid = 'shop-grid') {
+export function groupedHtml<T>(panel: string, groups: readonly ItemGroup<T>[], row: (entry: T) => string, grid = 'shop-grid', after?: {group: string; html: string}) {
   return groups.map(g => {
     const shut = isFolded(panel, g.id);
-    return `<section class="item-group${shut ? ' folded' : ''}" data-group="${g.id}"><h4 class="item-group-head"><button type="button" data-action="toggle-group" data-panel="${panel}" data-group="${g.id}" aria-expanded="${!shut}">${groupTitle(g, g.entries.length)}</button></h4><div class="${grid}">${g.entries.map(row).join("")}</div></section>`;
-  }).join('');
+    return `<section class="item-group${shut ? ' folded' : ''}" data-group="${g.id}"><h4 class="item-group-head"><button type="button" data-action="toggle-group" data-panel="${panel}" data-group="${g.id}" aria-expanded="${!shut}">${groupTitle(g, g.entries.length)}</button></h4><div class="${grid}">${g.entries.map(row).join("")}</div></section>${after?.group===g.id?after.html:''}`;
+  }).join('')+(after&&!groups.some(g=>g.id===after.group)?after.html:'');
 }
