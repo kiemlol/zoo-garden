@@ -64,7 +64,7 @@ function standIn(tint: string, hair: string, wear: SaveState['gear'] = {}) {
  * ratio follows the body actually drawn: until a styled kit loads, the default explorer stands in at the plain scale.
  */
 export function buildFriend(id: FriendId, gear: Friend['gear'] = {}, stage = 0, look: LookId = DEFAULT_LOOK): T.Group {
-  const colours = FRIENDS[id], wear: SaveState['gear'] = { hat: gear.hat, outfit: gear.outfit, boots: gear.boots, weapon: gear.weapon, pet: gear.pet };
+  const colours = FRIENDS[id], wear: SaveState['gear'] = { hat: gear.hat, glasses:gear.glasses, outfit: gear.outfit, boots: gear.boots, weapon: gear.weapon, pet: gear.pet };
   const root = buildAvatar(colours.tint, colours.hair, wear, friendHeight(stage), look);
   root.name = 'friend-' + id; root.userData.stage = stage;
   return root;

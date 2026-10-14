@@ -1,0 +1,62 @@
+{
+  "file": "public/assets/models/festival-gear.glb",
+  "bytes": 374688,
+  "models": {
+    "hair_pumpkin": {
+      "triangles": 2682,
+      "parts": [
+        "head"
+      ]
+    },
+    "dress_pumpkin": {
+      "triangles": 1616,
+      "parts": [
+        "body",
+        "arm-left",
+        "arm-right"
+      ]
+    },
+    "boots_pumpkin": {
+      "triangles": 1048,
+      "parts": [
+        "leg-left",
+        "leg-right"
+      ]
+    },
+    "hair_flex": {
+      "triangles": 784,
+      "parts": [
+        "head"
+      ]
+    },
+    "glasses_flex": {
+      "triangles": 396,
+      "parts": [
+        "head"
+      ]
+    },
+    "outfit_flex": {
+      "triangles": 942,
+      "parts": [
+        "body",
+        "arm-left",
+        "arm-right",
+        "leg-left",
+        "leg-right"
+      ]
+    },
+    "boots_flex": {
+      "triangles": 928,
+      "parts": [
+        "leg-left",
+        "leg-right"
+      ]
+    },
+    "deco_ghost_carriage": {
+      "triangles": 5458,
+      "parts": [
+        "body"
+      ]
+    }
+  }
+}

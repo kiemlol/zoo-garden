@@ -40,6 +40,8 @@ npm test        # gameplay, worlds, assets, save migration and real server tests
 
 See [home wildlife and new creature mechanics](docs/home-wildlife.md) for region assignments, Mosslug, Rolling Pangolin and their loot.
 
+See [festival outfits, ghost carriage and recipes](docs/festival-gear.md) for the new wardrobe pieces and uses for Mosslug/pangolin materials.
+
 ## Game modes
 
 Besides the farm and the worlds, six extras are one tap or one short walk away. Daily limits are generous on purpose (this is a solo-friendly edition) and the day turns at midnight Vietnam time.

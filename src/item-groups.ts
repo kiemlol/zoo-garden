@@ -29,7 +29,7 @@ export const BAG_ORDER: readonly GroupId[] = ['food', 'harvest', 'fish', 'seed',
 export function groupOf(id: string): GroupId {
   const item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined;
   if (!item) return 'material';
-  if (item.slot === 'hat') return 'hat';
+  if (item.slot === 'hat'||item.slot==='glasses') return 'hat';
   if (item.slot === 'outfit') return 'outfit';
   if (item.slot === 'boots') return 'boots';
   if (item.slot === 'pet') return 'pet';

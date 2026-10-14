@@ -576,7 +576,7 @@ export function kitPrice(s: SaveState): number | null { const beds = s.plots.len
 export function shopPrice(s: SaveState, id: ItemId): number | null { return id === 'plot_kit' ? kitPrice(s) : Object.hasOwn(ITEMS, id) ? ITEMS[id].price ?? specialPrice(id) : null; }
 function buyPlotKit(s: SaveState) { const price = kitPrice(s); if (price === null || s.energy < price || !addItem(s, 'plot_kit')) return false; s.energy -= price; recordEvent(s, 'craft'); return true; }
 /** Clothes: drawn on the explorer only without a disguise. */
-export const WEARABLE_SLOTS: readonly GearSlot[] = ['hat', 'outfit', 'boots'];
+export const WEARABLE_SLOTS: readonly GearSlot[] = ['hat', 'glasses', 'outfit', 'boots'];
 /**
  * Puts an item on. Pets have two slots (pet-slots.ts): `to` names one ('pet' | 'pet2'); without it the pet takes the
  * free slot, or replaces slot 1 when both are taken. A pet already worn is not worn twice unless the bag holds a second

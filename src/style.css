@@ -1992,3 +1992,11 @@ h1 > span {
 /* Settings: the camera angle slider with its presets under it. */
 .camera-angle { display: grid; gap: 6px; justify-items: end; min-width: 0; }
 .camera-angle .segmented { flex-wrap: wrap; justify-content: flex-end; }
+
+/* The game's canvas owns camera gestures; native page zoom/callouts never own controls. */
+html, body { touch-action: manipulation; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+#app, #world, #app *, #world * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+#app .skills, #app .skills *, #app .movement-joystick, #app .movement-joystick *,
+#touch-controls, #touch-controls *, #app .reel-button, #boost-button { touch-action: none; }
+
+@media (pointer: coarse) { input, textarea, select { font-size: max(16px, 1em); } }

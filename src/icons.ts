@@ -1,3 +1,4 @@
+import {assetUrl} from './asset-url.ts';
 import * as T from 'three';
 import { buildDecoration } from './decorations-art.ts';
 import { planetLight } from './toon.ts';
@@ -24,6 +25,7 @@ function setup() {
 }
 
 export function decorIcon(id: string): string {
+  if(id==='deco_ghost_carriage')return assetUrl('icons/items/deco_ghost_carriage.webp');
   return modelIcon(id, () => buildDecoration(id), true);
 }
 

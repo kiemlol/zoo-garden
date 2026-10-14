@@ -1,3 +1,4 @@
+import {VI_FESTIVAL} from '../src/locales/vi-festival.ts';
 import {VI_WILD_CREATURES} from '../src/locales/vi-wild-creatures.ts';
 // The Vietnamese text that used to sit next to the English in the shared content modules now lives only in the lazy
 // Vietnamese pack (src/locales). tests/fixtures/vi-snapshot.json was generated from the commit before the move
@@ -42,7 +43,7 @@ test('the phone full-screen helper strings come from the pack with the exact Vie
 test('the whole Vietnamese pack is unchanged: same keys, same text (plus the full-screen helper strings, which used to be inline)', () => {
   // Every string of the snapshot is still there with the same text, in the same order; later features may only ADD strings
   // (the endgame story fillers), never change or drop one.
-  const now = plain(VI_PACK), expected = { ...snapshot.pack, ...snapshot.tables.MOBILE_SUPPORT_VI, ...VI_WILD_CREATURES } as Record<string, string>;
+  const now = plain(VI_PACK), expected = { ...snapshot.pack, ...snapshot.tables.MOBILE_SUPPORT_VI, ...VI_WILD_CREATURES, ...VI_FESTIVAL } as Record<string, string>;
   for (const [key, value] of Object.entries(expected)) assert.equal(now[key], value, `changed or missing: ${key}`);
   const added = Object.keys(now).filter(key => !(key in expected));
   // Account entry adds 22 strings; swamp creature, drops and lava rod add 7.

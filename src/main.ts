@@ -1,3 +1,5 @@
+import {lockBrowserGestures} from './browser-gestures.ts';
+lockBrowserGestures();
 import {PANGOLIN} from './wild-creatures.ts';
 import {inSafeZone} from './safe-zone.ts';
 import {Venom} from './venom.ts';
@@ -705,7 +707,7 @@ function plotDialog(index:number) {
 }
 function inventory() {
   const entries=Object.entries(state.bag).filter(([id,n])=>n!>0&&(bagMode!=='wardrobe'||wardrobeItem(M.ITEMS[id]))) as [M.ItemId,number][];
-  const slots:[M.GearSlot,string,string][]=[['weapon','⚔️','Weapon'],['hat','👒','Hat'],['outfit','🧥','Outfit'],['boots','👟','Boots'],['pet','🐾','Pet'],['pet2','🐾','Second pet'],['disguise','🎭','Disguise']];
+  const slots:[M.GearSlot,string,string][]=[['weapon','⚔️','Weapon'],['hat','👒','Hat'],['glasses','🕶️','Glasses'],['outfit','🧥','Outfit'],['boots','👟','Boots'],['pet','🐾','Pet'],['pet2','🐾','Second pet'],['disguise','🎭','Disguise']];
   if(selectedItem&&!state.bag[selectedItem]&&!Object.values(state.gear).includes(selectedItem))selectedItem=null;
   const item=selectedItem?M.ITEMS[selectedItem]:null,stats=M.activeStats(state),slot=item?.slot;
   // Two pet slots (pet-slots.ts): a pet counts as worn when every copy of it is in a slot; with both slots taken the player picks which pet stays home.

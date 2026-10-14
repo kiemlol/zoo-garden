@@ -1,3 +1,4 @@
+import {FESTIVAL_ITEMS,FESTIVAL_RECIPES} from './festival-content.ts';
 import { registerDyes } from './dye-skins.ts';
 import { TITAN_ITEMS, TITAN_LOOT } from './titan-content.ts';
 import { BOSS_PET_ITEMS, BOSS_PET_LOOT } from './boss-pet-content.ts';
@@ -6,7 +7,7 @@ import { COLOSSUS_ITEMS, COLOSSUS_LOOT, COLOSSUS_TYPE } from './colossus-content
 // Gameplay facts measured from the public reference client, 2026-09-30.
 // Rendering assets, descriptions and implementation code are independently authored.
 /** Keys of SaveState.gear. 'pet2' is the second pet slot: it holds an item whose own slot is 'pet' (pet-slots.ts); no item names it. */
-export type GearSlot = 'weapon' | 'hat' | 'outfit' | 'boots' | 'pet' | 'pet2' | 'disguise';
+export type GearSlot = 'glasses' | 'weapon' | 'hat' | 'outfit' | 'boots' | 'pet' | 'pet2' | 'disguise';
 export type PlanetId = 'home' | 'candy' | 'ice' | 'lava' | 'toy' | 'jungle' | 'ocean' | 'cloud' | 'shadow';
 export type ItemId = string;
 export type CropId = string;
@@ -4124,5 +4125,7 @@ ITEMS.lava_scale={name:'Lava Scale',icon:'🔶',desc:'A warm, overlapping plate 
 ITEMS.rolling_shell={name:'Rolling Shell',icon:'🟤',desc:'A curled shell of interlocking scales. A material for disguises.',type:'material',sell:32};
 LOOT_TABLES.mosslug=[['rainbow_slime',1,1,2],['moss_shell',.55,1,1]];
 LOOT_TABLES.pangolin=[['lava_scale',1,1,2],['rolling_shell',.55,1,1]];
+Object.assign(ITEMS,FESTIVAL_ITEMS);
+RECIPES.push(...FESTIVAL_RECIPES);
 // Dyes (dye-skins.ts): energy-priced recolours of existing gear, generated last so every base item exists.
 registerDyes(ITEMS);

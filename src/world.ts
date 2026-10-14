@@ -47,7 +47,7 @@ import { type SaveState, type PlanetId, PLANETS, cropProgress, giftAvailable, ma
 import * as M from './model.ts';
 import {EnvironmentSimulation,createEnvironmentLayout,environmentWalkable,inWater,terrainHeight,zoneAt,type EnvironmentStatus,type EnvironmentEvent,type LightningState} from './environments.ts';
 import {EnvironmentView} from './environment-art.ts';
-import {buildDecoration} from './decorations-art.ts';
+import {buildDecoration,festivalKit} from './decorations-art.ts';
 import {ZONE_DIFFICULTY,bossCalloutText,bossPhase,bossSkill,bossTelegraphs,BOSS_WINDUPS,BOSS_CALLOUTS,BOSS_TELEGRAPH_COLORS,CALLOUT_RANGE,CREATURE_TELEGRAPHS,telegraphProgress,hitControl,liftHeight,keepsChasing,BOSS_RESISTED,RESIST_SLOW,KNOCK_IMPULSE,BOSS_KNOCK,BOSS_REACH,BOSS_SKILLS,LEASH,type BossSkill} from './boss-patterns.ts';
 import {addOutlines,setOutlinesEnabled,showOutlines} from './outline.ts';
 import {viewWidth,viewHeight} from './viewport.ts';
@@ -745,7 +745,9 @@ export class World {
     const top=id?kitDisguise&&['dz_fairy','dz_superhero'].includes(id):!gear.hat,leaf=c.getObjectByName('head-leaf');if(leaf)leaf.visible=top;tuckEars(c,!top);
     if(id){if(!kitDisguise)this.simpleDisguise(c,id,disguise!.color);}
     else{
+      if(['dress_pumpkin','outfit_flex'].includes(gear.outfit??''))c.traverse(o=>{if(o instanceof T.Mesh&&/^Hero shirt/.test((o.material as T.Material).name))o.visible=false;});
       if(gear.hat&&!this.wearKit(c,gear.hat,'head'))this.simpleHat(c,gear.hat);
+      if(gear.glasses)this.wearKit(c,gear.glasses,'head');
       if(gear.outfit&&!this.wearKit(c,gear.outfit,'body'))this.simpleOutfit(c,gear.outfit);
       if(gear.boots&&!this.wearKit(c,gear.boots,'body'))for(const x of [-.18,.18])c.add(box(gear.boots.includes('flipper')?'#66a9d6':'#b88c73',.27,.23,gear.boots.includes('flipper')?.6:.34,x,.17,.1));
     }
@@ -982,11 +984,12 @@ export class World {
     return null;
   }
   syncDecorations(){
+    if(this.state.decorations?.some(d=>d.id==='deco_ghost_carriage')&&!festivalKit.requested)void festivalKit.load().then(()=>{if(festivalKit.ready&&this.planet==='home')this.syncDecorations();});
     for(const e of this.entities.filter(e=>e.kind==='decoration')){this.root.remove(e.mesh);this.disposeTree(e.mesh);}
     this.entities=this.entities.filter(e=>e.kind!=='decoration');this.obstacles=this.obstacles.filter(o=>!o.tag?.startsWith('decor:'));
     if(this.planet!=='home')return;
     for(const d of this.state.decorations??[]){const item=M.ITEMS[d.id];if(!item)continue;const g=buildDecoration(d.id);
-      g.rotation.y=d.rotation;const e=this.addEntity('decoration',item.name,item.icon??'🏡',g,d.x,d.z,.9);e.id=`home:decoration:${d.uid}`;g.userData.decorationUid=d.uid;this.obstacles.push({x:d.x,z:d.z,r:.65,tag:'decor:'+d.uid});
+      g.rotation.y=d.rotation;const e=this.addEntity('decoration',item.name,item.icon??'🏡',g,d.x,d.z,item.collider??.9);e.id=`home:decoration:${d.uid}`;g.userData.decorationUid=d.uid;this.obstacles.push({x:d.x,z:d.z,r:item.collider??.65,tag:'decor:'+d.uid});
     }
   }
   groundPoint(clientX:number,clientY:number){this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);const p=this.raycaster.ray.intersectPlane(new T.Plane(UP,0),new T.Vector3());return p?{x:p.x,z:p.z}:null;}

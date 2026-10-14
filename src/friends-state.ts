@@ -8,7 +8,7 @@ import { DEFAULT_LOOK, toLook, type LookId } from './looks.ts';
  */
 export type FriendId = 'sprout' | 'clover' | 'pepper';
 export type FriendRole = 'garden' | 'farm' | 'cook';
-export type FriendSlot = 'hat' | 'outfit' | 'boots' | 'pet' | 'weapon';
+export type FriendSlot = 'glasses' | 'hat' | 'outfit' | 'boots' | 'pet' | 'weapon';
 export interface Friend {
   id: FriendId; role: FriendRole;
   rescuedAt: number;
@@ -53,7 +53,7 @@ export const CAGES: Record<FriendId, { planet: PlanetId; boss: string }> = {
   clover: { planet: 'home', boss: 'bear' },
   pepper: { planet: 'toy', boss: 'robot' },
 };
-export const FRIEND_SLOTS: readonly FriendSlot[] = ['hat', 'outfit', 'boots', 'pet', 'weapon'];
+export const FRIEND_SLOTS: readonly FriendSlot[] = ['hat', 'glasses', 'outfit', 'boots', 'pet', 'weapon'];
 /** The friend slot an item goes in (its own SaveState.gear slot); disguises and non-gear are not for friends. */
 export function friendSlot(raw: ItemId): FriendSlot | null {
   const slot = ITEMS[canonicalItem(raw)]?.slot;

@@ -15,7 +15,7 @@ Mosslug / **Ốc Sên Rêu** crawls at 0.85 m/s. Its slime lasts 7 seconds; step
 
 Rolling Pangolin / **Tê Tê Lăn** swipes twice, 0.65 seconds apart. Its sand roll has an 8-second cooldown, a 1-second upright dusty warning, a 10 m/s roll lasting up to 1.8 seconds, and a 3-second recovery. Colliding with scenery bounces it and redirects the remaining roll towards an eligible nearby target when the path is clear. A roll hit deals 1.3× its normal damage and stuns the explorer for 2 seconds; frontal ordinary hits are blocked while rolling, while the rear and skills remain vulnerable. It drops 1–2 Lava Scale / **Vảy Nham Thạch**, and has a 55% chance to drop a Rolling Shell / **Vỏ Cuộn**.
 
-The four drops are registered crafting materials with individual 3D ground models and exact-mesh backpack icons. Their descriptions identify the intended crafting uses; this update does not add new equipment recipes.
+The four drops are registered crafting materials with individual 3D ground models and exact-mesh backpack icons. They are consumed by the festival outfit and ghost carriage recipes described in [festival gear](festival-gear.md).
 
 ## Rebuild art
 

@@ -116,3 +116,7 @@ The Hunting harpoon aliases the already shipped `trident` held model and icon. I
 ## Home wildlife additions
 
 `blender/kit/build_wild_creatures.py` builds Mosslug and Rolling Pangolin, plus Rainbow Slime, Moss Shell, Lava Scale and Rolling Shell. The shared `wild-creatures.glb` is 147,848 bytes; both common creatures stay below 2,500 triangles. The generator also renders four 160 px item icons and previews, with budgets recorded in `wild-creatures-manifest.json`. See [home wildlife](../docs/home-wildlife.md) for mechanics and reproduction commands.
+
+## Festival wardrobe and carriage
+
+`blender/kit/build_festival_gear.py` builds the pumpkin witch and Flex wardrobe pieces plus the Halloween ghost carriage in `festival-gear.glb`. Eight 160 px icons and three previews use the same meshes. Part tags attach clothes, glasses and shoes to the existing hero pivots; `festival-gear-manifest.json` records triangle counts. The carriage's wheels use vertical cobweb geometry, and its red seat, bat emblem, cyan lanterns and ghost harness are all modeled. See [festival gear](../docs/festival-gear.md).

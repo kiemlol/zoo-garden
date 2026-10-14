@@ -1,4 +1,6 @@
 import * as T from 'three';
+import {festivalKit} from './assets.ts';
+export {festivalKit} from './assets.ts';
 import {RoundedBoxGeometry} from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import {toonMaterial} from './toon.ts';
 
@@ -31,6 +33,12 @@ class Sculptor {
 }
 
 const builders:Record<string,(s:Sculptor)=>void>={
+  deco_ghost_carriage(s){
+    s.box('#292631',[1.15,.18,1.8],[0,.5,-.2],s.root,true);s.box('#af2938',[1,.13,1],[0,.66,-.45],s.root,true);s.box('#b52d3a',[1.1,.9,.14],[0,1.08,-.92],s.root,true);
+    for(const x of [-.68,.68])for(const [z,r]of [[-.65,.5],[.65,.3]]){const wheel=s.ring('#332e3a',r,.04,[x,r,z]);wheel.rotation.y=Math.PI/2;}
+    for(const x of [-.43,.43]){s.rod('#332e3a',[x,.7,.22],[x,1.3,.22],.04);s.ball('#80eee5',.18,[x,1.4,.22]);}
+    s.ball('#edfff9',.4,[0,.65,1.35],[.8,1.4,.8]);s.eyes(0,.87,1.62,.11);s.root.userData.feature='ghost-drawn-red-carriage';
+  },
   deco_volcano(s){
     s.cylinder('#7c6870',.72,.91,.16,[0,.08,0],s.root,9);
     s.cylinder('#675568',.33,.79,.96,[0,.63,0],s.root,9);
@@ -184,6 +192,7 @@ const builders:Record<string,(s:Sculptor)=>void>={
 
 /** All models face +Z, stand on Y=0 and own their disposable resources. */
 export function buildDecoration(id:string):T.Group{
+  if(id==='deco_ghost_carriage'){const model=festivalKit.instance(id);if(model){model.name='decoration:'+id;model.userData.decorationId=id;return model;}}
   const sculptor=new Sculptor();const builder=Object.hasOwn(builders,id)?builders[id]:undefined;
   if(builder)builder(sculptor);
   else{sculptor.root.userData.fallback=true;sculptor.cylinder('#bb927b',.36,.28,.45,[0,.24,0]);sculptor.ball('#91b58b',.35,[0,.66,0]);}
