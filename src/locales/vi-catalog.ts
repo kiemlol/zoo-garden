@@ -1,3 +1,4 @@
+import {VI_WILD_CREATURES} from './vi-wild-creatures.ts';
 import { TITAN_VI } from './vi-titan.ts';
 import { BOSS_PET_VI } from './vi-boss-pets.ts';
 import { DUNGEON_VI } from './vi-dungeon.ts';
@@ -870,3 +871,5 @@ Object.assign(VI_CATALOG, {
   // The four starting skills under their own names (stage 2 of docs/QUALITY-PLAN.md); the old names above stay for old text.
   'Petal Gale': 'Lốc Cánh Hoa', 'Breeze Step': 'Bước Gió', 'Root Quake': 'Địa Chấn', 'Paw Storm': 'Mưa Đấm',
 });
+
+Object.assign(VI_CATALOG,VI_WILD_CREATURES);

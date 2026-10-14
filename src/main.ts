@@ -1,3 +1,4 @@
+import {PANGOLIN} from './wild-creatures.ts';
 import {inSafeZone} from './safe-zone.ts';
 import {Venom} from './venom.ts';
 import { assetUrl } from './asset-url.ts';
@@ -326,7 +327,7 @@ const combat=new CombatSimulation({
   dog:()=>{const g=world.guardDogs;return g&&started&&!visiting&&!fishGame&&!world.boarded&&dogMayToss(g.place,world.planet,world.position,!!world.interior)?{x:g.link.x,z:g.link.z,dmg:dogTossFactor(state.level),cd:DOG_TOSS_CD,target:world.selected?.kind==='enemy'?(world.selected as Enemy).id:null}:null;},
   targets:()=>world.enemies,weapon:()=>M.weaponStats(state),stats:()=>M.activeStats(state),
   move:(x,z)=>{const steps=Math.max(1,Math.ceil(Math.hypot(x,z)/.2));for(let i=0;i<steps;i++)world.move(x/steps,z/steps);},
-  hit:(target,impact)=>hit(target as Enemy,impact.amount,impact.stun,impact),
+  hit:(target,impact)=>{const before=target.hp;hit(target as Enemy,impact.amount,impact.stun,impact);return Math.max(0,before-target.hp);},
   clearShot:(from,to)=>clearSegment(from,to,world.obstacles,{bounds:WORLD_BOUNDS,clearance:.05}),
   effect:effect=>{showEffect(effect);emitAction({kind:'effect',effect});},
   heal:fraction=>{if(!actionHandler)state.hp=Math.min(M.maxHp(state),state.hp+M.maxHp(state)*fraction);},
@@ -1254,7 +1255,8 @@ function hit(e:Enemy,damage:number,stun=0,impact?:CombatHit,remote=false,hazard=
   // Vault creatures are fought in this browser, online too (a party member's hit goes to the run's host instead).
   const vault=!!dungeonApi?.owns(e);if(vault&&!dungeonApi!.mayDamage(e,damage,stun))return;
   if(!vault&&!ctfApi?.owns(e)&&!rescueApi?.owns(e)){if(actionHandler)return;if(!remote&&network.hit?.(e.id,damage,stun,impact))return;}// Flag Rush heroes (ctf.ts) too
-  const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard);combatHud.noteHit(e);world.hitFeedback(e,e.driver?Math.round(hpBefore-e.hp):damage,!!impact?.critical);if(!hazard||impact)tone(impact?.critical?'crit':'hit');
+  const hpBefore=e.hp;world.damageEnemy(e,damage,stun,hazard,!!impact?.quake,impact?.basic??!impact);combatHud.noteHit(e);world.hitFeedback(e,Math.round(hpBefore-e.hp),!!impact?.critical);if(!hazard||impact)tone(impact?.critical?'crit':'hit');
+  if(e.hp===hpBefore)return;
   if(impact?.lift&&e.hp>0)world.knockUpEnemy(e,impact.lift,.75);
   if(impact?.knock&&e.hp>0)world.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
   if(e.hp===0){world.defeatFeedback(e);tone('poof');
@@ -1639,6 +1641,7 @@ world.onDamage=(amount,source='melee',enemyId,cls='body')=>{
   {const from=enemyId?world.enemies.find(e=>e.id===enemyId):undefined;if(from&&combat.blocks(from)){world.fx?.burst(world.position,{n:6,color:['#fff3c4','#ffffff'],glow:true,size:.12,speed:3,up:2,y:1});if(source==='shot'){combat.reflect(from,Math.hypot(from.x-world.position.x,from.z-world.position.z)/DZ.block.speed);tone('hit');}return;}}
   const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
   if(fishGame)endFishing('The fish got away when you were hit.');
+  if(enemyId){const from=world.enemies.find(e=>e.id===enemyId);if(from?.type==='pangolin'&&from.phase==='roll')world.playerStun=PANGOLIN.stun;}
   state.hp=Math.max(0,state.hp-damage);dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();world.hurtFeedback(damage);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
   if(source==='shot'&&enemyId&&ENEMY_TYPES[world.enemies.find(e=>e.id===enemyId)?.type??'']?.poison&&!M.activeStats(state).poisonImmune)venom.infect(damage);
   checkDefeat();
@@ -2037,7 +2040,7 @@ function frame(now:number){
   // browser throttles rendering, and collisions do not tunnel at a low frame rate. At most four steps
   // run per frame; a longer stall turns into slow motion rather than a spiral of ever longer frames.
   updateContextWeapon();joystick.update();
-  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);stepFight(step,active,combatActive);combat.update(step,combatActive);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerSpeedBonus=combat.speedBonus;world.playerStealth=(combat.statuses.stealth??0)>0;world.playerSizeScale=combat.visualScale;world.playerShield=combat.invulnerable;world.playerBat=(combat.statuses.bats??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);skillFx.boulders.update(combatActive?step:0);skillFx.disguises.update(combatActive?step:0);if(started&&!document.hidden&&!actionHandler)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
+  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);stepFight(step,active,combatActive);combat.update(step,combatActive);combat.statuses.stun=Math.max(combat.statuses.stun??0,world.playerStun??0);combat.statuses.slip=Math.max(combat.statuses.slip??0,world.playerSlip??0);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerSpeedBonus=combat.speedBonus;world.playerStealth=(combat.statuses.stealth??0)>0;world.playerSizeScale=combat.visualScale;world.playerShield=combat.invulnerable;world.playerBat=(combat.statuses.bats??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);skillFx.boulders.update(combatActive?step:0);skillFx.disguises.update(combatActive?step:0);if(started&&!document.hidden&&!actionHandler)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
   // Landing from the ground slam squashes the explorer and jolts the camera.
   const airborne=combat.airborne>0;if(wasAirborne&&!airborne){world.landT=.25;slamImpact();}wasAirborne=airborne;
   // The explorer's pose follows the weapon, skills, fishing line and hit invulnerability.

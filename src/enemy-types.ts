@@ -15,7 +15,9 @@ export const ENEMY_TYPES:Record<string,EnemyDefinition>={
   mushroom:creature('Grumpy Mushroom',45,6,2.4,8,'mushroom','#ff4d5e','hopper',{radius:.55,reach:1.3,sight:8}),
   boar:creature('Wild Boar',85,10,3,14,'quadruped','#a9744f','charger',{radius:.8,cooldown:2.6,windup:.7}),
   bee:creature('Cross Wasp',55,8,3.8,12,'winged','#ffd23f','melee',{radius:.5,reach:1.4,flying:true,cooldown:1.1,windup:.3}),
-  forest_raptor:creature('Great Forest Hawk',160,14,4.2,36,'winged','#96714c','charger',{radius:.8,reach:1.9,sight:13,flying:true,accent:'#e8d2a6',cooldown:2.8,windup:.75}),
+  forest_raptor:creature('Meadow Eagle',160,14,4.2,36,'winged','#96714c','charger',{radius:.8,reach:1.9,sight:13,flying:true,accent:'#e8d2a6',cooldown:2.8,windup:.75}),
+  mosslug:creature('Mosslug',145,11,.85,30,'snail','#7ebd59','melee',{radius:.8,reach:1.5,sight:9,cooldown:1.8}),
+  pangolin:creature('Rolling Pangolin',210,16,2.5,42,'pangolin','#bd7650','melee',{radius:.85,reach:1.8,sight:12,cooldown:2.1,windup:.35}),
   wolf:creature('Grey Wolf',100,12,4.3,22,'quadruped','#8f9bb3','melee',{sight:12,cooldown:1.3,windup:.35}),
   chomper:creature('Snapping Flower',120,14,0,20,'flower','#58c24a','rooted',{radius:.8,reach:2.5,sight:7,accent:'#ff4f7a',cooldown:1.7,windup:.55}),
   swamp_octo:creature('Venom Jelly Octopus',95,12,1.7,24,'octo','#9f75dd','shooter',{radius:.75,reach:10,sight:12,accent:'#a6f05b',cooldown:2.4,windup:.65,poison:true}),
@@ -77,7 +79,11 @@ export const ENEMY_TYPES:Record<string,EnemyDefinition>={
 
 Object.assign(ENEMY_TYPES,TITANS);
 
-export const HOME_SPAWNS:Record<string,Array<[string,number]>>={forest:[['mushroom',20],['boar',12],['bee',6]],meadow:[['mushroom',12],['boar',8],['bee',12]],swamp:[['chomper',14],['wolf',10],['frog',12],['mushroom',6]],canyon:[['cactus',14],['wolf',8],['crab',12]]};
+export const LEGACY_HOME_SPAWNS:Record<string,Array<[string,number]>>={forest:[['mushroom',20],['boar',12],['bee',6]],meadow:[['mushroom',12],['boar',8],['bee',12]],swamp:[['chomper',14],['wolf',10],['frog',12],['mushroom',6]],canyon:[['cactus',14],['wolf',8],['crab',12]]};
+export const HOME_REGION:Readonly<Record<string,string>>={mushroom:'forest',boar:'forest',mosslug:'forest',mushking:'forest',wolf:'meadow',bee:'meadow',forest_raptor:'meadow',treant:'meadow',chomper:'swamp',frog:'swamp',swamp_octo:'swamp',croc:'swamp',cactus:'canyon',crab:'canyon',pangolin:'canyon',bear:'canyon',titan_turtle:'canyon'};
+export const HOME_BOSSES=[['bear','canyon'],['treant','meadow'],['croc','swamp'],['mushking','forest']] as const;
+export const NEW_HOME_SPAWNS=[['mosslug',12,'forest'],['pangolin',10,'canyon']] as const;
+export const HOME_SPAWNS:Record<string,Array<[string,number]>>={forest:[['mushroom',38],['boar',20],['mosslug',12]],meadow:[['wolf',18],['bee',18],['forest_raptor',6]],swamp:[['chomper',14],['frog',12],['swamp_octo',8]],canyon:[['cactus',14],['crab',12],['pangolin',10]]};
 /** Append after existing bosses/Titan: their durable combat identities must not move. */
 export const FOREST_RAPTOR_COUNT=6;
 export const PLANET_SPAWNS=Object.fromEntries(Object.entries(PLANETS).map(([id,planet])=>[id,planet.spawns])) as Partial<Record<PlanetId,Array<[string,number]>>>;
@@ -814,6 +820,7 @@ for(const id of Object.keys(SIZE_FACTORS))if(ENEMY_TYPES[id])ENEMY_TYPES[id]=siz
  */
 export const ENEMY_SCALE:Readonly<Record<string,number>>={
   // Rare large quarry deliberately towers over the hero; ordinary common creatures retain their original sizes.
+  mosslug:.93,pangolin:1,
   swamp_octo:.9,
   forest_raptor:1.45,
   mushroom:.49,boar:.91,bee:.73,wolf:.99,chomper:.67,frog:.73,cactus:.67,crab:.99,

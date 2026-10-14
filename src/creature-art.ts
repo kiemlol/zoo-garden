@@ -12,13 +12,14 @@ import { toToon } from './toon.ts';
  * names the animation already looks for (`leg0`-`leg3`, `wing-l`, `wing-r`). Creatures without art, and every
  * creature until the file arrives (or when it is missing), keep the procedural shapes.
  */
-export const creatureKit = new KitLibrary([KIT_FILES.creatures,KIT_FILES.forestBirds,KIT_FILES.swampGear]);
+export const creatureKit = new KitLibrary([KIT_FILES.creatures,KIT_FILES.forestBirds,KIT_FILES.swampGear,KIT_FILES.wildCreatures]);
 
 const LEGGED = ['body', 'leg_fl', 'leg_fr', 'leg_bl', 'leg_br'] as const;
 const WINGED = ['body', 'wing_l', 'wing_r'] as const;
 const SOLID = ['body'] as const;
 /** The parts each redrawn creature must have, matching its old family's animated parts (src/world.ts speciesModel). */
 export const CREATURE_PARTS: Readonly<Record<string, readonly string[]>> = {
+  mosslug:['body','head','shell'],pangolin:['body','head','leg_fl','leg_fr','leg_bl','leg_br','rolled'],
   swamp_octo: SOLID,
   mushroom: SOLID, mushking: SOLID, boar: LEGGED, bee: WINGED, wolf: LEGGED, frog: SOLID, crab: LEGGED, chomper: SOLID,
   cactus: SOLID, bear: SOLID, treant: SOLID, croc: LEGGED,
@@ -85,6 +86,7 @@ function template(type: string, kit: KitLibrary): T.Group | null {
     const pieces = byPart.get(role)!, pivot = new T.Vector3().setFromMatrixPosition(pieces[0].matrix), geometry = mergePart(pieces, pivot);
     if (!geometry) return null;
     const mesh = new T.Mesh(geometry, bakedMaterial()); mesh.name = `creature-${role}`; mesh.castShadow = true; mesh.receiveShadow = true;
+    if(role==='rolled')mesh.visible=false;
     const node = NODE_NAMES[role];
     if (node) { const hinge = new T.Group(); hinge.name = node; hinge.position.copy(pivot); hinge.add(mesh); group.add(hinge); }
     else { mesh.position.copy(pivot); group.add(mesh); }

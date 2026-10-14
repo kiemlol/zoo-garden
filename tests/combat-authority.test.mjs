@@ -21,7 +21,8 @@ async function fixture(t,{planet='home',profile:configure=()=>{}}={}){
  let deaths=0;const authority=createCombatAuthority({store,peers,rooms,remember,onError:error=>t.diagnostic(error.stack),send:(_,value)=>emit(value),broadcast:(_,value)=>emit(value),onDeath:p=>{deaths++;p.planet='home';p.room='public:home';p.pose={x:0,z:0,facing:0,moving:false};}});
  t.after(async()=>{await authority.close();await store.close();});
  const next=(predicate,from=messages.length)=>{const found=messages.slice(from).find(predicate);if(found)return Promise.resolve(found);return new Promise((resolve,reject)=>{const waiter={predicate,resolve,timer:setTimeout(()=>reject(new Error('Missing authority event')),3000)};waiters.push(waiter);});};
- function spawn(type,x=planet==='home'?-30:30,z=0,extra={}){const definition=enemyRoster(planet).find(e=>e.type===type);assert.ok(definition,type);authority.acceptSnapshots(room,[{id:definition.id,type,x,z,hp:1,...extra}]);return authority.state(room).enemies.get(definition.id);}
+ function spawn(type,x,z,extra={}){const definition=enemyRoster(planet).find(e=>e.type===type);assert.ok(definition,type);if(x===undefined){const at=planet==='home'?({forest:[-30,0],meadow:[0,30],swamp:[0,-30],canyon:[30,0]}[definition.zone]):[30,0];[x,z]=at;facingForSpawn(at);}z??=0;
+ function facingForSpawn(at){peer.pose.x=at[0];peer.pose.z=at[1]+1;}authority.acceptSnapshots(room,[{id:definition.id,type,x,z,hp:1,...extra}]);return authority.state(room).enemies.get(definition.id);}
  return {store,account,peer,peers,room,rooms,authority,messages,next,spawn,deaths:()=>deaths};
 }
 test('basic attacks and skills obey server cooldowns across repeated packets and room changes',async t=>{
@@ -237,7 +238,8 @@ test('Hard difficulty: the room host save gives server creatures +25% health and
  const easy=await fixture(t),e=easy.spawn('mushroom');assert.equal(e.maxHp,roster.baseMaxHp);assert.equal(e.damage,roster.baseDamage);
 });
 test('disguise freezes reach the server and the knight shield blocks only blows from in front',async t=>{
- const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_navy';p.bag.dz_navy=1;}}),enemy=f.spawn('mushroom',-30,4),boss=f.spawn('treant',-28,3);const engine=f.authority.engineFor(f.peer);
+ const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_navy';p.bag.dz_navy=1;}}),enemy=f.spawn('wolf',0,34),boss=f.spawn('treant',2,33);const engine=f.authority.engineFor(f.peer);
+ f.peer.pose.x=0;f.peer.pose.z=31;
  // The bosun's whistle stuns everything within 8 m, bosses too; clients hear it as a 'stun' status.
  const from=f.messages.length;assert.equal(engine.sim.disguise('dz_navy',2),true);assert.equal(enemy.stun,2.5);assert.equal(boss.stun,2.5);assert.ok(f.messages.slice(from).some(m=>m.type==='status'&&m.kind==='stun'&&m.id===enemy.id));
  f.account.profile.gear.disguise='dz_knight';f.account.profile.bag.dz_knight=1;f.peer.pose.facing=0;assert.equal(engine.sim.disguise('dz_knight',0),true);
@@ -277,4 +279,29 @@ test('swamp poison is server-owned, respects immunity and shields, and clears on
  const antidote=Object.keys(Game.ITEMS).find(id=>Game.ITEMS[id].antidote&&Game.ITEMS[id].slot);assert.ok(antidote);
  f.peer.account.profile.gear[Game.ITEMS[antidote].slot]=antidote;f.peer.account.profile.bag[antidote]=1;
  engine.damageAt=0;f.authority.damage(f.peer,enemy.id,'shot');assert.equal(engine.venom.step(1),0);
+});
+
+test('Mosslug shell immunity and Quake are enforced by canonical combat',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});
+ const f=await fixture(t,{profile:p=>{p.bag.sword_wood=1;p.gear.weapon='sword_wood';}}),enemy=f.spawn('mosslug'),sim=f.authority.engineFor(f.peer).sim;
+ // A canonical heavy first blow makes the creature hide, independent of the host's damage claims.
+ enemy.maxHp=100;enemy.hp=100;
+ sim.basic(enemy);assert.equal(enemy.phase,'shell');const hidden=enemy.hp;
+ f.authority.acceptSnapshots(f.room,[{id:enemy.id,type:enemy.type,x:enemy.x,z:enemy.z,phase:'chase',hp:1}]);assert.equal(enemy.phase,'shell');
+ sim.basic(enemy);assert.equal(enemy.hp,hidden);
+ assert.equal(sim.skill(2),true);t.mock.timers.tick(500);assert.ok(enemy.hp<hidden);assert.notEqual(enemy.phase,'shell');
+});
+
+test('server rejects creature positions outside their habitat and cross-border damage reports',async t=>{
+ const f=await fixture(t),enemy=f.spawn('mosslug'),home={x:enemy.x,z:enemy.z};
+ f.authority.acceptSnapshots(f.room,[{id:enemy.id,type:enemy.type,x:0,z:-30,phase:'chase'}]);assert.deepEqual({x:enemy.x,z:enemy.z},home);
+ f.peer.pose={x:-29,z:-32,facing:0};enemy.x=-32;enemy.z=-30;const engine=f.authority.engineFor(f.peer);engine.damageAt=0;
+ f.authority.damage(f.peer,enemy.id);assert.equal(engine.healthEvents.length,0);
+});
+
+test('pangolin armor protects the front, not the rear, and a roll collision stuns for two seconds',async t=>{
+ const f=await fixture(t),enemy=f.spawn('pangolin',30,0,{phase:'roll'});f.peer.pose={x:30,z:1,facing:Math.PI};enemy.phase='roll';enemy.facing=0;
+ const engine=f.authority.engineFor(f.peer);engine.sim.basic(enemy);assert.equal(enemy.hp,enemy.maxHp);
+ f.peer.pose.z=-1;engine.sim.basic(enemy);assert.ok(enemy.hp<enemy.maxHp);
+ f.peer.pose.z=1;engine.damageAt=0;f.authority.damage(f.peer,enemy.id);assert.equal(engine.sim.statuses.stun,2);assert.ok(f.messages.some(m=>m.type==='creatureStatus'&&m.kind==='stun'&&m.duration===2));assert.equal(engine.sim.basic(enemy),false);
 });

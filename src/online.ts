@@ -277,6 +277,7 @@ export function initOnline(game:GameBridge) {
       else if(message.type==='dropSpawn'&&message.drop)game.spawnNetworkDrop(message.drop,account!.id);
       else if(message.type==='dropClaimed')game.removeNetworkDrop(message.id);
       else if(message.type==='dropReleased')game.releaseNetworkDrop(message.id);
+      else if(message.type==='creatureStatus'&&(message.kind==='stun'||message.kind==='slip')){const current=world(),duration=Math.min(2,Math.max(0,Number(message.duration)||0));if(message.kind==='stun')current.playerStun=Math.max(current.playerStun??0,duration);else current.playerSlip=Math.max(current.playerSlip??0,duration);}
       else if(message.type==='healthResult')game.applyAuthorityHealth(message.delta||0,!!message.died);
       else if(message.type==='decoyHp'&&Number.isFinite(message.id)&&Number.isFinite(message.hp))game.applyDecoyHp(message.id,message.hp,String(message.kind),Number(message.x)||0,Number(message.z)||0);
       else if(typeof message.type==='string'&&message.type.startsWith('dg'))game.dungeonMessage?.(message);

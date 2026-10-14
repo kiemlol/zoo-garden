@@ -15,14 +15,14 @@ function world() {
   return Object.assign(Object.create(World.prototype), { state:M.newGame(),scene:new T.Scene(),camera:new T.PerspectiveCamera(40,4/3,.5,300),root:new T.Group(),player:new T.Group(),companion:new T.Group(),position:new T.Vector3(),destination:null,route:[],selected:null,obstacles:[],entities:[],enemies:[],plotMeshes:[],cropSignatures:[],particles:[],keys:new Set<string>(),facing:0,time:0,planet:'home',hazardTimer:0,marker:new T.Mesh(),ring:new T.Mesh(),cameraTarget:new T.Vector3(),sun:new T.DirectionalLight(),raycaster:new T.Raycaster(),onInteract(){},onAttackEnemy(){},onDamage(){},onZone(){} }) as World;
 }
 
-test('six large flying forest birds append after every existing home creature identity in world and server', () => {
+test('six meadow eagles keep after every existing home creature identity in world and server', () => {
   const roster=enemyRoster('home'),birds=roster.filter(e=>e.type==='forest_raptor');
   assert.equal(FOREST_RAPTOR_COUNT,6); assert.equal(birds.length,6);
   assert.deepEqual(roster.slice(146,151).map(e=>e.type),['bear','treant','croc','mushking','titan_turtle']);
   assert.deepEqual(birds.map(e=>e.id),Array.from({length:6},(_,i)=>`home:enemy:${151+i}`));
-  assert.ok(birds.every(e=>e.zone==='forest'&&e.baseMaxHp===Math.round(ENEMY_TYPES.forest_raptor.hp*1.7)&&!e.boss&&!e.dormant));
+  assert.ok(birds.every(e=>e.zone==='meadow'&&e.baseMaxHp===Math.round(ENEMY_TYPES.forest_raptor.hp)&&!e.boss&&!e.dormant));
   const w=world();w.build('home');
-  for(const bird of birds){const e=w.enemies.find(value=>value.id===bird.id)!;assert.equal(e.type,bird.type);assert.equal(e.maxHp,bird.baseMaxHp);assert.equal(e.xp,bird.xp);assert.ok(e.x<0);assert.equal(e.definition?.flying,true);assert.equal(e.definition?.behavior,'charger');}
+  for(const bird of birds){const e=w.enemies.find(value=>value.id===bird.id)!;assert.equal(e.type,bird.type);assert.equal(e.maxHp,bird.baseMaxHp);assert.equal(e.xp,bird.xp);assert.ok(e.z>0&&Math.abs(e.z)>Math.abs(e.x));assert.equal(e.definition?.flying,true);assert.equal(e.definition?.behavior,'charger');}
   // w18: hawks are drawn at half their old 1.45 scale (creature-sizes.ts); they now stand under the explorer.
   assert.ok(Math.abs(enemyScale('forest_raptor')-1.45*.5)<1e-9);
   const fallback=(w as any).enemyModel('forest_raptor',ENEMY_TYPES.forest_raptor) as T.Group;fallback.updateMatrixWorld(true);
@@ -37,7 +37,7 @@ test('harpoon is a purchasable reusable forgeable ranged weapon with canonical b
   const cost=M.forgeCost(0);for(const[id,count]of Object.entries(cost.materials))s.bag[id]=count;assert.equal(M.canForge(s,'harpoon'),true);
   const loot=M.rollLoot('forest_raptor',0,()=>0);assert.ok(loot.some(item=>item.id==='feather'));assert.ok(loot.some(item=>item.id==='meat'));
   assert.equal(weaponModelName('harpoon'),'trident');assert.equal(weaponModelName('bow_star'),'bow_star');
-  setLanguage('vi');try{assert.equal(t(item.name),'Lao săn ba chĩa');assert.equal(t(ENEMY_TYPES.forest_raptor.name),'Diều hâu rừng lớn');}finally{setLanguage('en');}
+  setLanguage('vi');try{assert.equal(t(item.name),'Lao săn ba chĩa');assert.equal(t(ENEMY_TYPES.forest_raptor.name),'Đại bàng đồng cỏ');}finally{setLanguage('en');}
 });
 
 test('a harpoon basic attack travels, hits once, retains the item and renders a directed three-prong mesh',()=>{

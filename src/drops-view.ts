@@ -97,7 +97,7 @@ export class DropView {
     for (const d of drops) {
       const visible = blinkVisible(d.life - d.age, time), slot = this.atlas.cell(d.item, live);
       let model=this.models.get(d.uid);
-      if(!model&&(d.item==='venom_ink'||d.item==='jelly_resin')){
+      if(!model&&(['venom_ink','jelly_resin','rainbow_slime','moss_shell','lava_scale','rolling_shell'].includes(d.item))){
         if(!weaponKit.requested)void weaponKit.load();
         model=weaponKit.instance(d.item)??undefined;
         if(model){model.name='loot-'+d.item;model.scale.setScalar(1.7);this.scene.add(model);this.models.set(d.uid,model);}

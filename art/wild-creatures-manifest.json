@@ -1,0 +1,50 @@
+{
+  "file": "public/assets/models/wild-creatures.glb",
+  "bytes": 147848,
+  "models": {
+    "mosslug": {
+      "triangles": 1974,
+      "parts": [
+        "mosslug_body",
+        "mosslug_head",
+        "mosslug_shell"
+      ]
+    },
+    "pangolin": {
+      "triangles": 2178,
+      "parts": [
+        "pangolin_body",
+        "pangolin_head",
+        "pangolin_leg_bl",
+        "pangolin_leg_br",
+        "pangolin_leg_fl",
+        "pangolin_leg_fr",
+        "pangolin_rolled"
+      ]
+    },
+    "rainbow_slime": {
+      "triangles": 392,
+      "parts": [
+        "rainbow_slime_body"
+      ]
+    },
+    "moss_shell": {
+      "triangles": 888,
+      "parts": [
+        "moss_shell_body"
+      ]
+    },
+    "lava_scale": {
+      "triangles": 78,
+      "parts": [
+        "lava_scale_body"
+      ]
+    },
+    "rolling_shell": {
+      "triangles": 440,
+      "parts": [
+        "rolling_shell_body"
+      ]
+    }
+  }
+}

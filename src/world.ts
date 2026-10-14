@@ -1,3 +1,4 @@
+import {MOSSLUG,PANGOLIN,inHabitat,shellBlocks,slimeAt,type SlimePatch} from './wild-creatures.ts';
 import {disguiseForm} from './disguise-form.ts';
 import { t } from './i18n.ts';
 import {TITANS,TITAN_BY_PLANET,type TitanId} from './titan-content.ts';
@@ -57,7 +58,7 @@ import {TargetMarker,TARGET_HOLD,TAP_RED} from './target-marker.ts';
 import {TelegraphDecals} from './telegraph.ts';
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
-import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,SWAMP_OCTO_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
+import {ENEMY_TYPES,LEGACY_HOME_SPAWNS,HOME_REGION,HOME_BOSSES,NEW_HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,SWAMP_OCTO_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
 import {HIP,applyGait,gaitSwing,limbsOf,newGait,stepGait,type Gait} from './walk-cycle.ts';
 import {DEFAULT_PIVOTS,fitOf,lookOf,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
 import {part} from './part-cache.ts';
@@ -83,12 +84,12 @@ export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;
  * Applies to its skills and its basic attacks and charges alike. */
 export const bossCooldownScale=(e:{boss:boolean;hp:number;maxHp:number;enraged?:boolean})=>e.boss?(e.hp<e.maxHp*.5?.7:1)*(e.enraged?.6:1):1;
 export interface AvatarVisual {size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean}
-export interface Enemy {titanAttacks?:TitanAttack[];titanLift?:number}
+export interface Enemy {wildCooldown?:number;titanAttacks?:TitanAttack[];titanLift?:number}
 /** An enemy run by its own module (colossus.ts): no generic AI or drawing here; `incoming` may scale a blow before it lands. */
 export interface Enemy {driver?:{incoming(e:Enemy,amount:number,hazard:boolean):number}}
 export interface RemotePose {/** More pets that follow this explorer besides gear.pet (the AI neighbours' second pet). */pets?:string[];/** The breed of the guard dog following this explorer (server-set; absent when it stays at its pen). */dog?:number|null;visual?:Partial<AvatarVisual>;/** The knight's shield is up (server-set): shots from in front bounce back. */block?:boolean;/** Hittable summons (server-checked, combat.ts shareableDecoys). */decoys?:DecoyPose[];id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];look?:LookId;hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
-export interface EnemySnapshot {homeX?:number;homeZ?:number;titanAttacks?:TitanAttack[];titanLift?:number;chaseGrace?:number;id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
+export interface EnemySnapshot {wildCooldown?:number;homeX?:number;homeZ?:number;titanAttacks?:TitanAttack[];titanLift?:number;chaseGrace?:number;id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
 export interface EnvironmentSnapshot {time:number;lamps:Array<[number,number]>;eclipseUntil?:number;weather?:LavaWeatherSnapshot;nestLevel?:number;fireRain?:EnvironmentSimulation['fireRain'];lightning?:LightningState}
 export interface EnvironmentAction {kind:'light-pillar'|'collect-ore';id:string;index?:number}
 export interface EnvironmentReward {id:string;count:number}
@@ -561,7 +562,7 @@ export class World {
   build(planet: PlanetId) {
     // A rebuild (travel, visiting, reset) always lands outdoors.
     if(this.interior){const inside=this.interior;this.interior=null;inside.drop();}
-    this.farmView?.dispose();this.farmView=undefined;this.titanView?.clear();this.joystickInput=null;
+    this.slimePatches=[];this.playerStun=0;this.playerSlip=0;this.farmView?.dispose();this.farmView=undefined;this.titanView?.clear();this.joystickInput=null;
     this.disposeTree(this.root);this.scene.remove(this.root);this.root=new T.Group();this.scene.add(this.root);
     this.entities=[];this.enemies=[];this.obstacles=[];this.dynamicObstacles=[];this.plotMeshes=[];this.cropSignatures=[];this.planet=planet;
     this.destination=null;this.route=[];this.selected=null;this.ring.visible=false;this.marker.visible=false;this.gateHits=0;
@@ -635,16 +636,17 @@ export class World {
       }
     };
     if(planet==='home'){
-      for(const [zone,spawns] of Object.entries(HOME_SPAWNS))for(const [type,count] of spawns)for(let i=0;i<count;i++)placeEnemy(type,zone);
-      for(const [type,zone] of [['bear','canyon'],['treant','forest'],['croc','swamp'],['mushking','meadow']])placeEnemy(type,zone,true);
+      for(const [zone,spawns] of Object.entries(LEGACY_HOME_SPAWNS))for(const [type,count] of spawns)for(let i=0;i<count;i++)placeEnemy(type,HOME_REGION[type]??zone);
+      for(const [type,zone] of HOME_BOSSES)placeEnemy(type,zone,true);
     }else{for(const [type,count] of PLANET_SPAWNS[planet]??[])for(let i=0;i<count;i++)placeEnemy(type);for(const type of PLANET_BOSSES[planet]??[])placeEnemy(type,undefined,true);}
     const titan=TITAN_BY_PLANET[planet];if(titan)placeEnemy(titan,planet==='home'?'canyon':undefined,true);
     if(planet==='lava'){
       const dragon=this.enemies.find(e=>e.type==='dragon');if(dragon){dragon.x=dragon.homeX=this.environment.layout.nest.x;dragon.z=dragon.homeZ=this.environment.layout.nest.z;dragon.hp=0;dragon.respawn=999999;dragon.mesh.visible=false;}
       for(let i=0;i<18;i++){const minion=this.spawnSpecies('minislime',30,30,enemyIndex++)!;minion.hp=0;minion.respawn=999999;minion.mesh.visible=false;}
     }
-    if(planet==='home')for(let i=0;i<FOREST_RAPTOR_COUNT;i++)placeEnemy('forest_raptor','forest');
+    if(planet==='home')for(let i=0;i<FOREST_RAPTOR_COUNT;i++)placeEnemy('forest_raptor','meadow');
     if(planet==='home')for(let i=0;i<SWAMP_OCTO_COUNT;i++)placeEnemy('swamp_octo','swamp');
+    if(planet==='home')for(const [type,count,zone] of NEW_HOME_SPAWNS)for(let i=0;i<count;i++)placeEnemy(type,zone);
     const free=(x:number,z:number,r:number)=>!someObstacleNear(this.obstacles,x,z,x,z,r,o=>Math.hypot(x-o.x,z-o.z)<o.r+r)&&!this.entities.some(e=>Math.hypot(x-e.x,z-e.z)<e.radius+r);
     this.decor=planDecor({planet,layout,random:rng,free,ponds,clearings:this.enemies.filter(e=>e.respawn<999999).map(e=>({x:e.homeX,z:e.homeZ,type:e.type}))});
     for(const piece of this.decor)if(piece.radius>0)this.obstacle(piece.x,piece.z,piece.radius);
@@ -831,7 +833,16 @@ export class World {
   }
   private speciesModel(def:EnemyDefinition){
     const color=def.color,accent=def.accent,g=new T.Group(),family=def.family;
-    if(family==='octo'){
+    if(family==='snail'){
+      const body=group(ball(color,.45,0,.25,0));body.name='creature-body';body.scale.set(1.25,.55,2);g.add(body);
+      const shell=group(ball('#96734b',.58,0,.82,-.12),ball('#65a54e',.43,0,1.19,-.12));shell.name='creature-shell';g.add(shell);
+      const head=group(ball(color,.38,0,.62,.65));head.name='creature-head';for(const x of [-.23,.23])head.add(cyl(color,.06,.06,.35,x,.94,.68),ball('#fff1c8',.13,x,1.15,.68),ball('#333441',.08,x,1.15,.80));g.add(head);return g;
+    }else if(family==='pangolin'){
+      const body=group(ball(color,.57,0,.67),ball('#ddb078',.3,0,.72,.62));body.name='creature-body';g.add(body);
+      const head=group(ball('#ffe3b3',.2,0,.60,.92));head.name='creature-head';for(const x of [-.2,.2])head.add(ball('#333441',.065,x,.85,.75));g.add(head);
+      for(let i=0;i<4;i++){const leg=group(cyl('#ddb078',.13,.17,.4,0,-.2));leg.name='leg'+i;leg.position.set(i<2?-.38:.38,.42,i%2?-.4:.4);g.add(leg);}
+      const rolled=ball(color,.65,0,.66);rolled.name='creature-rolled';rolled.visible=false;g.add(rolled);return g;
+    }else if(family==='octo'){
       const head=ball(color,.65,0,.75);head.scale.set(1,.95,.85);g.add(head);
       for(let i=0;i<8;i++){const a=i*Math.PI/4;for(let j=0;j<3;j++)g.add(ball(j===2?accent:color,.19-j*.035,Math.cos(a)*(.4+j*.23),.2+j*.04,Math.sin(a)*(.4+j*.23)));}
     }else if(['quadruped','turtle','crab','dragon'].includes(family)){
@@ -991,7 +1002,7 @@ export class World {
   roomDifficulty:Difficulty|null=null;
   environmentSnapshot():EnvironmentSnapshot{return {time:this.environment.time,lamps:[...this.environment.lamps],eclipseUntil:this.environment.eclipseUntil,...(this.planet==='lava'?{weather:this.environment.weather.snapshot(),nestLevel:this.environment.nestLevel,fireRain:this.environment.fireRain.map(p=>({...p}))}:{}),...(this.planet==='cloud'?{lightning:{...this.environment.lightning,bolts:this.environment.lightning.bolts.map(p=>({...p}))}}:{})};}
   applyEnvironmentSnapshot(snapshot:EnvironmentSnapshot){if(!this.environment||!Number.isFinite(snapshot.time)||snapshot.time<0)return;const offset=snapshot.time-this.environment.time;if(this.environment.riding)this.environment.rideUntil+=offset;this.environment.time=snapshot.time;this.environment.lamps=new Map(snapshot.lamps.filter(([id,until])=>Number.isInteger(id)&&Number.isFinite(until)));this.environment.eclipseUntil=snapshot.eclipseUntil??0;if(snapshot.weather)this.environment.weather.restore(snapshot.weather);if(Number.isFinite(snapshot.nestLevel))this.environment.nestLevel=Math.max(-.9,Math.min(.32,snapshot.nestLevel!));if(snapshot.fireRain)this.environment.fireRain=snapshot.fireRain.filter(p=>[p.x,p.z,p.duration,p.remaining].every(Number.isFinite)&&p.remaining>0&&p.duration>0).map(p=>({...p}));if(snapshot.lightning){const source=snapshot.lightning;this.environment.lightning={wait:Math.max(0,Math.min(13,source.wait||0)),sequence:Math.max(0,Math.floor(source.sequence||0)),bolts:source.bolts.filter(p=>[p.x,p.z,p.remaining,p.duration].every(Number.isFinite)&&p.remaining>0&&p.duration>0).map(p=>({...p}))};}this.syncWeatherNodes();}
-  enemySnapshots():EnemySnapshot[]{return this.enemies.map(e=>({id:e.id,type:e.type,x:e.x,z:e.z,homeX:e.homeX,homeZ:e.homeZ,hp:e.hp,maxHp:e.maxHp,respawn:e.respawn,phase:e.phase,facing:e.mesh.rotation.y,lift:e.lift??0,boss:e.boss,phaseTime:e.phaseTime,chaseGrace:Math.max(0,Math.min(4,(e.lastHitAt??-Infinity)+4-this.time)),stun:e.stun,statuses:{...e.statuses},cooldown:e.cooldown,targetX:e.targetX,targetZ:e.targetZ,bossStage:e.bossStage,skill:e.skill,attackCount:e.attackCount,skillCount:e.skillCount,telegraphs:e.telegraphs?.map(p=>({...p})),skillEffects:e.skillEffects?.map(p=>({...p})),spinTick:e.spinTick,damage:e.damage,titanAttacks:e.titanAttacks?.map(a=>structuredClone(a)),titanLift:e.titanLift,shots:(this.enemyShots??[]).filter(s=>s.ownerId===e.id).map(s=>({id:s.id,x:s.mesh.position.x,y:s.mesh.position.y,z:s.mesh.position.z,vx:s.vx,vz:s.vz,life:s.life,damage:s.damage,targetEnemyId:s.targetEnemyId}))}));}
+  enemySnapshots():EnemySnapshot[]{return this.enemies.map(e=>({id:e.id,wildCooldown:e.wildCooldown,type:e.type,x:e.x,z:e.z,homeX:e.homeX,homeZ:e.homeZ,hp:e.hp,maxHp:e.maxHp,respawn:e.respawn,phase:e.phase,facing:e.mesh.rotation.y,lift:e.lift??0,boss:e.boss,phaseTime:e.phaseTime,chaseGrace:Math.max(0,Math.min(4,(e.lastHitAt??-Infinity)+4-this.time)),stun:e.stun,statuses:{...e.statuses},cooldown:e.cooldown,targetX:e.targetX,targetZ:e.targetZ,bossStage:e.bossStage,skill:e.skill,attackCount:e.attackCount,skillCount:e.skillCount,telegraphs:e.telegraphs?.map(p=>({...p})),skillEffects:e.skillEffects?.map(p=>({...p})),spinTick:e.spinTick,damage:e.damage,titanAttacks:e.titanAttacks?.map(a=>structuredClone(a)),titanLift:e.titanLift,shots:(this.enemyShots??[]).filter(s=>s.ownerId===e.id).map(s=>({id:s.id,x:s.mesh.position.x,y:s.mesh.position.y,z:s.mesh.position.z,vx:s.vx,vz:s.vz,life:s.life,damage:s.damage,targetEnemyId:s.targetEnemyId}))}));}
   // Creature ids start with their planet ("candy:enemy:3"). A host's message can still arrive for the world just left (a late
   // 'enemies' message during travel, or a host that flew off and reports its new world to the old room); applying it would
   // spawn creatures nobody simulates or can defeat, which then stay on the map and the minimap forever.
@@ -1003,13 +1014,14 @@ export class World {
     if(Number.isFinite(snapshot.chaseGrace))e.lastHitAt=this.time-4+Math.max(0,Math.min(4,snapshot.chaseGrace!));
     if(snapshot.statuses)e.statuses={...snapshot.statuses};if(Number.isFinite(snapshot.stun))e.stun=snapshot.stun!;
     if(wasAlive&&e.hp<=0){e.dying=.3;e.telegraphs=[];e.skillEffects=[];e.titanAttacks=[];e.titanLift=0;e.knockVX=e.knockVZ=0;this.defeatFeedback(e);return;}
+    if(e.type==='mosslug'&&snapshot.phase){e.phase=snapshot.phase;e.phaseTime=snapshot.phaseTime;if(e.phase==='shell'){e.stun=0;e.mesh.userData.shellCooldown=MOSSLUG.hideCooldown;}}
     const impact=snapshot.impact;if(!impact||!Number.isFinite(impact.amount))return;
     this.authorityImpacts??=new Set();if(snapshot.impactId){if(this.authorityImpacts.has(snapshot.impactId))return;this.authorityImpacts.add(snapshot.impactId);if(this.authorityImpacts.size>512)this.authorityImpacts.delete(this.authorityImpacts.values().next().value!);}
     this.hitFeedback(e,impact.amount,!!impact.critical);e.lastHitAt=this.time;
     if(impact.knock&&impact.direction)this.knockEnemy(e,impact.direction.x,impact.direction.z,impact.knock);
-    if(impact.lift)this.knockUpEnemy(e,impact.lift,.8);
+    if(impact.lift&&e.phase!=='shell')this.knockUpEnemy(e,impact.lift,.8);
   }
-  applyEnemySnapshots(snapshots:EnemySnapshot[]){const own=`${this.planet}:`;for(const snapshot of snapshots){if(typeof snapshot.id!=='string'||!snapshot.id.startsWith(own)||!Number.isFinite(snapshot.x)||!Number.isFinite(snapshot.z)||!Number.isFinite(snapshot.hp))continue;let e=this.enemies.find(e=>e.id===snapshot.id);if(!e&&snapshot.type&&ENEMY_TYPES[snapshot.type]){e=this.spawnSpecies(snapshot.type,snapshot.x,snapshot.z,this.enemies.length)??undefined;if(e)e.id=snapshot.id;}if(!e)continue;e.x=snapshot.x;e.z=snapshot.z;e.hp=Math.max(0,snapshot.hp);e.maxHp=snapshot.maxHp;e.respawn=snapshot.respawn;e.phase=snapshot.phase;e.lift=snapshot.lift??0;e.stun=snapshot.stun??0;e.phaseTime=snapshot.phaseTime??0;if(Number.isFinite(snapshot.chaseGrace))e.lastHitAt=this.time-4+Math.max(0,Math.min(4,snapshot.chaseGrace!));e.cooldown=snapshot.cooldown??0;e.statuses={...snapshot.statuses};e.targetX=snapshot.targetX;e.targetZ=snapshot.targetZ;e.bossStage=snapshot.bossStage;e.skill=snapshot.skill;e.attackCount=snapshot.attackCount;e.skillCount=snapshot.skillCount;e.telegraphs=snapshot.telegraphs?.map(p=>({...p}));e.skillEffects=snapshot.skillEffects?.map(p=>({...p}));e.spinTick=snapshot.spinTick;e.damage=snapshot.damage??e.damage;e.titanAttacks=sanitizeTitanAttacks(snapshot.titanAttacks);e.titanLift=snapshot.titanLift??0;e.scaled=true;e.mesh.position.set(e.x,terrainHeight(this.environment.layout,e)+(e.lift??0),e.z);e.mesh.rotation.y=snapshot.facing??0;e.mesh.visible=e.hp>0;
+  applyEnemySnapshots(snapshots:EnemySnapshot[]){const own=`${this.planet}:`;for(const snapshot of snapshots){if(typeof snapshot.id!=='string'||!snapshot.id.startsWith(own)||!Number.isFinite(snapshot.x)||!Number.isFinite(snapshot.z)||!Number.isFinite(snapshot.hp))continue;let e=this.enemies.find(e=>e.id===snapshot.id);if(!e&&snapshot.type&&ENEMY_TYPES[snapshot.type]){e=this.spawnSpecies(snapshot.type,snapshot.x,snapshot.z,this.enemies.length)??undefined;if(e)e.id=snapshot.id;}if(!e)continue;e.x=snapshot.x;e.z=snapshot.z;e.hp=Math.max(0,snapshot.hp);e.maxHp=snapshot.maxHp;e.respawn=snapshot.respawn;e.phase=snapshot.phase;e.lift=snapshot.lift??0;e.stun=snapshot.stun??0;e.phaseTime=snapshot.phaseTime??0;if(Number.isFinite(snapshot.chaseGrace))e.lastHitAt=this.time-4+Math.max(0,Math.min(4,snapshot.chaseGrace!));e.wildCooldown=snapshot.wildCooldown??0;e.cooldown=snapshot.cooldown??0;e.statuses={...snapshot.statuses};e.targetX=snapshot.targetX;e.targetZ=snapshot.targetZ;e.bossStage=snapshot.bossStage;e.skill=snapshot.skill;e.attackCount=snapshot.attackCount;e.skillCount=snapshot.skillCount;e.telegraphs=snapshot.telegraphs?.map(p=>({...p}));e.skillEffects=snapshot.skillEffects?.map(p=>({...p}));e.spinTick=snapshot.spinTick;e.damage=snapshot.damage??e.damage;e.titanAttacks=sanitizeTitanAttacks(snapshot.titanAttacks);e.titanLift=snapshot.titanLift??0;e.scaled=true;e.mesh.position.set(e.x,terrainHeight(this.environment.layout,e)+(e.lift??0),e.z);e.mesh.rotation.y=snapshot.facing??0;e.mesh.visible=e.hp>0;
       if(snapshot.shots){this.enemyShots??=[];const ids=new Set(snapshot.shots.map(s=>s.id));for(let i=this.enemyShots.length-1;i>=0;i--)if(this.enemyShots[i].ownerId===e.id&&!ids.has(this.enemyShots[i].id)){const old=this.enemyShots[i];this.scene.remove(old.mesh);old.mesh.geometry.dispose();this.enemyShots.splice(i,1);}for(const source of snapshot.shots){if(![source.x,source.y,source.z,source.vx,source.vz,source.life,source.damage].every(Number.isFinite)||source.life<=0)continue;let shot=this.enemyShots.find(s=>s.id===source.id);if(!shot){const electric=e.type==='robot',model=ball(electric?'#e8fbff':e.definition?.accent??'#ffbb72',.17);this.scene.add(model);shot={...source,ownerId:e.id,mesh:model,...(electric?{electric}:{})};this.enemyShots.push(shot);}Object.assign(shot,{vx:source.vx,vz:source.vz,life:source.life,damage:source.damage,targetEnemyId:source.targetEnemyId});shot.mesh.position.set(source.x,source.y,source.z);}}
     }}
   /**
@@ -1302,13 +1314,16 @@ export class World {
     this.punchT=.25;if(kind!=='sword')this.punchArm^=1;
     fx?.burst({x:at.x+Math.sin(this.facing)*1.3,y:at.y,z:at.z+Math.cos(this.facing)*1.3},{n:5,color:'#ffffff',glow:true,size:.1,speed:3,up:2,y:.8,life:.3});
   }
-  damageEnemy(e:Enemy,amount:number,stun=0,hazard=false) {
+  damageEnemy(e:Enemy,amount:number,stun=0,hazard=false,quake=false,basic=true) {
     if(e.hp<=0)return;
+    if(!hazard&&shellBlocks(e.type,e.phase,quake,basic,e,e.mesh.rotation.y,this.position))return;
+    if(e.type==='mosslug'&&quake&&e.phase==='shell'){e.phase='recover';e.phaseTime=1.2;}
     if(e.driver)amount=e.driver.incoming(e,amount,hazard);
     if(!hazard&&e.type==='magmaturtle')amount*=e.phase==='recover'?2:.12;
     // A hit never staggers a boss (its wind-up and skill go on, as in the reference); a hard stun only slows it.
     const control=hitControl(e.boss,stun);if(!hazard)e.lastHitAt=this.time??0;
     e.hp=Math.max(0,e.hp-amount);e.stun=Math.max(e.stun,control.stun);if(control.slow&&e.hp>0){e.statuses??={};e.statuses.slow=Math.max(e.statuses.slow??0,control.slow);this.resistFeedback(e);}this.burst(e.x,e.z,'#fff0bb',8);
+    if(e.type==='mosslug'&&!hazard&&!quake&&e.hp>0&&amount>=e.maxHp*.08&&(e.mesh.userData.shellCooldown??0)<=0){e.phase='shell';e.phaseTime=MOSSLUG.hide;e.stun=0;e.mesh.userData.shellCooldown=MOSSLUG.hideCooldown;}
     if(e.hp===0){e.respawn=e.type==='minislime'||e.type==='dragon'?999999:e.definition?.titan?600:e.boss?90:22+Math.random()*10;e.dying=.3;e.knockVX=e.knockVZ=0;e.telegraphs=[];e.skillEffects=[];e.titanAttacks=[];e.titanLift=0;
       if(e.type==='magmaslime'&&this.networkRole!=='peer')this.enemies.filter(m=>m.type==='minislime'&&m.hp<=0).slice(0,3).forEach((minion,index)=>{const a=index*Math.PI*2/3;minion.x=e.x+Math.cos(a)*.9;minion.z=e.z+Math.sin(a)*.9;this.resolveOverlap(minion,this.collisionObstacles(),minion.radius);minion.homeX=minion.x;minion.homeZ=minion.z;minion.hp=minion.maxHp;minion.phase='idle';minion.stun=0;minion.respawn=0;});
       if(this.selected===e){this.selected=null;this.destination=null;this.route=[];this.ring.visible=false;}}
@@ -1322,11 +1337,14 @@ export class World {
   }
   dash() {for(let i=0;i<18;i++)this.move(Math.sin(this.facing)*.25,Math.cos(this.facing)*.25);this.burst(this.position.x,this.position.z,'#e8f5e1');}
   private resolveOverlap(point:Point,obstacles:Obstacle[],clearance:number){
+    const before={x:point.x,z:point.z},enemy=point as Enemy;
     // Only obstacles in nearby grid cells can touch the point (a push moves it, so each pass looks again).
     for(let pass=0;pass<8;pass++){let changed=false;for(const o of nearbyObstacles(obstacles,point.x,point.z,clearance+.015)){const distance=Math.hypot(point.x-o.x,point.z-o.z),minimum=o.r+clearance+.015;if(distance<minimum){const angle=distance>.0001?Math.atan2(point.z-o.z,point.x-o.x):.73;point.x=o.x+Math.cos(angle)*minimum;point.z=o.z+Math.sin(angle)*minimum;changed=true;}}if(!changed)break;}
+    if(this.planet==='home'&&Number.isFinite(enemy.homeX)&&!inHabitat({x:enemy.homeX,z:enemy.homeZ},point,enemy.radius*.5)){point.x=before.x;point.z=before.z;}
   }
   private creatureWalkable(e:Enemy,point:Point,allowVoid=false){
     if(Math.hypot(point.x,point.z)>=WORLD_BOUNDS)return false;
+    if(this.planet==='home'&&!inHabitat({x:e.homeX,z:e.homeZ},point,e.radius*.5))return false;
     // Path checks call this for every half metre, so the flyer test only runs where it matters (cloud and lava).
     const floating=(this.planet==='cloud'||this.planet==='lava')&&(e.definition?.flying||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''));
     if(!allowVoid&&!floating&&this.planet==='cloud'&&!environmentWalkable(this.environment.layout,point))return false;
@@ -1376,14 +1394,15 @@ export class World {
   /** The nearest explorer outside the safe village (or, charmed, the nearest other creature). Runs for every creature every step, so it
    *  keeps the nearest as it goes instead of building and sorting a list: one small object per call, for the winner only. */
   private enemyTarget(e:Enemy):(Point&{id?:string;enemy?:Enemy;decoy?:{owner:string|null;id:number}})|undefined{
-    if((e.statuses?.charm??0)>0){let best:Enemy|undefined,bestD=Infinity;for(const other of this.enemies){if(other===e||other.hp<=0)continue;const d=Math.hypot(other.x-e.x,other.z-e.z);if(d<bestD){bestD=d;best=other;}}return best?{x:best.x,z:best.z,enemy:best}:undefined;}
+    if((e.statuses?.charm??0)>0){let best:Enemy|undefined,bestD=Infinity;for(const other of this.enemies){if(other===e||other.hp<=0||this.planet==='home'&&!inHabitat({x:e.homeX,z:e.homeZ},other))continue;const d=Math.hypot(other.x-e.x,other.z-e.z);if(d<bestD){bestD=d;best=other;}}return best?{x:best.x,z:best.z,enemy:best}:undefined;}
+    const eligible=(p:Point)=>this.planet!=='home'||inHabitat({x:e.homeX,z:e.homeZ},p);
     const safe=this.planet==='home'?18:11;let bx=0,bz=0,bid:string|undefined,bestD=Infinity;
-    if(!this.playerStealth&&Math.hypot(this.position.x,this.position.z)>=safe){bx=this.position.x;bz=this.position.z;bestD=Math.hypot(bx-e.x,bz-e.z);}
-    if(this.remotePlayers)for(const [id,remote] of this.remotePlayers)if(remote.mesh.visible&&!remote.pose.visual?.stealth&&(remote.pose.hp??1)>0&&Math.hypot(remote.pose.x,remote.pose.z)>=safe){const d=Math.hypot(remote.pose.x-e.x,remote.pose.z-e.z);if(d<bestD){bestD=d;bx=remote.pose.x;bz=remote.pose.z;bid=id;}}
+    if(!this.playerStealth&&eligible(this.position)&&Math.hypot(this.position.x,this.position.z)>=safe){bx=this.position.x;bz=this.position.z;bestD=Math.hypot(bx-e.x,bz-e.z);}
+    if(this.remotePlayers)for(const [id,remote] of this.remotePlayers)if(eligible(remote.pose)&&remote.mesh.visible&&!remote.pose.visual?.stealth&&(remote.pose.hp??1)>0&&Math.hypot(remote.pose.x,remote.pose.z)>=safe){const d=Math.hypot(remote.pose.x-e.x,remote.pose.z-e.z);if(d<bestD){bestD=d;bx=remote.pose.x;bz=remote.pose.z;bid=id;}}
     // Summons creatures can fight (combat.ts SUMMON_HP): a decoy within DECOY.lure m wins over every explorer, any other
     // summon is attacked when it is the nearest target. The knight's challenge (taunt) keeps a creature on the knight.
     if(this.decoyList?.length&&!((e.statuses?.taunt??0)>0)){let pick:(DecoyPose&{owner:string|null})|undefined,lured=false,pickD=Infinity;
-      for(const d of this.decoyList){const at=d.ring?decoyPoint(d,e):d,dd=Math.hypot(at.x-e.x,at.z-e.z);
+      for(const d of this.decoyList){if(!eligible(d))continue;const at=d.ring?decoyPoint(d,e):d,dd=Math.hypot(at.x-e.x,at.z-e.z);
         if(d.taunt&&dd<=DECOY.lure){if(!lured||dd<pickD){pick=d;pickD=dd;lured=true;}}else if(!lured&&dd<bestD&&dd<pickD){pick=d;pickD=dd;}}
       if(pick&&(lured||pickD<bestD)){const at=pick.ring?decoyPoint(pick,e):pick;return {x:at.x,z:at.z,decoy:{owner:pick.owner,id:pick.id}};}
     }
@@ -1397,7 +1416,7 @@ export class World {
   }
   /** Other explorers' hittable summons from their poses (the server checked them; checked again here): for creatures to see and for drawing. */
   remoteDecoys(){const out:Array<DecoyPose&{owner:string}>=[];for(const [id,remote] of this.remotePlayers??[])if(remote.mesh.visible&&Array.isArray(remote.pose.decoys))for(const d of remote.pose.decoys.slice(0,DECOY.max))if(Number.isFinite(d?.x)&&Number.isFinite(d?.z)&&Number.isInteger(d?.id)&&d.hp>0&&Math.hypot(d.x-remote.pose.x,d.z-remote.pose.z)<30)out.push({...d,r:Math.min(1,Math.max(.2,d.r||.5)),owner:id});return out;}
-  private hitEnemyTarget(target:Point&{id?:string;enemy?:Enemy;decoy?:{owner:string|null;id:number}},amount:number,source:'melee'|'shot'|'hazard'='melee',enemyId?:string,cls:AttackClass='body'){if(target.decoy)this.onDecoyDamage?.(target.decoy.owner,target.decoy.id,amount,source,enemyId);else if(target.enemy)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(target.enemy,amount);else if(target.id){if(!this.remoteDodges(target.id,cls))this.onRemoteDamage?.(target.id,amount,source,enemyId);}else if(!this.playerSafe()&&(!this.playerFlying||source!=='melee'))this.onDamage(amount,source,enemyId,cls);}
+  private hitEnemyTarget(target:Point&{id?:string;enemy?:Enemy;decoy?:{owner:string|null;id:number}},amount:number,source:'melee'|'shot'|'hazard'='melee',enemyId?:string,cls:AttackClass='body'){if(target.decoy)this.onDecoyDamage?.(target.decoy.owner,target.decoy.id,amount,source,enemyId);else if(target.enemy)(this.onHazardEnemy??((e,d)=>this.damageEnemy(e,d)))(target.enemy,amount);else if(this.planet==='home'&&enemyId&&!inHabitat({x:this.enemies.find(e=>e.id===enemyId)?.homeX??target.x,z:this.enemies.find(e=>e.id===enemyId)?.homeZ??target.z},target))return;else if(target.id){if(!this.remoteDodges(target.id,cls))this.onRemoteDamage?.(target.id,amount,source,enemyId);}else if(!this.playerSafe()&&(!this.playerFlying||source!=='melee'))this.onDamage(amount,source,enemyId,cls);}
   /**
    * Another explorer is in the air over a ground attack, as this host sees it (jump-rules.ts poseAir): its pose height above
    * the ground it stands on, honoured for at most MAX_AIR_SECONDS in one go (updateRemotePlayer keeps the clock).
@@ -1416,7 +1435,7 @@ export class World {
     this.enemyShots.push({id:e.id+':shot:'+Math.random().toString(36).slice(2,10),ownerId:e.id,mesh:shot,vx:(target.x-e.x)/distance*13,vz:(target.z-e.z)/distance*13,life:1.4,damage:e.damage,...(electric?{electric}:{}),targetId:target.id,targetEnemyId:target.enemy?.id});
   }
   private areaDamage(e:Enemy,x:number,z:number,radius:number,multiplier:number,inner=0,cls:AttackClass='body'){
-    const hit=(p:Point)=>{const d=Math.hypot(p.x-x,p.z-z);return d<radius&&d>=inner;};
+    const hit=(p:Point)=>{const d=Math.hypot(p.x-x,p.z-z);return d<radius&&d>=inner&&(this.planet!=='home'||inHabitat({x:e.homeX,z:e.homeZ},p));};
     if((e.statuses?.charm??0)>0){for(const target of this.enemies)if(target!==e&&target.hp>0&&hit(target))(this.onHazardEnemy??((v,d)=>this.damageEnemy(v,d)))(target,e.damage*multiplier);return;}
     const environmentAtStart=this.environment,source=e.skill==='rain'||e.skill==='eclipse'?'shot':'melee';if(hit(this.position))this.hitEnemyTarget(this.position,e.damage*multiplier,source,e.id,cls);
     if(this.environment!==environmentAtStart)return;
@@ -1441,7 +1460,7 @@ export class World {
       for(const p of result.pulls)if(p.id===(this.localPlayerId??'local'))this.move(p.x,p.z,true);
       if(result.move){e.x=result.move.x;e.z=result.move.z;e.titanLift=result.move.y;if(result.done){e.titanLift=0;e.phase='recover';e.phaseTime=.5;}}
       for(const p of result.bursts){this.fx?.ring(p,{color:e.definition?.accent??'#ffb13d',from:.2,to:p.r,life:.4,thick:.25});this.burst(p.x,p.z,e.definition?.color??'#ff9b4a',12);}
-      if(authoritative&&!this.authoritativeAction&&result.summon)this.enemies.filter(m=>m!==e&&m.hp>0&&!m.boss&&m.type!=='minislime'&&(m.definition?.speed??0)>0&&Math.hypot(m.x-e.x,m.z-e.z)<60).slice(0,4).forEach((m,i)=>{const angle=e.mesh.rotation.y+(i+.5)*Math.PI/2;m.x=e.x+Math.sin(angle)*(e.radius+2);m.z=e.z+Math.cos(angle)*(e.radius+2);m.hp=m.maxHp;m.damage*=1.3;m.phase='chase';m.lastHitAt=this.time;});
+      if(authoritative&&!this.authoritativeAction&&result.summon)this.enemies.filter(m=>m!==e&&m.hp>0&&!m.boss&&m.type!=='minislime'&&(m.definition?.speed??0)>0&&Math.hypot(m.x-e.x,m.z-e.z)<60&&(this.planet!=='home'||inHabitat({x:m.homeX,z:m.homeZ},e,m.radius))).slice(0,4).forEach((m,i)=>{const angle=e.mesh.rotation.y+(i+.5)*Math.PI/2,next={x:e.x+Math.sin(angle)*(e.radius+2),z:e.z+Math.cos(angle)*(e.radius+2)};if(this.planet==='home'&&!inHabitat({x:m.homeX,z:m.homeZ},next,m.radius))return;m.x=next.x;m.z=next.z;m.hp=m.maxHp;m.damage*=1.3;m.phase='chase';m.lastHitAt=this.time;});
     }e.titanAttacks=e.titanAttacks.filter(a=>a.age<a.life);
   }
   private drawTitanAttacks(){
@@ -1533,6 +1552,7 @@ export class World {
     // along (it pulses with each hit), and a charger's lane stays down until its run ends.
     if(this.jumpRules&&e.phase==='bspin'){decals.draw(e.x,ground(e),e.z,3.4,1-Math.max(0,e.spinTick??0)/.35,BOSS_TELEGRAPH_COLORS.spin);return;}
     if(this.jumpRules&&e.phase==='charge'&&!e.boss&&e.definition?.behavior==='charger'){this.drawLane(e,{x:e.targetX??e.x,z:e.targetZ??e.z},1);return;}
+    if(e.type==='pangolin'&&e.phase==='roll-windup'){this.drawLane(e,{x:e.targetX??e.x,z:e.targetZ??e.z},telegraphProgress(e.phaseTime??0,PANGOLIN.windup));return;}
     if(e.phase!=='windup')return;
     const progress=this.windupProgress(e);
     // Ground-class attacks (jump-rules.ts) ripple: rings run out from the centre, so one look says 'jump over this'.
@@ -1588,6 +1608,8 @@ export class World {
     if(e.boss){e.bossStage=e.type==='dragon'?bossPhase(e.hp,e.maxHp):1;for(const pulse of e.skillEffects??[]){pulse.remaining-=dt;if(pulse.remaining<=0){this.areaDamage(e,pulse.x,pulse.z,pulse.r,pulse.multiplier,pulse.inner,attackClass('quake'));this.burst(pulse.x,pulse.z,'#edb875',12);}}e.skillEffects=e.skillEffects?.filter(p=>p.remaining>0);}
     const statuses=e.statuses??{},noAttack=(statuses.blind??0)>0||(statuses.sheep??0)>0||(statuses.fear??0)>0;
     if(e.boss&&!e.enraged&&e.hp<e.maxHp*.3&&e.phase!=='idle'&&e.phase!=='return')this.enrageBoss(e);
+    if(this.planet==='home'&&!target&&['chase','windup','charge','roll','roll-windup','swipe'].includes(e.phase??'')){e.phase='return';e.skill=undefined;e.telegraphs=[];e.route=[];}
+    if(this.updateWildCreature(e,dt,target,noAttack))return;
     if(e.stun>0){e.phase='chase';e.telegraphs=[];return;}
     if(e.phase==='windup'){
       e.phaseTime=(e.phaseTime??0)-dt;
@@ -1602,7 +1624,7 @@ export class World {
             if(def.behavior==='shooter')this.shootEnemy(e,target);
             else if(distance<reach+.4&&(!this.jumpRules||e.mesh.userData.slam||inMeleeArc(e.x,e.z,e.mesh.rotation.y,reach,target.x,target.z))&&clearSegment(e,target,this.obstacles,{bounds:WORLD_BOUNDS,clearance:0}))this.hitEnemyTarget(target,e.damage*(e.mesh.userData.slam?1.25:1),'melee',e.id,attackClass(e.mesh.userData.slam?'slam':'melee'));
           }
-          e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown*bossCooldownScale(e);
+          e.phase=e.type==='pangolin'?'swipe':'recover';e.phaseTime=e.type==='pangolin'?PANGOLIN.swipeGap:e.boss?.7:.45;e.cooldown=def.cooldown*bossCooldownScale(e);
         }
       }return;
     }
@@ -1626,6 +1648,7 @@ export class World {
     if((statuses.fear??0)>0&&target)goal={x:e.x+(e.x-target.x),z:e.z+(e.z-target.z)};
     const canWindup=!!def.titan&&distance<24||distance<(e.type==='lavaworm'?1.2:def.reach+(e.boss?BOSS_REACH.windup:0))||(e.type==='boar'||['firebat','thunderbird','jellyzap','wisp'].includes(e.type??''))&&distance<8;
     if(chasing&&canWindup&&!e.cooldown&&!noAttack){
+      if(e.type==='pangolin')e.mesh.userData.swipeHand=0;
       e.phase='windup';e.phaseTime=this.jumpRules?warningTime(def.windup):def.windup;e.targetX=target!.x;e.targetZ=target!.z;e.mesh.userData.attackCount=(e.mesh.userData.attackCount??0)+1;e.mesh.userData.slam=e.boss&&!BOSS_SKILLS[e.type??'']&&e.mesh.userData.attackCount%3===0;
       if(e.boss)this.beginBossSkill(e,target!);else e.skill=undefined;
       if(e.mesh.userData.slam&&!e.skill)e.phaseTime=1.1;e.windupTotal=e.phaseTime;e.mesh.rotation.y=Math.atan2(target!.x-e.x,target!.z-e.z);return;
@@ -1651,6 +1674,42 @@ export class World {
     }else e.route=[];
     const dx=goal.x-e.x,dz=goal.z-e.z,d=Math.hypot(dx,dz),speed=(chasing?def.speed:returning?def.speed*1.2:.6)*(e.boss&&e.hp<e.maxHp*.5?1.35:1)*(e.boss&&e.hp<e.maxHp*.3?1.25:1)*((e.bossStage??1)>=3?1.2:1)*((statuses.slow??0)>0?.45:1)*((statuses.sheep??0)>0?.45:1);
     if(d>.05){const step=Math.min(d,speed*dt);this.moveCreature(e,dx/d*step,dz/d*step);e.mesh.rotation.y=Math.atan2(dx,dz);e.phase=chasing?'chase':returning?'return':'idle';}
+  }
+  slimePatches:SlimePatch[]=[];playerStun=0;playerSlip=0;
+  private updateWildCreature(e:Enemy,dt:number,target:Point|undefined,noAttack:boolean){
+    if(e.type!=='mosslug'&&e.type!=='pangolin')return false;
+    const u=e.mesh.userData;e.wildCooldown=Math.max(0,(e.wildCooldown??0)-dt);u.shellCooldown=Math.max(0,(u.shellCooldown??0)-dt);u.rollCooldown=Math.max(e.wildCooldown,(u.rollCooldown??0)-dt,0);
+    if(e.type==='mosslug'){
+      if(e.phase==='shell'){e.phaseTime=(e.phaseTime??0)-dt;if(e.phaseTime<=0){e.phase='chase';e.stun=0;}return true;}
+      return false;
+    }
+    if(e.stun>0)return false;
+    const distance=target?Math.hypot(target.x-e.x,target.z-e.z):Infinity;
+    if(e.phase==='roll-windup'){
+      e.phaseTime=(e.phaseTime??0)-dt;this.fx?.burst(e,{n:1,color:'#d9b486',size:.18,life:.6,speed:1,up:2});
+      if(e.phaseTime<=0){e.phase='roll';e.phaseTime=PANGOLIN.rollTime;u.rollHit=false;u.rollCooldown=e.wildCooldown=PANGOLIN.cooldown;}
+      return true;
+    }
+    if(e.phase==='roll'){
+      const dx=(e.targetX??e.x)-e.x,dz=(e.targetZ??e.z)-e.z,d=Math.hypot(dx,dz)||1,old={x:e.x,z:e.z};
+      this.moveCreature(e,dx/d*PANGOLIN.rollSpeed*dt,dz/d*PANGOLIN.rollSpeed*dt);e.mesh.rotation.y=Math.atan2(dx,dz);
+      if(Math.hypot(e.x-old.x,e.z-old.z)<PANGOLIN.rollSpeed*dt*.5&&target){
+        this.moveCreature(e,-dx/d*.3,-dz/d*.3);
+        const hit=this.creatureObstacles().find(o=>Math.hypot(e.x-o.x,e.z-o.z)<o.r+e.radius+.7);
+        let vx=-dx/d,vz=-dz/d;
+        if(hit){const nx=e.x-hit.x,nz=e.z-hit.z,n=Math.hypot(nx,nz)||1,dot=dx/d*nx/n+dz/d*nz/n;vx=dx/d-2*dot*nx/n;vz=dz/d-2*dot*nz/n;}
+        const t=Math.hypot(target.x-e.x,target.z-e.z)||1,toward={x:e.x+(target.x-e.x)/t*2,z:e.z+(target.z-e.z)/t*2};
+        if(clearSegment(e,toward,this.creatureObstacles(),{...this.navigationOptions(e.radius,true),walkable:p=>this.creatureWalkable(e,p)})){vx=(target.x-e.x)/t;vz=(target.z-e.z)/t;}
+        e.targetX=e.x+vx*18;e.targetZ=e.z+vz*18;this.burst(e.x,e.z,'#dfb987',8);
+      }
+      if(target&&!noAttack&&distance<e.radius+.65&&!u.rollHit){this.hitEnemyTarget(target,e.damage*1.3,'melee',e.id,attackClass('rush'));u.rollHit=true;}
+      e.phaseTime=(e.phaseTime??0)-dt;if(e.phaseTime<=0||Math.hypot(e.x-(e.targetX??e.x),e.z-(e.targetZ??e.z))<.3){e.phase='recover';e.phaseTime=PANGOLIN.rest;e.cooldown=PANGOLIN.rest;}return true;
+    }
+    if(e.phase==='swipe'){
+      e.phaseTime=(e.phaseTime??0)-dt;if(e.phaseTime<=0){if(target&&!noAttack&&distance<e.definition!.reach+.4&&clearSegment(e,target,this.obstacles,{bounds:WORLD_BOUNDS,clearance:0}))this.hitEnemyTarget(target,e.damage,'melee',e.id);e.mesh.userData.strikeT=.25;e.mesh.userData.swipeHand=1;e.phase='recover';e.phaseTime=.55;}return true;
+    }
+    if(target&&!noAttack&&!e.cooldown&&e.phase!=='recover'&&distance<9&&!u.rollCooldown){e.phase='roll-windup';e.phaseTime=PANGOLIN.windup;e.targetX=e.x+(target.x-e.x)/distance*18;e.targetZ=e.z+(target.z-e.z)/distance*18;e.mesh.rotation.y=Math.atan2(target.x-e.x,target.z-e.z);return true;}
+    return false;
   }
   /** Push a creature back; it slides and slows like the reference's knockback, blocked by scenery. */
   knockEnemy(e:Enemy,dirX:number,dirZ:number,strength:number){
@@ -1689,6 +1748,8 @@ export class World {
     if(windup>0){sx*=1+windup*.2;sy*=1-windup*.25;sz*=1+windup*.2;lean=-windup*.2;shake=Math.sin(this.time*60)*.04*windup;}
     if(u.strikeT>0)lean=(behavior==='rooted'?.55:.4)*(u.strikeT/.25);
     if(e.phase==='charge')lean=.25;
+    if(e.type==='mosslug'){const head=m.getObjectByName('creature-head');if(head)head.visible=e.phase!=='shell';if(e.phase==='shell'){sx=sz=1.05;sy=.9;}}
+    if(e.type==='pangolin'){if(u.strikeT>0){const claw=m.getObjectByName(u.swipeHand?'leg3':'leg1');if(claw)claw.rotation.x=-1.2*(u.strikeT/.25);}const rolling=e.phase==='roll';for(const child of m.children)child.visible=child.name==='creature-rolled'?rolling:!rolling;if(rolling){const ball=m.getObjectByName('creature-rolled');if(ball)ball.rotation.x=this.time*PANGOLIN.rollSpeed;lean=0;lift=.05;}else if(e.phase==='roll-windup'){lean=-.8;sy=1.15;}else if(e.phase==='recover')sy=1+Math.sin(this.time*10)*.08;}
     if(e.stun>.25&&!e.lift){roll=Math.sin(this.time*20)*.1;if(this.fx&&Math.random()<dt*6)this.fx.burst({x:e.x,y:m.position.y+(e.boss?2.6:1.3),z:e.z},{n:1,color:'#fff27a',glow:true,size:.09,speed:1.5,up:.5,life:.5,gravity:0});}
     m.position.y+=lift;m.position.x+=shake;m.rotation.x=lean;m.rotation.z=roll;m.scale.x*=sx;m.scale.y*=sy;m.scale.z*=sz;
   }
@@ -1755,6 +1816,11 @@ export class World {
       if(active||simulateWorld){const landing=j.step(dt);if(landing){this.landT=.2;this.onLanded?.(landing);}}}
     this.environment??=new EnvironmentSimulation(createEnvironmentLayout(this.planet));this.enemyShots??=[];this.dynamicObstacles??=[];this.resourceTimers??=new Map();
     const environmentForFrame=this.environment;
+    for(const e of this.enemies)if(e.hp>0&&e.type==='mosslug'){const u=e.mesh.userData;if(!u.trailAt||Math.hypot(e.x-u.trailAt.x,e.z-u.trailAt.z)>.65){u.trailAt={x:e.x,z:e.z};(this.slimePatches??=[]).push({x:e.x,z:e.z,life:MOSSLUG.trailLife});}}
+    this.playerStun=Math.max(0,(this.playerStun??0)-dt);this.playerSlip=Math.max(0,(this.playerSlip??0)-dt);this.slimePatches=(this.slimePatches??[]).filter(p=>(p.life-=dt)>0);
+    if(!this.playerFlying&&!this.playerSafe()&&slimeAt(this.slimePatches,this.position))this.playerSlip=MOSSLUG.slip;
+    if(this.playerSlip>0&&active&&!this.movementLocked)this.move(Math.sin(this.facing)*dt*1.8,Math.cos(this.facing)*dt*1.8);
+
     if(active||simulateWorld)this.time+=dt;
     let dx=0,dz=0,routeTarget:T.Vector3|undefined;
     if(active&&!this.movementLocked&&!this.environment.airborne){
@@ -1805,12 +1871,13 @@ export class World {
     if(simulateWorld&&this.networkRole==='peer')for(const enemy of this.enemies)this.updateTitanAttacks(enemy,dt,false);
     // Indoors the outdoor scene is not drawn: posing every creature there was a third of the cottage's frame on slow phones.
     if(active||simulateWorld)for(const enemy of this.enemies)this.stepCreatureMotion(enemy,dt);
-    if(!this.interior){this.drawTitanAttacks();this.decals?.begin();for(const enemy of this.enemies)this.updateEnemyVisual(enemy,active||simulateWorld?dt:0);
+    if(!this.interior){this.drawTitanAttacks();this.decals?.begin();for(const patch of this.slimePatches??[])if(Math.hypot(patch.x-this.position.x,patch.z-this.position.z)<35)this.decals?.draw(patch.x,.045,patch.z,MOSSLUG.trailRadius,patch.life/MOSSLUG.trailLife,'#8bdcc1');for(const enemy of this.enemies)this.updateEnemyVisual(enemy,active||simulateWorld?dt:0);
       // The jump's blob shadow: under the explorer, smaller and fainter the higher the jump (one pooled disc, only while in the air).
       {const h=this.jump.height;if(h>.04&&!this.boarded){const k=Math.min(1,h/(MAX_HEIGHT+1));this.decals?.shadow(this.position.x,this.position.y+.05,this.position.z,.62*(1-.55*k),.42*(1-.5*k));}}
       this.decals?.end();}
     if(simulateWorld)for(let i=this.enemyShots.length-1;i>=0;i--){
       const shot=this.enemyShots[i],from={x:shot.mesh.position.x,z:shot.mesh.position.z};shot.mesh.position.x+=shot.vx*dt;shot.mesh.position.z+=shot.vz*dt;shot.life-=dt;
+      const habitatOwner=this.enemies.find(e=>e.id===shot.ownerId);if(this.planet==='home'&&habitatOwner&&!inHabitat({x:habitatOwner.homeX,z:habitatOwner.homeZ},shot.mesh.position))shot.life=0;
       if(!shot.targetEnemyId&&Math.hypot(shot.mesh.position.x,shot.mesh.position.z)<(this.planet==='home'?18:11)-.3)shot.life=0; // shots aimed at players die at the safe zone's edge
       if(this.networkRole!=='peer'){
       if(!clearSegment(from,shot.mesh.position,this.obstacles,{bounds:WORLD_BOUNDS,clearance:.1}))shot.life=0;
@@ -1835,7 +1902,7 @@ export class World {
     this.player.position.copy(this.position);this.player.position.y+=(this.playerLift??0)+this.jump.height+(this.airCarry||0);this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
     // The companion waits by the pen at home and trails behind and to one side away from it; flyers hover and flap, walkers hop.
     (this.petPen??=new PetCompanion()).update(this,dt);(this.petPen2??=new PetCompanion(1)).update(this,dt);
-    this.animatePlayer(dt);this.animateRemotes(dt);
+    this.animatePlayer(dt);this.player.rotation.z=this.playerSlip>0?Math.sin(this.time*13)*.12:0;this.animateRemotes(dt);
     this.player.visible=!this.boarded;this.companion.visible=!this.boarded&&this.petPen.shown;if(this.companion2)this.companion2.visible=!this.boarded&&this.petPen2.shown;
     // The reference's follow: 9/s on the explorer, 5/s on the starship in cut-scenes, always looking straight at the target.
     this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.camera.position.copy(this.cameraTarget).add(this.viewOffset??=cameraOffset(16/9));this.camera.lookAt(this.cameraTarget);

@@ -6,7 +6,7 @@ Buy the **Hunting harpoon** from **Outfitters → Weapons** for **1,000 energy**
 
 Fish hunting uses only the harpoon in this release. Bows retain their existing combat behavior. Harpoon hunting does not reveal mysterious shadows or create giant catches; equip a rod from the backpack to use the existing line-fishing minigame. Ordinary hunting fish occupy canonical pond slots; their availability is separate from line-fishing silhouettes. Online rewards and cooldowns are checked by the action service; a hosted service still needs deployment and multi-client testing.
 
-Six **Great Forest Hawks** live in Mushroom Forest, outside Clover Village's safe area. They are flying enemies with 160 HP, 36 base EXP and the existing charger attack behavior. Harpoons and other weapons can fight them. Each defeat guarantees 1–2 feathers and has a 70% chance of 1–2 meat before normal loot modifiers. Their six roster entries append after all existing home enemies and the home Titan, preserving existing enemy IDs and save/authority references.
+Six **Meadow Eagles** live in Blue Lake Meadow, outside Clover Village's safe area. They are flying enemies with 160 HP, 36 base EXP and the existing charger attack behavior. Harpoons and other weapons can fight them. Each defeat guarantees 1–2 feathers and has a 70% chance of 1–2 meat before normal loot modifiers. Their six roster entries append after all existing home enemies and the home Titan, preserving existing enemy IDs and save/authority references.
 
 ## Vietnamese guide
 
@@ -14,7 +14,7 @@ Mua **Lao săn ba chĩa** tại **Cửa hàng Trang bị → Vũ khí** với **
 
 Bản này chỉ dùng lao để săn cá. Cung vẫn dùng trong chiến đấu như trước. Săn bằng lao không bắt được bóng cá bí ẩn hay tạo cá siêu khổng lồ; hãy trang bị cần câu từ túi đồ để chơi câu bằng dây. Cá thường để săn có vị trí riêng trong từng ao, độc lập với bóng cá bí ẩn. Khi chơi online, máy chủ kiểm tra phần thưởng và thời gian hồi; dịch vụ online vẫn cần triển khai và kiểm thử với nhiều người chơi.
 
-Có sáu **Diều hâu rừng lớn** bay trong Rừng Nấm, ngoài vùng an toàn của làng. Mỗi con có 160 máu và cho 36 EXP cơ bản. Có thể dùng lao hoặc vũ khí khác để đánh. Mỗi lần hạ gục luôn cho 1–2 lông vũ và có 70% cơ hội nhận 1–2 thịt, trước các hệ số phần thưởng thông thường.
+Có sáu **Đại bàng đồng cỏ** bay trong Đồng Cỏ Hồ Xanh, ngoài vùng an toàn của làng. Mỗi con có 160 máu và cho 36 EXP cơ bản. Có thể dùng lao hoặc vũ khí khác để đánh. Mỗi lần hạ gục luôn cho 1–2 lông vũ và có 70% cơ hội nhận 1–2 thịt, trước các hệ số phần thưởng thông thường.
 
 ## Art provenance and rendering limits
 

@@ -164,7 +164,7 @@ test('a farm animal tap carries only its own UID while the pen remains a separat
 });
 
 test('home includes nine plots and exact regional creature populations within full bounds',()=>{
-  const w=world();w.build('home');assert.equal(w.plotMeshes.length,9);assert.equal(w.enemies.length,151+FOREST_RAPTOR_COUNT+SWAMP_OCTO_COUNT);assert.equal(w.enemies.filter(e=>e.type==='forest_raptor').length,FOREST_RAPTOR_COUNT);assert.equal(w.enemies.filter(e=>e.boss).length,5);assert.equal(w.enemies.filter(e=>e.definition?.titan).length,1);
+  const w=world();w.build('home');assert.equal(w.plotMeshes.length,9);assert.equal(w.enemies.length,151+FOREST_RAPTOR_COUNT+SWAMP_OCTO_COUNT+22);assert.equal(w.enemies.filter(e=>e.type==='forest_raptor').length,FOREST_RAPTOR_COUNT);assert.equal(w.enemies.filter(e=>e.boss).length,5);assert.equal(w.enemies.filter(e=>e.definition?.titan).length,1);
   assert.ok(w.enemies.some(e=>Math.hypot(e.x,e.z)>100));assert.equal(w.blocked(149,0),true);
   assert.deepEqual(w.entities.filter(e=>e.kind==='plot').slice(0,3).map(e=>[e.x,e.z]),[[-12.23,1.16],[-11,1.16],[-9.77,1.16]]);
 });

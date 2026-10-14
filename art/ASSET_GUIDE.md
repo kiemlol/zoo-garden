@@ -112,3 +112,7 @@ No saved-game format was changed.
 `forest-birds.glb` adds the Great Forest Hawk used for the six large forest enemies. Its Blender source is `blender/kit/build_forest_birds.py`, adapted from the local `3d_astra` project's procedural `birdGeometry` wing and tail layout. The source hash, four rigid-part pivots, dimensions, 1,452-triangle count and 45,504-byte budget are recorded in `forest-birds-manifest.json`. Runtime scale is 1.45, with two flapping wing hinges and a 0.8 m collision radius around the body. It uses no textures, skin or extra animation file; all six birds share the baked geometry and material.
 
 The Hunting harpoon aliases the already shipped `trident` held model and icon. Its flying fork is the single 84-triangle vertex-colored mesh from `src/harpoon-art.ts`, with no texture or shadow pass. There is no additional weapon model download. The [hunting guide](../docs/hunting.md) records gameplay, Vietnamese instructions, provenance and the existing horizontal combat-plane limitation.
+
+## Home wildlife additions
+
+`blender/kit/build_wild_creatures.py` builds Mosslug and Rolling Pangolin, plus Rainbow Slime, Moss Shell, Lava Scale and Rolling Shell. The shared `wild-creatures.glb` is 147,848 bytes; both common creatures stay below 2,500 triangles. The generator also renders four 160 px item icons and previews, with budgets recorded in `wild-creatures-manifest.json`. See [home wildlife](../docs/home-wildlife.md) for mechanics and reproduction commands.

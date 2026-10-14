@@ -65,7 +65,7 @@ export function lootText(items: readonly { icon: string; name: string; count: nu
 
 /** Difficulty by home zone or planet; creature levels are difficulty × 3 − 2 (world.spawnSpecies). */
 
-const HOME_ZONES: Record<string, { id: string; boss: string }> = { 'Mushroom Forest': { id: 'forest', boss: 'treant' }, 'Blue Lake Meadow': { id: 'meadow', boss: 'mushking' }, 'Chomper Swamp': { id: 'swamp', boss: 'croc' }, 'Redrock Canyon': { id: 'canyon', boss: 'bear' } };
+const HOME_ZONES: Record<string, { id: string; boss: string }> = { 'Mushroom Forest': { id: 'forest', boss: 'mushking' }, 'Blue Lake Meadow': { id: 'meadow', boss: 'treant' }, 'Chomper Swamp': { id: 'swamp', boss: 'croc' }, 'Redrock Canyon': { id: 'canyon', boss: 'bear' } };
 const names = (types: readonly string[]) => types.map(type => t(ENEMY_TYPES[type]?.name ?? '')).filter(Boolean).slice(0, 3).join(', ');
 /** Zone banner text: the detail names what lives there, the chip rates it ('★★ · Lv 4+ · King Bear'). */
 export function zoneInfo(name: string, planet: PlanetId | string): { detail: string; chip: string } {

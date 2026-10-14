@@ -4117,5 +4117,12 @@ RECIPES.push({result:'rod_lava',energy:1500,materials:{rod_steady:1,magma:8,obsi
 const lavaRodRecipe=RECIPES.find(r=>r.result==='rod_lava'&&r.station==='forge')!;
 ITEMS.rod_lava.price=lavaRodRecipe.energy;ITEMS.rod_lava.materials={...lavaRodRecipe.materials};
 RECIPES.push({...lavaRodRecipe,station:'shop'});
+// Home wildlife materials: append without shifting existing recipe identities.
+ITEMS.rainbow_slime={name:'Rainbow Slime',icon:'🌈',desc:'Slippery rainbow slime from a Mosslug. A crafting binder for skating shoes and traps.',type:'material',sell:18};
+ITEMS.moss_shell={name:'Moss Shell',icon:'🐚',desc:'A sturdy spiral shell covered in soft moss. A material for shields and disguises.',type:'material',sell:28};
+ITEMS.lava_scale={name:'Lava Scale',icon:'🔶',desc:'A warm, overlapping plate from a rolling pangolin. A material for armor.',type:'material',sell:24};
+ITEMS.rolling_shell={name:'Rolling Shell',icon:'🟤',desc:'A curled shell of interlocking scales. A material for disguises.',type:'material',sell:32};
+LOOT_TABLES.mosslug=[['rainbow_slime',1,1,2],['moss_shell',.55,1,1]];
+LOOT_TABLES.pangolin=[['lava_scale',1,1,2],['rolling_shell',.55,1,1]];
 // Dyes (dye-skins.ts): energy-priced recolours of existing gear, generated last so every base item exists.
 registerDyes(ITEMS);
