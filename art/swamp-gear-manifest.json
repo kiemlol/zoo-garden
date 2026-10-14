@@ -1,0 +1,32 @@
+{
+  "file": "public/assets/models/swamp-gear.glb",
+  "bytes": 82504,
+  "textures": 0,
+  "models": {
+    "swamp_octo": {
+      "triangles": 1674,
+      "parts": [
+        "swamp_octo_body"
+      ]
+    },
+    "venom_ink": {
+      "triangles": 300,
+      "parts": [
+        "venom_ink_body"
+      ]
+    },
+    "jelly_resin": {
+      "triangles": 300,
+      "parts": [
+        "jelly_resin_body"
+      ]
+    },
+    "rod_lava": {
+      "triangles": 912,
+      "parts": [
+        "rod-tip",
+        "rod_lava@hand-right"
+      ]
+    }
+  }
+}

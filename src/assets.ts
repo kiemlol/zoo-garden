@@ -45,6 +45,7 @@ export const KIT_FILES = {
   worldsHarsh: modelUrl('worlds-harsh.glb'),
   worldsDressing: modelUrl('worlds-dressing.glb'),
   farm: modelUrl('farm.glb'),
+  swampGear: modelUrl('swamp-gear.glb'),
   creatures: modelUrl('creatures.glb'),
   forestBirds: modelUrl('forest-birds.glb'),
   helper: modelUrl('helper.glb'),
@@ -535,7 +536,7 @@ export function heroKitFor(look: LookId): HeroLibrary {
 }
 // Gear the explorer can wear or hold, one file per group so each downloads only when first worn.
 export const wearKit = new KitLibrary([KIT_FILES.wear]);
-export const weaponKit = new KitLibrary([KIT_FILES.weapons]);
+export const weaponKit = new KitLibrary([KIT_FILES.weapons,KIT_FILES.swampGear]);
 /** New gameplay item, existing Blender trident geometry; no duplicate weapon download. */
 export const weaponModelName = (id: string) => id === 'harpoon' ? 'trident' : id;
 export const disguiseKit = new KitLibrary([KIT_FILES.disguises]);

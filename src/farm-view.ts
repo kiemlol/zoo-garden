@@ -158,6 +158,12 @@ export function placeholderAnimal(id: ModelId): T.Group {
     g.add(part('dog_head', [0, .4, .2], ball('#e8a25a', .2, 0, .14, .1), ball('#fff1d8', .09, 0, .08, .26, 1.2, .9, .9), ball('#1c1b2e', .03, 0, .12, .34), ball('#1c1b2e', .035, -.08, .2, .26), ball('#1c1b2e', .035, .08, .2, .26), ball('#b8743a', .07, -.12, .33, .08, .8, 1.5, .5), ball('#b8743a', .07, .12, .33, .08, .8, 1.5, .5)));
     for (const [n,x,z] of [['fl',-.1,.15],['fr',.1,.15],['bl',-.1,-.17],['br',.1,-.17]] as const) g.add(part(`dog_leg_${n}`, [x,.18,z], cyl('#e8a25a',.05,.14,0,-.09,0), ball('#fff1d8',.06,0,-.15,.01,1,.7,1.2)));
     g.add(part('dog_tail', [0,.35,-.23], ball('#e8a25a',.06,0,.08,-.04,.9,1.8,.9), ball('#fff1d8',.05,0,.2,-.02)));
+  } else if(id==='goat'||id==='kid'){
+    const s=id==='kid'?.68:1,coat='#fbf0dc',patch='#a56a3a';
+    g.add(part(`${id}_body`,[0,.59*s,0],ball(coat,.30*s,0,0,0,1,.9,1.43),ball(patch,.20*s,0,.22*s,-.12*s,1,.25,1.2)));
+    g.add(part(`${id}_head`,[0,.8*s,.32*s],ball(coat,.24*s,0,.07*s,.04*s),ball('#ffc2cf',.10*s,0,-.03*s,.24*s,1.7,1,.95),ball('#322943',.045*s,-.11*s,.1*s,.23*s),ball('#322943',.045*s,.11*s,.1*s,.23*s),ball(coat,.09*s,-.3*s,.14*s,0,1.6,.7,.85),ball(coat,.09*s,.3*s,.14*s,0,1.6,.7,.85),cyl('#ecd3a2',.045*s,(id==='kid'?.08:.18)*s,-.13*s,.28*s,-.05*s),cyl('#ecd3a2',.045*s,(id==='kid'?.08:.18)*s,.13*s,.28*s,-.05*s)));
+    for(const[n,x,z]of [['fl',-.21,.22],['fr',.21,.22],['bl',-.21,-.29],['br',.21,-.29]]as const)g.add(part(`${id}_leg_${n}`,[x*s,.38*s,z*s],cyl(coat,.075*s,.3*s,0,-.15*s,0),ball('#5a3d33',.075*s,0,-.33*s,.02*s,1,.67,1.1)));
+    g.add(part(`${id}_tail`,[0,.69*s,-.43*s],ball(coat,.06*s,0,.08*s,-.06*s,1,1.4,1)));
   } else if (id === 'pig' || id === 'piglet') {
     const dog = false, s = id === 'piglet' ? .58 : 1, coat = dog ? '#c98d4c' : id === 'piglet' ? '#ffc1cd' : '#ffb4c0';
     g.add(part(`${id}_body`, [0, .48*s, 0], ball(coat, .34*s, 0, 0, 0, 1, .85, 1.45)));

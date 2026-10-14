@@ -1,4 +1,4 @@
-import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT} from './enemy-types.ts';
+import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,SWAMP_OCTO_COUNT} from './enemy-types.ts';
 import {TITAN_BY_PLANET} from './titan-content.ts';
 import {ZONE_DIFFICULTY} from './boss-patterns.ts';
 import type {PlanetId} from './content.ts';
@@ -13,5 +13,6 @@ export function enemyRoster(planet:PlanetId):EnemyRosterEntry[]{
   const titan=TITAN_BY_PLANET[planet];if(titan)add(titan,planet==='home'?'canyon':planet);
   if(planet==='lava')for(let i=0;i<18;i++)add('minislime');
   if(planet==='home')for(let i=0;i<FOREST_RAPTOR_COUNT;i++)add('forest_raptor','forest');
+  if(planet==='home')for(let i=0;i<SWAMP_OCTO_COUNT;i++)add('swamp_octo','swamp');
   return entries;
 }

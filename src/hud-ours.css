@@ -565,7 +565,7 @@ body.air-combat { --fight-width: calc(var(--sk) * 3.784); }
 @media (min-aspect-ratio: 1/1) {
   :root {
     --combat-strip-left: calc(var(--hero-w) + var(--edge) + var(--safe-left) + 8px);
-    --combat-strip-right: calc(var(--col) + var(--mm) + 12px);
+    --combat-strip-right: var(--combat-home-right, calc(var(--col) + var(--mm) + var(--sk) + 24px));
     --combat-strip-width: max(0px, calc(100vw - var(--combat-strip-left) - var(--combat-strip-right)));
   }
   #app #hud #boss-bar {
@@ -579,8 +579,8 @@ body.air-combat { --fight-width: calc(var(--sk) * 3.784); }
     left: var(--combat-strip-left); right: var(--combat-strip-right); top: calc(3px + var(--safe-top));
     width: auto; transform: none; padding: 3px 6px; gap: 4px; border-radius: 12px;
   }
-  #app.boss-on #hud .colossus-banner { left: calc(var(--combat-strip-left) + var(--combat-strip-width) / 2 + 4px); }
-  #app:has(#colossus-banner:not([hidden])) #hud #boss-bar { right: calc(var(--combat-strip-right) + var(--combat-strip-width) / 2 + 4px); }
+  #app.boss-on #hud .colossus-banner { left: calc(var(--combat-strip-left) + var(--combat-strip-width) * .62 + 4px); }
+  #app:has(#colossus-banner:not([hidden])) #hud #boss-bar { right: calc(var(--combat-strip-right) + var(--combat-strip-width) * .38 + 4px); }
   #app #hud .colossus-banner.near { display: flex; }
   #app #hud .colossus-banner .cb-icon { width: 22px; height: 22px; font-size: 14px; }
   #app #hud .colossus-banner b { font-size: 11px; }

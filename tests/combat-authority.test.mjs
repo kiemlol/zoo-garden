@@ -266,3 +266,15 @@ test("online knight: a shot reported against the raised shield hits the shooter 
  engine.sim.update(.5);assert.ok(enemy.hp<hp,'the shooter is hit by its own shot');
  f.peer.pose.facing=Math.PI;const after=enemy.hp;engine.damageAt=0;f.authority.damage(f.peer,enemy.id,'shot');engine.sim.update(.5);assert.equal(enemy.hp,after,'from behind nothing bounces');assert.ok(engine.healthEvents.some(e=>e.amount<0));
 });
+
+test('swamp poison is server-owned, respects immunity and shields, and clears on reset',async t=>{
+ const f=await fixture(t),enemy=f.spawn('swamp_octo',0,-31),engine=f.authority.engineFor(f.peer);f.peer.pose.x=0;f.peer.pose.z=-30;
+ f.authority.damage(f.peer,enemy.id,'shot');assert.ok(engine.venom.step(1)>0);
+ f.authority.resetPeer(f.peer,{newLife:true});assert.equal(engine.venom.step(1),0);
+ engine.damageAt=0;engine.sim.statuses.shield=10;f.authority.damage(f.peer,enemy.id,'shot');assert.equal(engine.venom.step(1),0);
+ engine.sim.statuses.shield=0;f.peer.account.profile.gear.outfit='outfit_jungle';
+ // Use the catalog's actual poison-proof outfit instead of a client flag.
+ const antidote=Object.keys(Game.ITEMS).find(id=>Game.ITEMS[id].antidote&&Game.ITEMS[id].slot);assert.ok(antidote);
+ f.peer.account.profile.gear[Game.ITEMS[antidote].slot]=antidote;f.peer.account.profile.bag[antidote]=1;
+ engine.damageAt=0;f.authority.damage(f.peer,enemy.id,'shot');assert.equal(engine.venom.step(1),0);
+});

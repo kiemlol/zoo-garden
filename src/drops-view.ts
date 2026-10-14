@@ -6,6 +6,7 @@ import { t } from './i18n.ts';
  * The spin is faked by flipping the card's x-scale; the countdown pill is a pooled DOM element within 14 m.
  */
 import * as T from 'three';
+import {weaponKit} from './assets.ts';
 import { terrainHeight, type EnvironmentLayout } from './environments.ts';
 import { DROP, DropManager, RING_COLORS, blinkVisible, dropLabel, rarityOf, type Drop, type Rarity } from './drops.ts';
 
@@ -89,17 +90,26 @@ export class DropView {
   sync(drops: Drop[], time: number, camera: T.Camera, hero: { x: number; z: number }, width: number, height: number) {
     if (!drops.length && this.idle) return; // nothing lying about and the meshes are already hidden: no sets, uploads or tag work
     if (drops.length > this.capacity) this.grow(Math.max(drops.length, this.capacity * 2));
+    const liveIds=new Set(drops.map(d=>d.uid));
+    for(const [uid,model]of this.models)if(!liveIds.has(uid)){this.scene.remove(model);this.models.delete(uid);}
     const live = new Set(drops.map(d => d.item)), cam = camera.position;
     let n = 0;
     for (const d of drops) {
       const visible = blinkVisible(d.life - d.age, time), slot = this.atlas.cell(d.item, live);
+      let model=this.models.get(d.uid);
+      if(!model&&(d.item==='venom_ink'||d.item==='jelly_resin')){
+        if(!weaponKit.requested)void weaponKit.load();
+        model=weaponKit.instance(d.item)??undefined;
+        if(model){model.name='loot-'+d.item;model.scale.setScalar(1.7);this.scene.add(model);this.models.set(d.uid,model);}
+      }
+      if(model){model.visible=visible;model.position.set(d.x,d.y-.22,d.z);model.rotation.y=d.spin;model.updateMatrixWorld(true);}
       // Ring on the ground.
       this.m.makeTranslation(d.x, d.ground + .04, d.z); this.rings.setMatrixAt(n, visible ? this.m : this.m.makeScale(0, 0, 0)); this.rings.setColorAt(n, this.colors[d.rarity]);
       // Card: cylindrical billboard (yaw only) plus a fixed lean back. The spin is an x-scale flip that never
       // narrows below 55%, so the icon stays readable through the turn (a true edge-on card would vanish).
       const flip = Math.cos(d.spin), sx = Math.sign(flip || 1) * (.55 + .45 * Math.abs(flip));
       this.e.set(LEAN, Math.atan2(cam.x - d.x, cam.z - d.z), 0); this.q.setFromEuler(this.e);
-      this.s.set(CARD * sx, CARD, CARD).multiplyScalar(visible && slot >= 0 ? 1 : 0);
+      this.s.set(CARD * sx, CARD, CARD).multiplyScalar(visible && slot >= 0 && !model ? 1 : 0);
       this.p.set(d.x, d.y + CARD * .5 - .25, d.z);
       this.cards.setMatrixAt(n, this.m.compose(this.p, this.q, this.s));
       this.cell.setXY(n, Math.max(0, slot) % GRID, GRID - 1 - Math.floor(Math.max(0, slot) / GRID));
@@ -112,6 +122,7 @@ export class DropView {
     this.idle = n === 0;
   }
   private idle = false;
+  private models=new Map<number,T.Group>();
 
   private syncTags(_drops:Drop[],_camera:T.Camera,_hero:{x:number;z:number},_width:number,_height:number){
     for(const tag of this.tags.values())tag.el.remove();this.tags.clear();

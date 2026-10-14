@@ -1,3 +1,4 @@
+import {Venom} from '../src/venom.ts';
 import {randomUUID} from 'node:crypto';
 import * as Game from '../src/model.ts';
 import {ContextGearSelection} from '../src/context-gear.ts';
@@ -82,12 +83,13 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   function hurtPlayer(peer,amount,source='melee'){
     const e=engineFor(peer),now=Date.now();// Nothing hurts an explorer standing in the safe zone round the cottage (safe-zone.ts), whatever the host reports.
     if(peer.visit||!peer.active||peer.account.profile.hp<=0||inSafeZone(peer.pose,peer.planet)||now-e.damageAt<550||e.sim.invulnerable||source==='melee'&&e.sim.statuses.flight>0)return;
-    e.damageAt=now;const defense=Game.defense(combatProfile(peer))+e.sim.defenseBonus+(e.sim.statuses.armor>0?80:0);hp(peer,-Math.max(1,Math.round(amount*60/(defense+60))),source);
+    e.damageAt=now;const defense=Game.defense(combatProfile(peer))+e.sim.defenseBonus+(e.sim.statuses.armor>0?80:0);const damage=Math.max(1,Math.round(amount*60/(defense+60)));hp(peer,-damage,source);return damage;
   }
   function hurtEnemyTarget(peer,enemy,multiplier,source='melee'){
     // The knight's raised shield, facing the creature, stops the blow; a shot it stops flies back and hits the shooter (combat.reflect).
     const sim=engineFor(peer).sim;if(sim.blocks(enemy)){if(source==='shot'&&!peer.visit&&peer.active)sim.reflect(enemy,dist(peer.pose,enemy)/DZ.block.speed);return;}
-    hurtPlayer(peer,enemy.damage*multiplier,source);
+    const damage=hurtPlayer(peer,enemy.damage*multiplier,source);
+    if(damage&&source==='shot'&&ENEMY_TYPES[enemy.type]?.poison&&!Game.activeStats(combatProfile(peer)).poisonImmune)engineFor(peer).venom.infect(damage);
   }
   /**
    * A creature's blow, shot or area reached one of `peer`'s summons (the room host reports it; combat.ts SUMMON_HP).
@@ -262,11 +264,11 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     let engine=engines.get(peer.account.id);
     if(engine){
       engine.peer=peer;engine.lastSeen=Date.now();
-      if(engine.room!==peer.room){flushHealth(engine);engine.sim.reset();engine.room=peer.room;}
+      if(engine.room!==peer.room){flushHealth(engine);engine.sim.reset();engine.venom.clear();engine.room=peer.room;}
       if(engine.planet!==peer.planet){engine.planet=peer.planet;engine.environment=new EnvironmentSimulation(createEnvironmentLayout(peer.planet));}
       return engine;
     }
-    engine={peer,room:peer.room,planet:peer.planet,reconciledLife:epoch(peer.account),lastSeen:Date.now(),nextBasic:0,nextSkill:[0,0,0,0],healthEvents:[],hpAt:0,damageAt:0,lastSkill:new Map(),environment:new EnvironmentSimulation(createEnvironmentLayout(peer.planet))};
+    engine={venom:new Venom(),peer,room:peer.room,planet:peer.planet,reconciledLife:epoch(peer.account),lastSeen:Date.now(),nextBasic:0,nextSkill:[0,0,0,0],healthEvents:[],hpAt:0,damageAt:0,lastSkill:new Map(),environment:new EnvironmentSimulation(createEnvironmentLayout(peer.planet))};
     const current=()=>engine.peer,room=()=>rooms.get(current().room);
     const targets=()=>room()?[...state(room()).enemies.values()]:[];
     const petShooter=(p,index)=>{const id=companionId(p.account.profile.gear,index),pet=id?Game.ITEMS[id]?.pet:undefined;return pet&&!p.visit&&!atHome(p.planet,p.pose)?{...pet,dmg:pet.dmg*gearFactor(p.account.profile,id),x:p.pose.x,z:p.pose.z}:null;};
@@ -290,6 +292,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   function resetPeer(peer,{newLife=false,reason}={}){
     const engine=engineFor(peer);engine.sim.reset();
     if(newLife||reason==='rest')engine.healthEvents=[];
+    engine.venom.clear();
     if(newLife){engine.reconciledLife=epoch(peer.account);engine.environment=new EnvironmentSimulation(createEnvironmentLayout(peer.planet));engine.damageAt=0;}
     if(reason==='reset'){engine.nextBasic=0;engine.nextSkill=[0,0,0,0];}
   }
@@ -333,6 +336,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       for(const peer of active){const e=engineFor(peer);e.sim.update(dt,true);e.environment.authoritative=false;e.environment.time=s.environment.time-dt;e.environment.weather.restore(weatherBefore);e.environment.fireRain=structuredClone(rainBefore);e.environment.lightning=structuredClone(lightningBefore);e.environment.lamps=new Map(s.environment.lamps);e.environment.eclipseUntil=s.environment.eclipseUntil;e.environment.dragonPhase=s.environment.dragonPhase;e.environment.nestLevel=before.nestLevel;
         if(peer.account.ridePlanet===peer.planet&&peer.account.rideUntil>now)e.environment.rideUntil=e.environment.time+(peer.account.rideUntil-now)/1000;
         const traits=Game.activeStats(peer.account.profile),hazard=e.environment.step(dt,peer.pose,{x:0,z:0},{...traits,fireResistance:traits.lavaproof?1:traits.fireResistance,flying:e.sim.statuses.flight>0||e.sim.statuses.bats>0},[]);
+        const poison=e.venom.step(dt,traits.poisonImmune||inSafeZone(peer.pose,peer.planet)||peer.account.profile.hp<=0);if(poison>0)hp(peer,-Math.max(1,Math.round(poison)),'poison');
         if(hazard.damage>0)hurtPlayer(peer,hazard.damage,'hazard');if(hazard.heal)hp(peer,hazard.heal,'heal');if(traits.regen>0&&peer.account.profile.hp<traits.maxHp)hp(peer,traits.regen*dt,'regen');if(atHome(peer.planet,peer.pose)&&peer.account.profile.hp<traits.maxHp)hp(peer,homeRecoveryBonus(traits.regen)*dt,'rest');
 
       }

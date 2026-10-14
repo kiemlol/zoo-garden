@@ -44,8 +44,8 @@ test('the whole Vietnamese pack is unchanged: same keys, same text (plus the ful
   const now = plain(VI_PACK), expected = { ...snapshot.pack, ...snapshot.tables.MOBILE_SUPPORT_VI } as Record<string, string>;
   for (const [key, value] of Object.entries(expected)) assert.equal(now[key], value, `changed or missing: ${key}`);
   const added = Object.keys(now).filter(key => !(key in expected));
-  // Account entry adds 22 localized labels and validation messages.
-  assert.ok(added.length < 158, `unexpected growth of the pack: ${added.length} new strings`);
+  // Account entry adds 22 strings; swamp creature, drops and lava rod add 7.
+  assert.ok(added.length < 165, `unexpected growth of the pack: ${added.length} new strings`);
 });
 
 // Vietnamese letters: Latin-1 and Latin Extended accents plus the Latin Extended Additional block (all the tone marks).

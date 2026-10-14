@@ -5,7 +5,7 @@ import { t } from './i18n.ts';
 import * as M from './model.ts';
 import type { World, Enemy } from './world.ts';
 import type { EnemyDefinition } from './enemy-types.ts';
-import { terrainHeight } from './environments.ts';
+import { terrainHeight, zoneAt } from './environments.ts';
 import {cameraOffset} from './camera-rig.ts';
 import { planetLook } from './look.ts';
 import { COLOSSUS_ID, COLOSSUS_MINIONS, COLOSSUS_MINION_SHARD, COLOSSUS_NAME, COLOSSUS_SCHEDULE as W, COLOSSUS_STATS as S, COLOSSUS_TYPE, clockText, colossusClock, colossusMaxHp, NEIGHBOUR_HIT_CAP, roarHours } from './colossus-content.ts';
@@ -444,7 +444,7 @@ export class ColossusEvent {
     let mode: 'none' | 'soon' | 'awake' | 'done' = 'none', left = clock.left;
     if (online && s) { if (s.on && !s.killed) mode = 'awake'; else if (s.soon) mode = 'soon'; else if (s.on && s.killed) mode = 'done'; if (s.startsAt && mode === 'soon') left = s.startsAt - now; if (s.endsAt && mode === 'awake') left = s.endsAt - now; }
     else if (!online && !colossusSleeps()) { if (clock.phase === 'soon') mode = 'soon'; else if (clock.phase === 'active') mode = this.killedDay === clock.day ? 'done' : 'awake'; }
-    if (!this.h.playing()||this.h.world.planet!=='home') mode = 'none';
+    if (!this.h.playing()||this.h.world.planet!=='home'||this.h.world.interior||zoneAt(this.h.world.position)!=='home') mode = 'none';
     const hp = e && e.hp > 0 ? e.hp / e.maxHp : (online && s?.maxHp ? (s.hp ?? 0) / s.maxHp : 1);
     // Close by, the boss bar already shows its health: the banner steps back (hidden on phones, no meter on desktop).
     const bar = document.getElementById('boss-bar'), near = mode === 'awake' && !!bar && !bar.hidden && !!e && Math.hypot(this.h.world.position.x - e.x, this.h.world.position.z - e.z) < 36;

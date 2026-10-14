@@ -26,10 +26,12 @@ export function initHudLayout() {
     const {width,bottom}=metrics,root=document.documentElement.style;
     const trackerBox=tracker?.getBoundingClientRect(),trackerBottom=trackerBox?.height?Math.ceil(trackerBox.bottom):0;
     const movement=document.querySelector<HTMLElement>('#hud .movement-joystick')?.getBoundingClientRect(),hudBottom=menu.closest('#hud')?.getBoundingClientRect().bottom??window.innerHeight;
-    const moveClearance=movement?.height?hudBottom-movement.top+8:168;
+    const home=document.querySelector<HTMLElement>('#hud .home-button')?.getBoundingClientRect();
+    if(home?.width){const value=Math.ceil(window.innerWidth-home.left+8)+'px';if(root.getPropertyValue('--combat-home-right')!==value)root.setProperty('--combat-home-right',value);}
+    const moveClearance=movement?.height?hudBottom-movement.top+24:184;
     if(root.getPropertyValue('--move-clearance')!==moveClearance+'px')root.setProperty('--move-clearance',moveClearance+'px');
     if(trackerBottom!==lastTrackerBottom){lastTrackerBottom=trackerBottom;root.setProperty('--tracker-bottom',trackerBottom+'px');}
-    if (width !== lastWidth && width > 0) { lastWidth = width; root.setProperty('--dock-w', width + 'px'); }
+    if (width !== lastWidth && width > 0) { lastWidth = width; root.setProperty('--dock-w', width + 'px'); schedule(); }
     if (bottom !== lastBottom && bottom > 0) { lastBottom = bottom; root.setProperty('--menu-bottom', bottom + 'px'); }
     if(food&&!food.hidden&&foodAnchor){
       const anchor=foodAnchor.getBoundingClientRect(),visual=window.visualViewport;
@@ -58,7 +60,7 @@ export function initHudLayout() {
   };
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(measure);};
   const resize=typeof ResizeObserver!=='undefined'?new ResizeObserver(schedule):null;resize?.observe(menu);if(tracker)resize?.observe(tracker);
-  document.querySelectorAll<HTMLElement>('#hud .skills, #hud .movement-joystick, #hud .minimap, .quick-eat').forEach(el=>resize?.observe(el));
+  document.querySelectorAll<HTMLElement>('#hud .skills, #hud .movement-joystick, #hud .minimap, #hud .home-button, .quick-eat').forEach(el=>resize?.observe(el));
   const watch=typeof MutationObserver!=='undefined'?new MutationObserver(schedule):null;
   watch?.observe(menu,{childList:true});
   if(food)watch?.observe(food,{childList:true,attributes:true,attributeFilter:['hidden']});

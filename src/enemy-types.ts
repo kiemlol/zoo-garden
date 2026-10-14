@@ -3,7 +3,7 @@ import {TITANS} from './titan-content.ts';
 import {SIZE_FACTORS,sized,sizeFactor} from './creature-sizes.ts';
 
 export type EnemyBehavior='hopper'|'melee'|'charger'|'rooted'|'shooter'|'boss';
-export interface EnemyDefinition {name:string;hp:number;damage:number;speed:number;reach:number;sight:number;xp:number;radius:number;behavior:EnemyBehavior;family:string;color:string;accent:string;cooldown:number;windup:number;boss:boolean;titan?:boolean;flying?:boolean;stealth?:number;aquatic?:boolean}
+export interface EnemyDefinition {name:string;hp:number;damage:number;speed:number;reach:number;sight:number;xp:number;radius:number;behavior:EnemyBehavior;family:string;color:string;accent:string;cooldown:number;windup:number;boss:boolean;titan?:boolean;flying?:boolean;stealth?:number;aquatic?:boolean;poison?:boolean}
 function creature(name:string,hp:number,damage:number,speed:number,xp:number,family:string,color:string,behavior:EnemyBehavior='melee',extra:Partial<EnemyDefinition>={}):EnemyDefinition{
   return {name,hp,damage,speed,xp,family,color,accent:'#fff1cf',behavior,reach:1.6,sight:10,radius:.7,cooldown:1.5,windup:.45,boss:false,...extra};
 }
@@ -18,6 +18,7 @@ export const ENEMY_TYPES:Record<string,EnemyDefinition>={
   forest_raptor:creature('Great Forest Hawk',160,14,4.2,36,'winged','#96714c','charger',{radius:.8,reach:1.9,sight:13,flying:true,accent:'#e8d2a6',cooldown:2.8,windup:.75}),
   wolf:creature('Grey Wolf',100,12,4.3,22,'quadruped','#8f9bb3','melee',{sight:12,cooldown:1.3,windup:.35}),
   chomper:creature('Snapping Flower',120,14,0,20,'flower','#58c24a','rooted',{radius:.8,reach:2.5,sight:7,accent:'#ff4f7a',cooldown:1.7,windup:.55}),
+  swamp_octo:creature('Venom Jelly Octopus',95,12,1.7,24,'octo','#9f75dd','shooter',{radius:.75,reach:10,sight:12,accent:'#a6f05b',cooldown:2.4,windup:.65,poison:true}),
   frog:creature('Poison Frog',70,10,2.8,16,'frog','#6fd35a','hopper',{radius:.6,accent:'#b27dff',cooldown:1.3}),
   cactus:creature('Prickly Cactus',140,15,0,30,'cactus','#4cb86b','shooter',{radius:.75,reach:11,sight:11,cooldown:2.1,windup:.6}),
   crab:creature('Stone Crab',130,14,2.6,26,'crab','#ff6a4d','melee',{radius:.8,windup:.5}),
@@ -813,6 +814,7 @@ for(const id of Object.keys(SIZE_FACTORS))if(ENEMY_TYPES[id])ENEMY_TYPES[id]=siz
  */
 export const ENEMY_SCALE:Readonly<Record<string,number>>={
   // Rare large quarry deliberately towers over the hero; ordinary common creatures retain their original sizes.
+  swamp_octo:.9,
   forest_raptor:1.45,
   mushroom:.49,boar:.91,bee:.73,wolf:.99,chomper:.67,frog:.73,cactus:.67,crab:.99,
   jelly:.73,gummy:.91,lollipop:.61,bunny:.51,chocobeetle:.99,
@@ -826,3 +828,6 @@ export const ENEMY_SCALE:Readonly<Record<string,number>>={
 };
 /** The scale a creature's model is drawn at: bosses 1.85, common creatures their ENEMY_SCALE. */
 export function enemyScale(type:string|undefined,boss=false){return (type&&Object.hasOwn(TITANS,type)?TITANS[type as keyof typeof TITANS].scale:boss?1.85:ENEMY_SCALE[type??'']??1)*sizeFactor(type);}
+
+/** Appended after existing home IDs, including the hawks. */
+export const SWAMP_OCTO_COUNT=8;

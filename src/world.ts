@@ -57,7 +57,7 @@ import {TargetMarker,TARGET_HOLD,TAP_RED} from './target-marker.ts';
 import {TelegraphDecals} from './telegraph.ts';
 import {LAVA_ORE_RULES,type LavaWeatherSnapshot} from './lava-weather.ts';
 import {createHarpoonProjectile} from './harpoon-art.ts';
-import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
+import {ENEMY_TYPES,HOME_SPAWNS,PLANET_SPAWNS,PLANET_BOSSES,FOREST_RAPTOR_COUNT,SWAMP_OCTO_COUNT,enemyScale,type EnemyDefinition} from './enemy-types.ts';
 import {HIP,applyGait,gaitSwing,limbsOf,newGait,stepGait,type Gait} from './walk-cycle.ts';
 import {DEFAULT_PIVOTS,fitOf,lookOf,toLook,DEFAULT_LOOK,type Fit,type LookId} from './looks.ts';
 import {part} from './part-cache.ts';
@@ -644,6 +644,7 @@ export class World {
       for(let i=0;i<18;i++){const minion=this.spawnSpecies('minislime',30,30,enemyIndex++)!;minion.hp=0;minion.respawn=999999;minion.mesh.visible=false;}
     }
     if(planet==='home')for(let i=0;i<FOREST_RAPTOR_COUNT;i++)placeEnemy('forest_raptor','forest');
+    if(planet==='home')for(let i=0;i<SWAMP_OCTO_COUNT;i++)placeEnemy('swamp_octo','swamp');
     const free=(x:number,z:number,r:number)=>!someObstacleNear(this.obstacles,x,z,x,z,r,o=>Math.hypot(x-o.x,z-o.z)<o.r+r)&&!this.entities.some(e=>Math.hypot(x-e.x,z-e.z)<e.radius+r);
     this.decor=planDecor({planet,layout,random:rng,free,ponds,clearings:this.enemies.filter(e=>e.respawn<999999).map(e=>({x:e.homeX,z:e.homeZ,type:e.type}))});
     for(const piece of this.decor)if(piece.radius>0)this.obstacle(piece.x,piece.z,piece.radius);
@@ -830,7 +831,10 @@ export class World {
   }
   private speciesModel(def:EnemyDefinition){
     const color=def.color,accent=def.accent,g=new T.Group(),family=def.family;
-    if(['quadruped','turtle','crab','dragon'].includes(family)){
+    if(family==='octo'){
+      const head=ball(color,.65,0,.75);head.scale.set(1,.95,.85);g.add(head);
+      for(let i=0;i<8;i++){const a=i*Math.PI/4;for(let j=0;j<3;j++)g.add(ball(j===2?accent:color,.19-j*.035,Math.cos(a)*(.4+j*.23),.2+j*.04,Math.sin(a)*(.4+j*.23)));}
+    }else if(['quadruped','turtle','crab','dragon'].includes(family)){
       const body=ball(color,.8,0,.64);body.scale.set(1,.7,1.35);g.add(body,ball(color,.48,0,.95,1));
       let leg=0;for(const x of [-.58,.58])for(const z of [-.66,.66]){const hip=new T.Group();hip.name='leg'+leg++;hip.position.set(x,.55,z);hip.add(cyl(accent,.16,.2,.55,0,-.27,0));g.add(hip);}
       if(family==='crab')for(const x of [-1,1])g.add(ball(accent,.35,x,.95,.85));

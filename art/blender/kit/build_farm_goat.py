@@ -1,10 +1,10 @@
 """The farm goat, its kid and their shelter. install(g) is called by build_farm_expansion.py.
 
-An original chunky toy goat: cream coat with a soft brown saddle and patches, a slightly arched barrel body, slim
-jointed legs ending in cloven hooves, a narrow face with a pink muzzle, a goatee, two swept-back horns, sideways
-ears with pink insides and a short upturned tail. The kid is the same build at ~60 % with a rounder head, shorter
-legs and horn nubs. Parts follow the quadruped contract (body/head/leg_fl/leg_fr/leg_bl/leg_br/tail, origins at
-their hinges, ground at z = 0, front is -Y).
+An original chunky toy goat: round cream torso, brown saddle, large expressive head,
+pink muzzle and ears, sturdy split hooves, swept horns and an upturned tail.
+The kid has a proportionally larger head and little horn nubs. Adult height ~1.22 m,
+kid ~0.8 m. Parts retain the body/head/four-leg/tail hinge contract, Z-up ground
+and -Y front. build_farm.py remains usable; build_swamp_gear.py also rebuilds this kit.
 """
 import math
 
@@ -12,93 +12,39 @@ from mathutils import Vector
 
 
 def build_goat(g, m, pid):
-    Model, sphere, cyl, cone, tube, bez, FM = (g[n] for n in ('Model', 'sphere', 'cyl', 'cone', 'tube', 'bez', 'FM'))
-    eye_pair, blush_pair, decal = g['eye_pair'], g['blush_pair'], g['decal']
-    kid = pid == 'kid'
-    K = 0.6 if kid else 1.0
-    hk = 1.3 if kid else 1.0      # the kid's head stays big
-    coat, patch = FM('goat', '#FBF0DC'), FM('goat patch', '#A56A3A')
-    beard = FM('goat beard', '#7A4A28')
-
-    def v(x, y, z):
-        return Vector((x * K, y * K, z * K))
-
-    def blob(part, mat_, c, r, segs=8, rings=5):
-        part.add(sphere(1.0, segs, rings, scale=tuple(a * K for a in r)).moved(c), mat_)
-
-    hp = 0.36 if kid else 0.40
-    zb = hp + 0.1
-    piv = dict(body=v(0, 0.05, hp), head=v(0, -0.25, zb + 0.07),
-               leg_fl=v(-0.1, -0.19, hp), leg_fr=v(0.1, -0.19, hp), leg_bl=v(-0.1, 0.27, hp), leg_br=v(0.1, 0.27, hp),
-               tail=v(0, 0.35, zb + 0.06))
-    M = Model(pid, piv)
-
-    # ---- body: a barrel with a slight arch (a spine blob), chest and rump, brown saddle and a side patch
-    BC, BR = v(0, 0.05, zb), tuple(a * K for a in (0.18, 0.31, 0.17))
-    M['body'].add(sphere(1.0, 11 if kid else 14, 6 if kid else 8, scale=BR).moved(BC), coat)
-    blob(M['body'], coat, v(0, 0.27, zb + 0.01), (0.15, 0.12, 0.15), 8, 5)          # rump
-    decal(M['body'], BC, BR, (0.0, 0.05, 1.0), 0.14 * K, 0.2 * K, patch, lift=0.016 * K, n=10, spin=0.3)
-    decal(M['body'], BC, BR, (1.0, 0.4, 0.15), 0.08 * K, 0.07 * K, patch, lift=0.012 * K, n=8, spin=0.9)
-    decal(M['body'], BC, BR, (-1.0, -0.3, 0.3), 0.07 * K, 0.06 * K, patch, lift=0.012 * K, n=8, spin=0.2)
-
-    # ---- head: narrow skull, tapered pink muzzle, goatee, horns, sideways ears, big eyes
-    H = v(0, -0.34, zb + 0.15)
-    HR = tuple(a * K * hk for a in ((0.095, 0.115, 0.1) if not kid else (0.095, 0.11, 0.1)))
-    HR = (HR[0], HR[1], HR[2])
-    M['head'].add(sphere(1.0, 10 if kid else 12, 6 if kid else 7, scale=HR).moved(H), coat)
-    MZ = H + Vector((0, -HR[1] * 0.75, -HR[2] * 0.42))
-    MR = (HR[0] * 0.6, HR[1] * 0.8, HR[2] * 0.5)
-    M['head'].add(sphere(1.0, 9, 5, scale=MR).moved(MZ), coat)
-    nose = MZ + Vector((0, -MR[1] * 0.72, MR[2] * 0.05))
-    M['head'].add(sphere(1.0, 7, 4, scale=(MR[0] * 0.78, MR[1] * 0.4, MR[2] * 0.7)).moved(nose), m['muzzle'])
-    for side in (-1, 1):
-        M['head'].add(sphere(1.0, 5, 3, scale=(0.012 * K, 0.008 * K, 0.01 * K)).moved(
-            nose + Vector((side * MR[0] * 0.3, -MR[1] * 0.36, MR[2] * 0.15))), m['nostril'])
-    eye_pair(M['head'], H, HR, (0.58, -0.72, 0.28), 0.034 * K * hk, m, squash=1.25, segs=7)
-    blush_pair(M['head'], H, HR, (0.72, -0.62, -0.15), 0.03 * K * hk, m)
-    # brown face stripe and cap
-    decal(M['head'], H, HR, (0, -0.4, 1.0), 0.05 * K * hk, 0.075 * K * hk, patch, lift=0.003, n=8)
-    # goatee: a tapered pointed beard under the chin
-    chin = MZ + Vector((0, -MR[1] * 0.1, -MR[2] * 0.8))
-    M['head'].add(cone(chin + Vector((0, 0.0, 0.015 * K)), chin + Vector((0, 0.02 * K, -0.12 * K)), 0.034 * K, sides=5), beard)
-    for side in (-1, 1):
-        # sideways ears with pink insides, tipped a little down
-        ea = H + Vector((side * HR[0] * 0.92, HR[1] * 0.2, HR[2] * 0.2))
-        tip = ea + Vector((side * 0.17 * K * hk, 0.02 * K, -0.04 * K))
-        M['head'].add(cone(ea, tip, 0.045 * K * hk, sides=6), coat)
-        M['head'].add(cone(ea + Vector((0, -0.016 * K, 0.0)), tip + Vector((-side * 0.012 * K, -0.012 * K, 0.0)),
-                           0.026 * K * hk, sides=5), m['blush'])
-        # horns: swept up then back (nubs on the kid)
-        base = H + Vector((side * HR[0] * 0.42, HR[1] * 0.1, HR[2] * 0.82))
-        if kid:
-            M['head'].add(sphere(1.0, 6, 4, scale=(0.026 * K, 0.026 * K, 0.034 * K)).moved(base + Vector((0, 0, 0.0))), m['horn'])
-        else:
-            pts = bez([base, base + Vector((side * 0.03, -0.01, 0.08)), base + Vector((side * 0.05, 0.08, 0.12)),
-                       base + Vector((side * 0.05, 0.17, 0.08))], 5)
-            M['head'].add(tube(pts, [0.036, 0.031, 0.025, 0.017, 0.005], sides=5, cap=0.004), m['horn'])
-    # neck filler so a nod never opens a gap
-    M['head'].add(sphere(1.0, 8, 5, scale=tuple(a * K for a in (0.095, 0.12, 0.13))).moved(v(0, -0.27, zb + 0.07)), coat)
-
-    # ---- legs: slim, jointed, with a pale cloven hoof; hind legs zig-zag, origin at the hip
-    for name, x, y in (('leg_fl', -0.1, -0.19), ('leg_fr', 0.1, -0.19), ('leg_bl', -0.1, 0.27), ('leg_br', 0.1, 0.27)):
-        back = y > 0
-        ky = 0.02 if back else 0.0
-        fy = 0.035 if back else 0.0
-        pts = [v(x, y, hp + 0.05), v(x, y, hp - 0.05), v(x, y - ky, 0.56 * hp), v(x, y + fy * 0.4, 0.47 * hp),
-               v(x, y + fy, 0.24 * hp), v(x, y + fy, 0.19 * hp)]
-        M[name].add(tube(pts, [0.058 * K, 0.046 * K, 0.032 * K, 0.028 * K, 0.033 * K, 0.033 * K], sides=5 if kid else 6, cap=0.0), coat)
-        if back:
-            blob(M[name], coat, v(x * 0.9, y + 0.01, hp), (0.065, 0.1, 0.1), 8, 5)
-        else:
-            blob(M[name], coat, v(x * 0.75, y + 0.0, hp + 0.02), (0.055, 0.075, 0.08), 8, 5)
-        for dx in (-1, 1):
-            c0 = Vector((x * K + dx * 0.016 * K, (y + fy - 0.005) * K, 0.0))
-            M[name].add(cyl(c0 + Vector((0, 0, 0.2 * hp * K)), c0, 0.019 * K, 0.025 * K, sides=5, cap=0.0), m['hoof'])
-    # ---- tail: short, upturned
-    tr = v(0, 0.35, zb + 0.06)
-    pts = bez([tr, tr + v(0, 0.06, 0.0), tr + v(0, 0.1, 0.05), tr + v(0, 0.1, 0.13)], 4)
-    M['tail'].add(tube(pts, [0.036 * K, 0.034 * K, 0.028 * K, 0.014 * K], sides=5, cap=0.01 * K), coat)
-    return M
+    """Round toy proportions, larger face and sturdy legs; keep every rigid hinge."""
+    Model, sphere, cyl, tube, FM = (g[n] for n in ('Model','sphere','cyl','tube','FM'))
+    kid=pid=='kid'; k=.68 if kid else 1; head=1.12 if kid else 1
+    coat,patch=FM('goat','#FBF0DC'),FM('goat patch','#A56A3A')
+    def v(x,y,z): return Vector((x*k,y*k,z*k))
+    def ell(part, material, c, r, seg=10, rings=5):
+        part.add(sphere(1,seg,rings,scale=tuple(a*k for a in r)).moved(v(*c)),material)
+    piv=dict(body=v(0,.05,.52),head=v(0,-.32,.80),tail=v(0,.45,.70))
+    for name,x,y in [('fl',-.21,-.22),('fr',.21,-.22),('bl',-.21,.29),('br',.21,.29)]:piv['leg_'+name]=v(x,y,.38)
+    model=Model(pid,piv)
+    ell(model['body'],coat,(0,.05,.59),(.30,.43,.27),12,6)
+    ell(model['body'],patch,(0,.15,.82),(.23,.27,.06))
+    ell(model['head'],coat,(0,-.36,.87),(.24*head,.24*head,.25*head),12,6)
+    ell(model['head'],coat,(0,-.30,.68),(.18,.18,.23))
+    ell(model['head'],m['muzzle'],(0,-.565,.77),(.17,.095,.10))
+    for side in (-1,1):
+        ell(model['head'],m['nostril'],(side*.055,-.647,.785),(.015,.010,.018),6,3)
+        ell(model['head'],coat,(side*.30,-.30,.94),(.16,.08,.07))
+        ell(model['head'],m['blush'],(side*.32,-.36,.95),(.10,.025,.035),8,4)
+    g['eye_pair'](model['head'],v(0,-.36,.87),tuple(a*k*head for a in (.24,.24,.25)),(.57,-.8,.18),.052*k*head,m,squash=1.2,segs=8)
+    g['blush_pair'](model['head'],v(0,-.36,.87),tuple(a*k*head for a in (.24,.24,.25)),(.68,-.73,-.20),.045*k,m)
+    for side in (-1,1):
+        pts=[v(side*.13,-.27,1.055),v(side*.16,-.22,1.14),v(side*.19,-.12,1.22),v(side*.19,-.01,1.18)]
+        if kid:pts=pts[:2]
+        model['head'].add(tube(pts,[.06*k,.048*k] if kid else [.06*k,.05*k,.036*k,.008*k],sides=6,cap=0),m['horn'])
+    if not kid:
+        model['head'].add(tube([v(0,-.51,.70),v(0,-.51,.59),v(0,-.48,.53)],[.065,.05,.01],sides=6,cap=0),patch)
+    for name,x,y in [('fl',-.21,-.22),('fr',.21,-.22),('bl',-.21,.29),('br',.21,.29)]:
+        part=model['leg_'+name]
+        part.add(cyl(v(x,y,.39),v(x,y,.09),.075*k,.065*k,sides=7),coat)
+        for dx in (-.035,.035):ell(part,m['hoof'],(x+dx,y-.02,.05),(.040,.085,.05),6,3)
+    model['tail'].add(tube([v(0,.43,.69),v(0,.52,.77),v(0,.55,.87)],[.07*k,.055*k,.02*k],sides=6,cap=0),coat)
+    return model
 
 
 def build_shelter(g, m):
@@ -122,7 +68,7 @@ def install(g):
         g['ANIMALS'].append(pid)
         g['PARTS'][pid] = g['HOOF_PARTS']
         k = 0.6 if pid == 'kid' else 1.0
-        g['SIZE'][pid] = dict(h=0.85 if pid == 'goat' else 0.5, half=(0.24, 0.5) if pid == 'goat' else (0.2, 0.35))
+        g['SIZE'][pid] = dict(h=1.22 if pid == 'goat' else .80, half=(.46,.67) if pid == 'goat' else (.32,.47))
         g['KIND'][pid] = 'animal'
         g['BUILDERS'][pid] = lambda m, pid=pid: build_goat(g, m, pid)
     g['PROPS'].append('goat_shelter')

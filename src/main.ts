@@ -1,3 +1,5 @@
+import {inSafeZone} from './safe-zone.ts';
+import {Venom} from './venom.ts';
 import { assetUrl } from './asset-url.ts';
 import './mobile-game-init.mjs';
 import {cropBadgeAnchor} from './crop-cards.ts';
@@ -1617,6 +1619,14 @@ let dying=false;
 function checkDefeat(){if(!started||state.hp>0||dying)return false;if(dungeonApi?.active){dungeonApi.knockedOut();return true;}if(ctfApi?.active||rescueApi?.active){state.hp=1;return true;}/* Flag Rush respawns by its own rules: a match never drops a death bag */if(actionHandler){dying=true;void perform<{dropped?:boolean}>('die',{x:world.position.x,z:world.position.z}).then(r=>{dying=false;endFishing();resetCombat();rebuildHomePresentation('home');world.refreshPlayer();if(r)deathDialog(!!r.dropped);else toast('You are safe at home.','🏡');});return true;}endFishing();resetCombat();const bag=change(()=>M.die(state,world.position.x,world.position.z));rebuildHomePresentation('home');world.refreshPlayer();deathDialog(!!bag);return true;}
 /** The knock-out card: where the backpack went (death-bags.ts) and what stays safe. */
 function deathDialog(dropped:boolean){openDialog('death','A little rest, then try again',`<div class="grow-illustration">${dropped?'🎒':'🌷'}</div><p class="center">${dropped?'Your backpack dropped where you fell. Walk back to the pink bag within 7 days to pick everything up.':M.keepsBag(state)?t('Your backpack is safe.'):t('Your backpack was empty, so nothing was lost.')}</p><p class="center muted">Your level, energy, worn gear and chest are safe.</p><button class="primary wide" data-action="close">Back on my feet →</button>`,'EVERY EXPLORER TAKES A TUMBLE');}
+const venom=new Venom();
+frameListeners.add(dt=>{
+  if(!venom.active)return;
+  if(actionHandler||!started||visiting||world.interior||state.hp<=0||inSafeZone(world.position,world.planet)){venom.clear();return;}
+  if(uiBlocked())return;
+  const damage=venom.step(dt,M.activeStats(state).poisonImmune);
+  if(damage>0){state.hp=Math.max(0,state.hp-Math.max(1,Math.round(damage)));world.hurtFeedback(Math.round(damage));checkDefeat();updateHud();}
+});
 world.onDamage=(amount,source='melee',enemyId,cls='body')=>{
   // A ground attack passes under a jump (jump-rules.ts). Online this client is the room's host when it gets here, so a
   // dodged blow is simply never reported; the server still checks every hit that is.
@@ -1630,6 +1640,7 @@ world.onDamage=(amount,source='melee',enemyId,cls='body')=>{
   const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
   if(fishGame)endFishing('The fish got away when you were hit.');
   state.hp=Math.max(0,state.hp-damage);dungeonApi?.noteDamage(damage);combatTimers.invulnerable=.55;comboMeter.break();world.hurtFeedback(damage);tone('hurt');vibrate(60);$('#damage-flash').classList.add('active');setTimeout(()=>$('#damage-flash').classList.remove('active'),160);
+  if(source==='shot'&&enemyId&&ENEMY_TYPES[world.enemies.find(e=>e.id===enemyId)?.type??'']?.poison&&!M.activeStats(state).poisonImmune)venom.infect(damage);
   checkDefeat();
   updateHud();
 };
@@ -1655,7 +1666,7 @@ combatView.extraAllies=()=>{
   if(remoteSummonIds.size>256)remoteSummonIds.clear();
   return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
 };
-function resetCombat(){airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){venom.clear();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
