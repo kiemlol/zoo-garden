@@ -12,12 +12,12 @@ import { RESCUE_VI } from './vi-rescue.ts';
  */
 export const VI_CATALOG: Record<string, string> = {
   'Venom Jelly Octopus':'Bạch Tuộc Thạch Độc',
-  'Venom ink pearl':'Ngọc mực độc',
+  'Slime tendril':'Râu chất nhờn',
   'Jelly resin':'Nhựa thạch nhầy',
   'Lava fishing rod':'Cần câu dung nham',
-  'A sealed violet ink pearl from a venom jelly octopus. Used to bind heat-resistant fishing gear.':'Ngọc mực tím của Bạch Tuộc Thạch Độc, dùng để kết dính dụng cụ câu chịu nhiệt.',
+  'A springy, slime-coated tendril from a venom jelly octopus. Used to bind heat-resistant fishing gear.':'Râu đàn hồi phủ chất nhờn của Bạch Tuộc Thạch Độc, dùng để kết dính dụng cụ câu chịu nhiệt.',
   'Springy green resin from a venom jelly octopus. A flexible binder for a lava fishing rod.':'Nhựa xanh đàn hồi của Bạch Tuộc Thạch Độc, dùng làm chất kết dính cho cần câu dung nham.',
-  'An obsidian rod with a magma reel. +8 defense, +2 health regeneration while equipped, quality 110%, steady line (10% snap chance). Crafted with venom ink and jelly resin.':'Cần đá hắc diện có máy cuốn dung nham. Khi trang bị: +8 phòng thủ, +2 hồi máu; chất lượng 110%, dây bền (10% nguy cơ đứt). Chế tạo bằng ngọc mực độc và nhựa thạch nhầy.',
+  'An obsidian rod with a magma reel. +8 defense, +2 health regeneration while equipped, quality 110%, steady line (10% snap chance). Crafted with slime tendrils and jelly resin.':'Cần đá hắc diện có máy cuốn dung nham. Khi trang bị: +8 phòng thủ, +2 hồi máu; chất lượng 110%, dây bền (10% nguy cơ đứt). Chế tạo bằng râu chất nhờn và nhựa thạch nhầy.',
 
   "Removes half of the crop's original growing time. Two uses ripen a newly planted non-tree crop. Fruit trees: up to 2 hours per dose.": "Giảm thời gian chờ bằng một nửa thời gian sinh trưởng ban đầu của cây. Dùng hai lần làm cây mới trồng chín ngay, trừ cây ăn quả: mỗi lần giảm tối đa 2 giờ.",
 

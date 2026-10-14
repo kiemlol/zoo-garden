@@ -318,3 +318,15 @@ test('watering a friend takes 10% of the remaining time, pays 5 + min(30, level)
   at+=240_000;const tomorrow=await water('owner',10);assert.equal(tomorrow.result.left,9,'a new day');
   assert.equal(waterXp(1),6);assert.equal(waterXp(30),35);assert.equal(waterXp(80),35);assert.equal(waterBoost(1000,400),60);assert.equal(waterBoost(1000,1200),0);
 });
+
+test('lava rod purchase consumes recipe materials on server and refuses energy-only requests',async t=>{
+ const h=await service(t),poor=account('no_materials'),ready=account('with_materials');
+ for(const a of [poor,ready]){a.profile.level=50;a.profile.energy=1e6;}
+ const recipe=Game.RECIPES.find(r=>r.result==='rod_lava'&&r.station==='shop');
+ for(const[id,n]of Object.entries(recipe.materials))ready.profile.bag[id]=n;
+ await h.store.create(poor);await h.store.create(ready);
+ await assert.rejects(h.act(poor.id,'buy',{id:'rod_lava'}),e=>e.status===409);
+ assert.equal((await h.store.get('no_materials')).profile.energy,1e6);
+ const bought=await h.act('with_materials','buy',{id:'rod_lava'});assert.equal(bought.profile.bag.rod_lava,1);assert.equal(bought.profile.energy,998500);
+ for(const id of Object.keys(recipe.materials))assert.equal(bought.profile.bag[id],undefined,id+' consumed by server');
+});

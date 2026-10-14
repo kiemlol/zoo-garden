@@ -48,3 +48,30 @@ test('GLB has toon hybrid, real loot meshes and usable lava rod tip; goat adult/
  assert.ok(new T.Box3().setFromObject(farm.instance('goat')!).max.y>1.15);
  assert.ok(new T.Box3().setFromObject(farm.instance('kid')!).max.y>.75);
 });
+
+test('lava rod shop purchase requires its displayed materials even with abundant energy',()=>{
+ const s=M.newGame();s.level=50;s.energy=1e7;const before=s.energy;
+ assert.equal(M.isSpecial('rod_lava'),false);assert.equal(M.shopPrice(s,'rod_lava'),1500);
+ assert.equal(M.buy(s,'rod_lava'),false);assert.equal(s.energy,before);assert.equal(s.bag.rod_lava,undefined);
+ const recipe=M.RECIPES.find(r=>r.result==='rod_lava'&&r.station==='shop')!;
+ assert.deepEqual(M.ITEMS.rod_lava.materials,recipe.materials);
+ for(const[id,n]of Object.entries(recipe.materials))s.bag[id]=n;
+ assert.equal(M.buy(s,'rod_lava'),true);assert.equal(s.energy,before-1500);assert.equal(s.bag.rod_lava,1);
+ for(const id of Object.keys(recipe.materials))assert.equal(s.bag[id],undefined,id+' consumed');
+ assert.equal(M.ITEMS.venom_ink.name,'Slime tendril');assert.equal(M.ITEMS.venom_ink.sell,18);
+});
+test('all goat and kid hip anchors overlap the actual torso surface',async()=>{
+ const farm=await kit('farm.glb');
+ for(const id of ['goat','kid']){
+  const g=farm.instance(id)!;g.updateMatrixWorld(true);
+  const body=g.children.filter((o):o is T.Mesh=>o instanceof T.Mesh&&o.name.startsWith(id+'_body'));
+  body.forEach(o=>{o.material=(o.material as T.Material).clone();o.material.side=T.DoubleSide;});
+  for(const role of ['leg_fl','leg_fr','leg_bl','leg_br']){
+   const pivot=new T.Vector3().setFromMatrixPosition(farm.parts(id)!.find(p=>p.name.startsWith(id+'_'+role))!.matrix);
+   const ray=new T.Raycaster(new T.Vector3(pivot.x,-1,pivot.z),new T.Vector3(0,1,0)),hits=ray.intersectObjects(body,false);
+   assert.ok(hits.length>=2,id+' '+role+' intersects torso');
+   assert.ok(pivot.y>=hits[0].point.y&&pivot.y<=hits.at(-1)!.point.y,id+' '+role+' hip stays inside torso, not below it');
+  }
+  body.forEach(o=>(o.material as T.Material).dispose());
+ }
+});

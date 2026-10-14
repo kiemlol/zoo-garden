@@ -14,7 +14,7 @@ from mathutils import Vector
 HERE=os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,HERE)
 from style import mat,reset_scene,export_glb,studio,game_camera,render
-from build_weapons import Piece,sphere,tube,add_eye,ell_point,new_empty,triangulate,Weapon,KIND,build_rod_common,realise_weapon
+from build_weapons import Piece,sphere,tube,add_eye,ell_point,new_empty,triangulate,Weapon,KIND,build_rod_common,realise_weapon,icon_matrix_weapon,icon_camera
 import build_farm as farm
 ROOT=os.path.normpath(os.path.join(HERE,'../../..'))
 
@@ -42,10 +42,21 @@ def build():
     root=new_empty('swamp_octo');obj=triangulate(piece.build());obj.parent=root
     roots['swamp_octo']=root;objects.extend([root,obj])
     for name,color in [('venom_ink','violet'),('jelly_resin','mint')]:
-        p=Piece(name+'_body');ell(p,(0,0,.24),(.23,.20,.25),m[color],12,7)
-        ell(p,(-.075,-.15,.35),(.045,.025,.065),m['white'],8,4)
-        ell(p,(0,0,.08),(.26,.22,.07),m['dark'],10,4)
-        ell(p,(.06,.01,.48),(.09,.08,.13),m[color],8,4)
+        p=Piece(name+'_body')
+        if name=='venom_ink':
+            # Keep the durable item ID; replace the pearl with curled jelly feelers.
+            for i in range(3):
+                x=(i-1)*.13
+                pts=[(x,.06,.10),(x,-.02,.22),(x+.04,-.04,.39),(x+.11,0,.54),(x+.08,.06,.61),(x+.015,.075,.58)]
+                p.add(tube(pts,[.085,.077,.062,.043,.029,.008],sides=7,cap=0),m['violet'])
+                for z in (.20,.31,.42):ell(p,(x-.015,-.085,z),(.04,.025,.035),m['mint'],6,3)
+                ell(p,(x+.02,-.06,.36),(.023,.016,.045),m['cream'],6,3)
+            ell(p,(0,.05,.06),(.25,.14,.06),m['mint'],10,4)
+        else:
+            ell(p,(0,0,.24),(.23,.20,.25),m[color],12,7)
+            ell(p,(-.075,-.15,.35),(.045,.025,.065),m['white'],8,4)
+            ell(p,(0,0,.08),(.26,.22,.07),m['dark'],10,4)
+            ell(p,(.06,.01,.48),(.09,.08,.13),m[color],8,4)
         root=new_empty(name);obj=triangulate(p.build());obj.parent=root
         roots[name]=root;objects.extend([root,obj])
     KIND['rod_lava']='rod';w=Weapon('rod_lava')
@@ -54,10 +65,10 @@ def build():
     # Raised magma veins and a flame-shaped reel ornament remain opaque toon geometry.
     w.add(tube([(0,-.28,.03),(.025,-.65,.025),(-.018,-1.05,.02),(0,-1.40,.013)],[.012,.012,.009,.004],sides=5,cap=0),lava)
     rod=realise_weapon(w);roots['rod_lava']=rod['node'];objects.extend([rod['node']]+rod['meshes']+list(rod['empties'].values()))
-    return roots,objects
+    return roots,objects,rod
 
 def main():
-    reset_scene();roots,objects=build()
+    reset_scene();roots,objects,rod=build()
     path=os.path.join(ROOT,'public/assets/models/swamp-gear.glb');size=export_glb(objects,path)
     manifest={'file':'public/assets/models/swamp-gear.glb','bytes':size,'textures':0,'models':{}}
     for name,root in roots.items():
@@ -76,9 +87,15 @@ def main():
         vertices=[o.matrix_world@v.co for o in root.children_recursive if o.type=='MESH' for v in o.data.vertices]
         low=Vector(tuple(min(v[i] for v in vertices) for i in range(3)));high=Vector(tuple(max(v[i] for v in vertices) for i in range(3)))
         center=(low+high)*.5
-        cam=game_camera(target=center,ortho_scale=max(high-low)*1.35)
-        cam.location=center+Vector((3,-5,3))
-        cam.rotation_euler=(center-cam.location).to_track_quat('-Z','Y').to_euler()
+        if name=='rod_lava':
+            # The exact rod icon rotation and projected-bounds fit used by the other rods.
+            root.matrix_world=icon_matrix_weapon(rod)
+            bpy.context.view_layer.update()
+            cam=icon_camera(rod['meshes'],elevation=14,margin=1.05)
+        else:
+            cam=game_camera(target=center,ortho_scale=max(high-low)*(1.16 if name=='venom_ink' else 1.35))
+            cam.location=center+Vector((3,-5,3))
+            cam.rotation_euler=(center-cam.location).to_track_quat('-Z','Y').to_euler()
         bpy.context.scene.render.image_settings.quality=85
         cpu_render(os.path.join(ROOT,'public/assets/icons/items',name+'.webp'))
         for obj in [root]+list(root.children_recursive):obj.hide_render=True

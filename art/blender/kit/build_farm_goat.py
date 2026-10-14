@@ -20,7 +20,7 @@ def build_goat(g, m, pid):
     def ell(part, material, c, r, seg=10, rings=5):
         part.add(sphere(1,seg,rings,scale=tuple(a*k for a in r)).moved(v(*c)),material)
     piv=dict(body=v(0,.05,.52),head=v(0,-.32,.80),tail=v(0,.45,.70))
-    for name,x,y in [('fl',-.21,-.22),('fr',.21,-.22),('bl',-.21,.29),('br',.21,.29)]:piv['leg_'+name]=v(x,y,.38)
+    for name,x,y in [('fl',-.21,-.22),('fr',.21,-.22),('bl',-.21,.29),('br',.21,.29)]:piv['leg_'+name]=v(x,y,.59)
     model=Model(pid,piv)
     ell(model['body'],coat,(0,.05,.59),(.30,.43,.27),12,6)
     ell(model['body'],patch,(0,.15,.82),(.23,.27,.06))
@@ -41,7 +41,9 @@ def build_goat(g, m, pid):
         model['head'].add(tube([v(0,-.51,.70),v(0,-.51,.59),v(0,-.48,.53)],[.065,.05,.01],sides=6,cap=0),patch)
     for name,x,y in [('fl',-.21,-.22),('fr',.21,-.22),('bl',-.21,.29),('br',.21,.29)]:
         part=model['leg_'+name]
-        part.add(cyl(v(x,y,.39),v(x,y,.09),.075*k,.065*k,sides=7),coat)
+        # A spherical hip overlaps the torso even at the maximum walking swing.
+        ell(part,coat,(x,y,.59),(.11,.11,.11),8,4)
+        part.add(cyl(v(x,y,.59),v(x,y,.09),.078*k,.065*k,sides=7),coat)
         for dx in (-.035,.035):ell(part,m['hoof'],(x+dx,y-.02,.05),(.040,.085,.05),6,3)
     model['tail'].add(tube([v(0,.43,.69),v(0,.52,.77),v(0,.55,.87)],[.07*k,.055*k,.02*k],sides=6,cap=0),coat)
     return model

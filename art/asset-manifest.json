@@ -14021,7 +14021,7 @@
     "units": "metres",
     "coordinates": "Blender: Z up, front -Y; glTF: Y up, front +Z; origin at each piece's ground centre. Animals and the gate: a root node with one child per part, whose translation is the part pivot (glTF) and whose vertices are relative to it.",
     "file": "farm.glb",
-    "bytes": 861692,
+    "bytes": 866956,
     "limit_bytes": 1024000,
     "budgets": {
       "animal": 2600,
@@ -15600,7 +15600,7 @@
       },
       "goat": {
         "kind": "animal",
-        "triangles": 1416,
+        "triangles": 1608,
         "budget": 2600,
         "materials": [
           "Farm blush",
@@ -15687,7 +15687,7 @@
           },
           "leg_fl": {
             "node": "goat_leg_fl",
-            "triangles": 76,
+            "triangles": 124,
             "materials": [
               "Farm goat",
               "Farm hoof"
@@ -15695,17 +15695,17 @@
             "pivot": [
               -0.21,
               -0.22,
-              0.38
+              0.59
             ],
             "pivot_gltf": [
               -0.21,
-              0.38,
+              0.59,
               0.22
             ]
           },
           "leg_fr": {
             "node": "goat_leg_fr",
-            "triangles": 76,
+            "triangles": 124,
             "materials": [
               "Farm goat",
               "Farm hoof"
@@ -15713,17 +15713,17 @@
             "pivot": [
               0.21,
               -0.22,
-              0.38
+              0.59
             ],
             "pivot_gltf": [
               0.21,
-              0.38,
+              0.59,
               0.22
             ]
           },
           "leg_bl": {
             "node": "goat_leg_bl",
-            "triangles": 76,
+            "triangles": 124,
             "materials": [
               "Farm goat",
               "Farm hoof"
@@ -15731,17 +15731,17 @@
             "pivot": [
               -0.21,
               0.29,
-              0.38
+              0.59
             ],
             "pivot_gltf": [
               -0.21,
-              0.38,
+              0.59,
               -0.29
             ]
           },
           "leg_br": {
             "node": "goat_leg_br",
-            "triangles": 76,
+            "triangles": 124,
             "materials": [
               "Farm goat",
               "Farm hoof"
@@ -15749,11 +15749,11 @@
             "pivot": [
               0.21,
               0.29,
-              0.38
+              0.59
             ],
             "pivot_gltf": [
               0.21,
-              0.38,
+              0.59,
               -0.29
             ]
           },
@@ -15778,7 +15778,7 @@
       },
       "kid": {
         "kind": "animal",
-        "triangles": 1332,
+        "triangles": 1524,
         "budget": 2600,
         "materials": [
           "Farm blush",
@@ -15864,7 +15864,7 @@
           },
           "leg_fl": {
             "node": "kid_leg_fl",
-            "triangles": 76,
+            "triangles": 124,
             "materials": [
               "Farm goat",
               "Farm hoof"
@@ -15872,17 +15872,17 @@
             "pivot": [
               -0.1428,
               -0.1496,
-              0.2584
+              0.4012
             ],
             "pivot_gltf": [
               -0.1428,
-              0.2584,
+              0.4012,
               0.1496
             ]
           },
           "leg_fr": {
             "node": "kid_leg_fr",
-            "triangles": 76,
+            "triangles": 124,
             "materials": [
               "Farm goat",
               "Farm hoof"
@@ -15890,17 +15890,17 @@
             "pivot": [
               0.1428,
               -0.1496,
-              0.2584
+              0.4012
             ],
             "pivot_gltf": [
               0.1428,
-              0.2584,
+              0.4012,
               0.1496
             ]
           },
           "leg_bl": {
             "node": "kid_leg_bl",
-            "triangles": 76,
+            "triangles": 124,
             "materials": [
               "Farm goat",
               "Farm hoof"
@@ -15908,17 +15908,17 @@
             "pivot": [
               -0.1428,
               0.1972,
-              0.2584
+              0.4012
             ],
             "pivot_gltf": [
               -0.1428,
-              0.2584,
+              0.4012,
               -0.1972
             ]
           },
           "leg_br": {
             "node": "kid_leg_br",
-            "triangles": 76,
+            "triangles": 124,
             "materials": [
               "Farm goat",
               "Farm hoof"
@@ -15926,11 +15926,11 @@
             "pivot": [
               0.1428,
               0.1972,
-              0.2584
+              0.4012
             ],
             "pivot_gltf": [
               0.1428,
-              0.2584,
+              0.4012,
               -0.1972
             ]
           },

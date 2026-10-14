@@ -4108,10 +4108,14 @@ ITEMS.fish_guardian={name:'Lake Guardian',icon:'🎏',desc:'A glowing koi that g
 FISH.fish_guardian={id:'fish_guardian',name:ITEMS.fish_guardian.name,icon:ITEMS.fish_guardian.icon,rarity:'legendary',speed:.98,power:.98,stamina:.98,sell:450,xp:Math.round((4+.98*25)*4),size:[180,260],planet:['home']};
 LOOT_TABLES.forest_raptor=[['feather',1,1,2],['meat',.7,1,2]];
 // Swamp hunting materials and an end-game rod; appended recipes keep saved indexes stable.
-ITEMS.venom_ink={name:'Venom ink pearl',icon:'🟣',desc:'A sealed violet ink pearl from a venom jelly octopus. Used to bind heat-resistant fishing gear.',type:'material',sell:18};
+ITEMS.venom_ink={name:'Slime tendril',icon:'🐙',desc:'A springy, slime-coated tendril from a venom jelly octopus. Used to bind heat-resistant fishing gear.',type:'material',sell:18};
 ITEMS.jelly_resin={name:'Jelly resin',icon:'🟢',desc:'Springy green resin from a venom jelly octopus. A flexible binder for a lava fishing rod.',type:'material',sell:12};
-ITEMS.rod_lava={name:'Lava fishing rod',icon:'🎣',desc:'An obsidian rod with a magma reel. +8 defense, +2 health regeneration while equipped, quality 110%, steady line (10% snap chance). Crafted with venom ink and jelly resin.',type:'weapon',slot:'weapon',sell:600,stats:{def:8,regen:2},weapon:{kind:'rod',range:1.2,cd:.5,quality:1.1,steady:true,fx:'#ff9b38'}};
+ITEMS.rod_lava={name:'Lava fishing rod',icon:'🎣',desc:'An obsidian rod with a magma reel. +8 defense, +2 health regeneration while equipped, quality 110%, steady line (10% snap chance). Crafted with slime tendrils and jelly resin.',type:'weapon',slot:'weapon',sell:600,stats:{def:8,regen:2},weapon:{kind:'rod',range:1.2,cd:.5,quality:1.1,steady:true,fx:'#ff9b38'}};
 LOOT_TABLES.swamp_octo=[['jelly_resin',1,1,2],['venom_ink',.65,1,1]];
 RECIPES.push({result:'rod_lava',energy:1500,materials:{rod_steady:1,magma:8,obsidian:12,venom_ink:6,jelly_resin:10},category:'Weapons',station:'forge'});
+// A normal material-priced rod at the outfitters too; retain its furnace recipe/index.
+const lavaRodRecipe=RECIPES.find(r=>r.result==='rod_lava'&&r.station==='forge')!;
+ITEMS.rod_lava.price=lavaRodRecipe.energy;ITEMS.rod_lava.materials={...lavaRodRecipe.materials};
+RECIPES.push({...lavaRodRecipe,station:'shop'});
 // Dyes (dye-skins.ts): energy-priced recolours of existing gear, generated last so every base item exists.
 registerDyes(ITEMS);

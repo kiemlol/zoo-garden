@@ -1,6 +1,6 @@
 {
   "file": "public/assets/models/swamp-gear.glb",
-  "bytes": 82504,
+  "bytes": 91216,
   "textures": 0,
   "models": {
     "swamp_octo": {
@@ -10,7 +10,7 @@
       ]
     },
     "venom_ink": {
-      "triangles": 300,
+      "triangles": 600,
       "parts": [
         "venom_ink_body"
       ]
