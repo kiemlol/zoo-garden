@@ -1,8 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import * as T from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {World,HERO_SCALE} from '../src/world.ts';
 import {RefinedAssetLibrary} from '../src/assets.ts';
+import {clearSegment} from '../src/navigation.ts';
 import {attackRange} from '../src/combat.ts';
 import {claimGift,newGame,plant,weaponStats} from '../src/model.ts';
 import * as M from '../src/model.ts';
@@ -22,6 +25,53 @@ function world() {
     onInteract(){},onAttackEnemy(){},onDamage(){},onZone(){},
   }) as World;
 }
+
+test('village shops form a separated horizontal row clear of the stone paths in both art variants',async()=>{
+  const w=world();w.build('home');
+  const row=['craft','shop','sell'].map(kind=>w.entities.find(e=>e.kind===kind)!);
+  assert.ok(row[2].x>9,'the market moves right');
+  assert.ok(row.every(e=>e.z===row[0].z),'all three buildings share a row');
+  for(const e of row){
+    assert.ok(w.obstacles.some(o=>o.x===e.x&&o.z===e.z),'collision follows the building');
+    assert.ok(M.HOME_CLEARANCE.some(o=>o.x===e.x&&o.z===e.z&&o.r===e.radius),'bed clearance follows the building');
+    assert.equal(w.blocked(e.x,e.z),true);assert.equal(M.bedClear(e.x,e.z),false);
+  }
+  const checkFootprints=()=>{
+    const buildings=w.entities.filter(e=>!['enemy','plot','fish','animal'].includes(e.kind));
+    for(const e of row){
+      const box=new T.Box3().setFromObject(e.mesh);
+      assert.ok(box.min.x>1.1&&box.min.z>1.1,`${e.kind} clears both stepping-stone axes`);
+      for(const other of buildings)if(other!==e)assert.equal(box.intersectsBox(new T.Box3().setFromObject(other.mesh)),false,`${e.kind} overlaps ${other.kind}`);
+    }
+  };
+  checkFootprints();
+  const assets=new RefinedAssetLibrary(async url=>{
+    const bytes=readFileSync(new URL('../public'+url,import.meta.url));
+    return (await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'')).scene;
+  });
+  await assets.loadAll();w.applyRefinedAssets(assets);checkFootprints();
+});
+
+test('shop gaps, frontage and paths remain walkable and each shop can be reached and used',()=>{
+  const w=world();w.build('home');
+  const row=['craft','shop','sell'].map(kind=>w.entities.find(e=>e.kind===kind)!);
+  for(let i=1;i<row.length;i++){
+    const x=(row[i-1].x+row[i].x)/2,z=row[i].z;
+    assert.equal(clearSegment({x,z:z-2.5},{x,z:z+2.5},w.obstacles),true,'the explorer fits between neighbouring buildings');
+  }
+  assert.equal(clearSegment({x:2.6,z:9},{x:11,z:9},w.obstacles),true,'clear frontage across the row');
+  assert.equal(clearSegment({x:0,z:1},{x:0,z:9},w.obstacles),true,'south stone path beside the row stays open');
+  assert.equal(clearSegment({x:1,z:0},{x:18,z:0},w.obstacles),true,'east stone path stays open');
+  for(const start of [[0,-4.8],[-4,3],[0,17],[17,0]])for(const e of row){
+    w.position.set(start[0],0,start[1]);let interacted=false;
+    w.onInteract=entity=>{assert.equal(entity,e);interacted=true;};
+    w.select(e);assert.ok(w.destination&&w.route.length,`${e.kind} has an approach path`);
+    let previous=w.position.clone();
+    for(const point of w.route){assert.equal(clearSegment(previous,point,w.obstacles),true);previous=point;}
+    for(let frame=0;frame<1200&&!interacted;frame++){w.update(.025,true,false);assert.equal(w.blocked(w.position.x,w.position.z),false);}
+    assert.equal(interacted,true,`${e.kind} interacts from ${start}`);
+  }
+});
 
 test('world movement reaches a fractional goal beside a tree without corner cutting',()=>{
   const w=world();w.build('home');w.position.set(23.364043668843806,0,-23.966000208165497);
