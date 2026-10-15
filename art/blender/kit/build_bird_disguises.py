@@ -25,6 +25,20 @@ def star(it,part,c,r,col):
 
 def penguin():
  it=item('dz_penguin')
+ # The costume owns its face as well as its body; no original explorer mesh is needed underneath.
+ ell(it,'head',(0,-.04,1.58),(.545,.535,.57),'skin',24,12)
+ for side in [-1,1]:
+  x=side*.205
+  ell(it,'head',(x,-.543,1.59),(.128,.039,.15),'hair',16,8)
+  ell(it,'head',(x,-.563,1.583),(.111,.032,.135),'white',16,8)
+  ell(it,'head',(x,-.590,1.584),(.078,.023,.106),'blue',16,8)
+  ell(it,'head',(x,-.611,1.591),(.047,.012,.077),'ink',14,7)
+  ell(it,'head',(x-.027,-.625,1.64),(.029,.010,.033),'white',10,5)
+  ell(it,'head',(x+.032,-.614,1.54),(.012,.008,.015),'white',8,4)
+  line(it,'head',[(x-side*.10,-.548,1.69),(x+side*.09,-.538,1.70),(x+side*.14,-.51,1.73)],.015,'hair',6)
+  blush=it.palette.setdefault('blush',it.m('blush','#F2A6A4'))
+  it.add('head',W.ellipsoid((side*.32,-.49,1.47),(.075,.014,.032),12,5),blush)
+ line(it,'head',[(-.075,-.554,1.43),(-.04,-.573,1.414),(0,-.579,1.409),(.04,-.573,1.414),(.075,-.554,1.43)],.009,'brown',6)
  # Hood framing an open human face, with cartoon penguin eyes above the opening.
  it.add('head',W.hood(.77,53,3,segs=28,steps=(180,155,130,110,90,75)),{'main':it.palette['coal'],'rim':it.palette['lining']})
  for side in [-1,1]:
@@ -45,7 +59,7 @@ def penguin():
   ell(it,'head',(side*.68,-.06,1.61),(.105,.2,.235),'ink',12,6)
   ell(it,'head',(side*.754,-.14,1.61),(.085,.19,.22),'white',14,7)
   line(it,'head',[(side*.77,-.08,1.43),(side*.79,-.1,1.77)],.014,'silver',5)
- # Plump romper over the base explorer, with a soft-looking white belly inset.
+ # Complete plump romper with a soft-looking white belly inset.
  ell(it,'body',(0,.015,.72),(.57,.43,.53),'coal',20,10)
  ell(it,'body',(0,-.37,.72),(.4,.13,.43),'white',20,10)
  F.bow(it,'body',(0,-.41,1.14),.18,'blue')
@@ -163,21 +177,17 @@ def main():
  manifest={'file':'public/assets/models/bird-disguises.glb','bytes':size,'models':{id:{'triangles':sum(W.mesh_tris(o) for _,o in e['pieces']),'parts':[p for p,_ in e['pieces']],'skillOnly':not id.startswith('dz_')} for id,e in entries.items()}}
  with open(os.path.join(ROOT,'art/bird-disguises-manifest.json'),'w') as f:json.dump(manifest,f,indent=2);f.write('\n')
  for o in objects:o.hide_render=True
- hero,_=W.load_hero()
- for o in hero:o.hide_render=True
  for id,e in entries.items():
   shown=[o for _,o in e['pieces']]
   for o in [e['empty']]+shown:o.hide_render=False
-  if id=='dz_penguin':
-   for o in hero:o.hide_render=o.name.startswith('head-leaf')
   F.cpu_stage((640,800));bpy.context.scene.cycles.samples=24
   ground=bpy.data.objects.get('Preview ground')
   if ground:
    m=ground.data.materials[0];m.diffuse_color=(.65,.75,.84,1);m.node_tree.nodes.get('Principled BSDF').inputs['Base Color'].default_value=(.65,.75,.84,1)
-  F.camera(shown+[o for o in hero if o.type=='MESH' and not o.hide_render],8,1.15)
+  F.camera(shown,8,1.15)
   render(os.path.join(ROOT,'art/previews/kit',id+'.webp'))
   if id.startswith('dz_'):
    bpy.context.scene.render.resolution_x=160;bpy.context.scene.render.resolution_y=160;bpy.context.scene.render.film_transparent=True;F.camera(shown,8,1.2);render(os.path.join(ROOT,'public/assets/icons/items',id+'.webp'))
-  for o in [e['empty']]+shown+hero:o.hide_render=True
+  for o in [e['empty']]+shown:o.hide_render=True
  print(json.dumps(manifest))
 if __name__=='__main__':main()

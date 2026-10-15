@@ -1,9 +1,9 @@
 {
   "file": "public/assets/models/bird-disguises.glb",
-  "bytes": 432428,
+  "bytes": 487124,
   "models": {
     "dz_penguin": {
-      "triangles": 4420,
+      "triangles": 7196,
       "parts": [
         "head",
         "body",

@@ -21,7 +21,7 @@ Regenerate the four models, two shop icons, previews and manifest:
 blender -b --factory-startup --python-exit-code 1 --python art/blender/kit/build_bird_disguises.py
 ```
 
-Output: `public/assets/models/bird-disguises.glb`. Both disguises use all six existing `@part` wearable tags. Blender Z-up / -Y-facing is converted to the game's Y-up / +Z-facing format on export. The lantern retains translucent glass and emissive blue-violet flames; the dagger has raised violet runes, a curved steel guard and skull pommel.
+Output: `public/assets/models/bird-disguises.glb`. Both disguises use all six existing `@part` wearable tags. They are complete models with their own faces and bodies: the original explorer render meshes are hidden while the rig and hand anchors remain active. Their authored proportions stay fixed across mirror body/height choices, and taking the disguise off restores the original look. Hidden meshes are excluded from both remote-player and friend merging. Blender Z-up / -Y-facing is converted to the game's Y-up / +Z-facing format on export. The lantern retains translucent glass and emissive blue-violet flames; the dagger has raised violet runes, a curved steel guard and skull pommel.
 
 ## Verification
 

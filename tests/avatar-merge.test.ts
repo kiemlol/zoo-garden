@@ -39,3 +39,7 @@ test('the friend path (not exact) still merges everything plain into one piece p
   mergeParts(root);
   assert.equal(meshesUnder(root).length, 1);
 });
+
+test('both merging paths exclude hidden geometry instead of making it visible again',()=>{
+ for(const exact of [false,true]){const root=new T.Group(),part=new T.Group();root.add(part);const hidden=box(toonMaterial({color:'#ff00ff'}));hidden.visible=false;part.add(hidden,box(toonMaterial({color:'#fff'})),box(toonMaterial({color:'#fff'}),2));mergeParts(root,{exact});const visible=meshesUnder(root).filter(m=>m.visible);assert.equal(visible.length,1);assert.equal(visible[0].geometry.getAttribute('position').count,72);assert.equal(hidden.visible,false);}
+});

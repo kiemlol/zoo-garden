@@ -1,3 +1,4 @@
+import {BIRD_SKILLS} from './bird-skills.ts';
 import {MOSSLUG,PANGOLIN,inHabitat,shellBlocks,slimeAt,type SlimePatch} from './wild-creatures.ts';
 import {disguiseForm} from './disguise-form.ts';
 import { t } from './i18n.ts';
@@ -735,9 +736,10 @@ export class World {
    */
   private avatar(color:string,gear:SaveState['gear']={},look:LookId|string=DEFAULT_LOOK){
     const disguise=gear.disguise?M.DISGUISES[gear.disguise]:undefined,id=gear.disguise??'';
-    const kitDisguise=!!id&&!!this.kitFor(id)&&heroKit.ready;
+    const kitDisguise=!!id&&!!this.kitFor(id)&&heroKit.ready,fullBodyDisguise=kitDisguise&&Object.hasOwn(BIRD_SKILLS,id);
     // A body style downloads on first use; the default explorer stands in until it arrives.
-    const combo=toLook(look)??DEFAULT_LOOK,styled=heroKitFor(combo);if(styled!==heroKit&&!styled.requested)void styled.load().then(()=>{if(styled.ready)this.refreshAvatars();});
+    // Complete costumes use their authored proportions, independent of the underlying mirror body.
+    const combo=fullBodyDisguise?DEFAULT_LOOK:toLook(look)??DEFAULT_LOOK,styled=heroKitFor(combo);if(styled!==heroKit&&!styled.requested)void styled.load().then(()=>{if(styled.ready)this.refreshAvatars();});
     const base=styled.ready&&heroKit.ready?styled:heroKit,tint=disguise&&!kitDisguise?disguise.color:color,c=base.instance(tint)??this.chibi(tint);
     c.userData.look=base===heroKit?DEFAULT_LOOK:combo;const fit=fitOf(combo);if(base!==heroKit&&Object.keys(fit).length)c.userData.fit=fit;
     // The sprout pokes through hats and most costumes; the fairy crown and hero mask leave it showing.
@@ -751,6 +753,9 @@ export class World {
       if(gear.outfit&&!this.wearKit(c,gear.outfit,'body'))this.simpleOutfit(c,gear.outfit);
       if(gear.boots&&!this.wearKit(c,gear.boots,'body'))for(const x of [-.18,.18])c.add(box(gear.boots.includes('flipper')?'#66a9d6':'#b88c73',.27,.23,gear.boots.includes('flipper')?.6:.34,x,.17,.1));
     }
+    // Keep the rig/hand anchors animated, but hide every original render mesh before attaching the full costume.
+    // Hiding only the shirt leaves skin, shorts, hair, backpack and styled tails poking through when posed.
+    if(fullBodyDisguise)c.traverse(o=>{if(o instanceof T.Mesh)o.visible=false;});
     if(kitDisguise)this.wearKit(c,id,'body');
     if(gear.weapon&&!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);
     // Up to two pets beside them (pet-slots.ts): the first on the left as ever, the second on the right; with their dog out (drawn by dog-world.ts on the left) the one pet takes the right.
