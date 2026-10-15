@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as T from 'three';
 import {CombatSimulation,type CombatHost,type CombatTarget,type CombatHit,type CombatEffect} from '../src/combat.ts';
-import {INK,INK_LOOKS,inkBoundary,inkDamageFactor,inInkDomain} from '../src/ink-skills.ts';
+import {INK,INK_LOOKS,inkDomainRadius,inkBoundary,inkDamageFactor,inInkDomain} from '../src/ink-skills.ts';
 import {InkSkillView} from '../src/ink-skill-view.ts';
 import {InkDomainView} from '../src/ink-domain-view.ts';
 import {World} from '../src/world.ts';
+import {flashMaterialsOf,deferFlash} from '../src/flash-materials.ts';
+import {InkDragonRig,inkDragonPoint} from '../src/ink-dragon.ts';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import * as Game from '../src/model.ts';
 function arena(){
  const p={x:0,z:0},targets:CombatTarget[]=[],hits:{id:string;hit:CombatHit}[]=[],effects:CombatEffect[]=[],status:{id:string;kind:string;duration:number}[]=[];let angle=0,aim:{x:number;z:number}|null=null,wall=Infinity;
@@ -26,7 +29,7 @@ test('a brush follows a moving victim and subsequent brushes retarget after a ki
  const a=arena(),first=a.enemy('first',0,3);first.hp=20;a.enemy('next',0,4);a.sim.disguise('dz_ink_painter',0);first.x=.9;a.run(3);assert.equal(first.hp<=0,true);assert.ok(a.hits.some(h=>h.id==='next'));assert.equal(a.effects.filter(e=>e.look==='ink-brush').length,5);
 });
 test('stationary domain lasts ten simulation seconds and gives 50% extra damage only while its caster is inside',()=>{
- const a=arena();a.enemy('victim',0,2);a.sim.disguise('dz_ink_painter',3);assert.deepEqual(a.sim.inkDomain,{x:0,z:0,radius:8});a.sim.disguise('dz_ink_painter',0);a.run(.2);const buffed=a.hits[0].hit.amount;
+ const a=arena();a.enemy('victim',0,2);a.sim.disguise('dz_ink_painter',3);assert.deepEqual(a.sim.inkDomain,{x:0,z:0,radius:0});a.sim.disguise('dz_ink_painter',0);a.run(.2);const buffed=a.hits[0].hit.amount;
  const b=arena();b.enemy('victim',0,2);b.sim.disguise('dz_ink_painter',0);b.run(.2);assert.ok(Math.abs(buffed/b.hits[0].hit.amount-1.5)<.03);a.p.x=20;assert.equal(a.sim.inkDomain!.x,0);a.run(15,false);assert.ok(a.sim.inkDomain);a.run(10);assert.equal(a.sim.inkDomain,null);assert.equal(inkDamageFactor({x:1,z:1},[{x:0,z:0,radius:8}]),.6);assert.equal(inkDamageFactor({x:9,z:0},[{x:0,z:0,radius:8}]),1);
 });
 test('a swept domain barrier blocks exits, entries, knockback and outside-to-outside tunnelling',()=>{
@@ -55,4 +58,28 @@ test('all ink effects render finite transforms, close the right owner domain and
 
 test('ink wash also handles the crop billboard shader after its custom projection replaces the stock vertex chunk',()=>{
  const view=new InkDomainView(),m=new T.MeshBasicMaterial();m.onBeforeCompile=s=>{s.vertexShader=s.vertexShader.replace('#include <project_vertex>','vec3 pivot=(modelMatrix*instanceMatrix*vec4(0.,0.,0.,1.)).xyz;vec3 right=vec3(1.,0.,0.);vec3 up=vec3(0.,1.,0.);vec2 q=position.xy;vec4 mvPosition=viewMatrix*vec4(pivot+right*q.x+up*q.y,1.);gl_Position=projectionMatrix*mvPosition;');};view.patch(m);const shader:any={vertexShader:'void main(){\n#include <project_vertex>\n}',fragmentShader:'void main(){gl_FragColor=vec4(1.);}',uniforms:{}};m.onBeforeCompile(shader,{} as any);assert.match(shader.vertexShader,/vInkWorld=pivot\+right\*q.x\+up\*q.y/);assert.match(shader.fragmentShader,/inkLuma/);assert.ok(shader.uniforms.inkDomains);
+});
+
+
+test('domain spreads from the caster over 0.8 seconds with matching visual and combat radii',()=>{
+ const a=arena(),scene=new T.Scene(),fx=new InkSkillView(scene,()=>0,()=>null,false);a.sim.disguise('dz_ink_painter',3);fx.play(a.effects[0]);const root=scene.children[0];assert.equal(inkDomainRadius(-1),0);assert.equal(inkDomainRadius(100),8);
+ let previous=0;for(let i=0;i<8;i++){a.run(.1);fx.update(.1);const radius=a.sim.inkDomain!.radius;assert.ok(radius>previous);assert.ok(Math.abs(root.scale.x*8-radius)<1e-10);assert.equal(inkDamageFactor({x:7.9,z:0},[a.sim.inkDomain!]),radius>=7.9?.6:1);previous=radius;}
+ assert.ok(Math.abs(previous-8)<1e-9);fx.clear();
+});
+test('hit-flash material copies reuse one ink patch before, during and after a domain',()=>{
+ const view=new InkDomainView(),scene=new T.Scene(),mob=deferFlash(new T.Group().add(new T.Mesh(new T.BoxGeometry(),new T.MeshToonMaterial({color:'#91bb33'}))));scene.add(mob);view.prepare(scene,[]);
+ const source=(mob.children[0] as T.Mesh).material as T.Material,flash=flashMaterialsOf(mob)[0],version=flash.version,key=source.customProgramCacheKey();
+ const shader=()=>({vertexShader:'void main(){\n#include <project_vertex>\n}',fragmentShader:'void main(){gl_FragColor=vec4(1.);}',uniforms:{}} as any);
+ for(const fields of [[{x:0,z:0,radius:8}],[],[{x:0,z:0,radius:4}],[]]){view.update(1.1,fields,scene,[]);const s=shader();flash.onBeforeCompile(s,{} as any);assert.equal(s.vertexShader.match(/varying vec3 vInkWorld;/g)?.length,1);assert.equal(s.fragmentShader.match(/uniform int inkCount;/g)?.length,1);assert.equal(s.uniforms.inkCount.value,fields.length);assert.equal(flash.version,version,'periodic discovery does not recompile a copied hook');assert.equal(flash.customProgramCacheKey(),key,'hit flash reuses the warmed program');}
+ const s=shader();flash.onBeforeCompile(s,{} as any);view.clear();assert.equal(s.uniforms.inkCount.value,0);assert.equal(s.uniforms.inkDomains.value[0].z,0);assert.equal(flash.color.getHexString(),'91bb33');
+});
+test('authored dragon bends its body while swimming overhead, without rewriting shared vertex buffers',async()=>{
+ const bytes=readFileSync(new URL('../public/assets/models/ink-painter.glb',import.meta.url)),scene=(await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'' )).scene,model=scene.getObjectByName('ink_dragon') as T.Group,rig=new InkDragonRig(model),positions=rig.meshes.map(m=>m.geometry.getAttribute('position').array.slice()),a=new T.Vector3(),b=new T.Vector3();
+ const spineDistance=(age:number)=>inkDragonPoint(.2,age,a).distanceTo(inkDragonPoint(.8,age,b));assert.ok(Math.abs(spineDistance(0)-spineDistance(1))>.1,'the body changes shape instead of rotating a fixed pose');
+ for(const age of [0,.25,1,2,4.9]){rig.pose(age);rig.root.updateMatrixWorld(true);for(let j=0;j<rig.meshes.length;j++){const m=rig.meshes[j];for(let i=0;i<m.geometry.getAttribute('position').count;i+=13){m.getVertexPosition(i,a);a.applyMatrix4(m.matrixWorld);assert.ok(a.toArray().every(Number.isFinite));assert.ok(a.y>2,'body stays above the player');}assert.deepEqual(m.geometry.getAttribute('position').array,positions[j]);}}
+ const second=new InkDragonRig(model);assert.equal(second.meshes[0].geometry,rig.meshes[0].geometry,'casts reuse skin weights and GPU geometry');rig.dispose();second.dispose();
+});
+
+test('dragon fallback geometry is released when a cast ends before its authored asset has loaded',()=>{
+ const scene=new T.Scene(),fx=new InkSkillView(scene,()=>0,()=>null,false);fx.play({look:'ink-dragon',kind:'cast',x:0,z:0,radius:6,duration:5,color:'#17191e'});let freed=0;scene.traverse(o=>{if(o instanceof T.SkinnedMesh){assert.equal(o.geometry.userData.sharedKit,false);o.geometry.addEventListener('dispose',()=>freed++);}});fx.clear();assert.ok(freed>0);assert.equal(scene.children.length,0);
 });

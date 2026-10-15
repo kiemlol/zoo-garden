@@ -5,10 +5,14 @@ export class InkDomainView {
  private fields={value:Array.from({length:24},()=>new T.Vector4())};
  private patched=new WeakMap<T.Material,{compile:T.Material['onBeforeCompile'];key:T.Material['customProgramCacheKey']}>();
  private count={value:0};private clock=0;
+ private hooks=new WeakMap<T.Material['onBeforeCompile'],{compile:T.Material['onBeforeCompile'];key:T.Material['customProgramCacheKey']}>();
  patch(material:T.Material){
   if(this.patched.has(material)||material.userData.inkKeepColor)return;
+  // Hit-flash copies preserve these function references. Reuse their patch and program instead of nesting it.
+  const inherited=this.hooks.get(material.onBeforeCompile);if(inherited){this.patched.set(material,inherited);return false;}
   const compile=material.onBeforeCompile,key=material.customProgramCacheKey;this.patched.set(material,{compile,key});const fields=this.fields,count=this.count;
   material.onBeforeCompile=function(shader,renderer){compile.call(this,shader,renderer);
+   if(shader.vertexShader.includes('varying vec3 vInkWorld;'))return;
    const standard=shader.vertexShader.includes('#include <project_vertex>'),card=shader.vertexShader.includes('vec3 pivot=(modelMatrix*instanceMatrix')&&shader.vertexShader.includes('gl_Position=projectionMatrix*mvPosition;');if(!standard&&!card)return;
    shader.uniforms.inkDomains=fields;shader.uniforms.inkCount=count;
    shader.vertexShader='varying vec3 vInkWorld;\n'+(standard?shader.vertexShader.replace('#include <project_vertex>',`#include <project_vertex>
@@ -24,16 +28,22 @@ export class InkDomainView {
    const wash=`float inkMask=0.0;for(int inkIndex=0;inkIndex<24;inkIndex++){if(inkIndex>=inkCount)break;vec4 domain=inkDomains[inkIndex];if(domain.z>0.0)inkMask=max(inkMask,1.0-smoothstep(domain.z-.12,domain.z,distance(vInkWorld.xz,domain.xy)));}float inkLuma=dot(gl_FragColor.rgb,vec3(.2126,.7152,.0722));gl_FragColor.rgb=mix(gl_FragColor.rgb,vec3(inkLuma),inkMask);`;
    shader.fragmentShader=shader.fragmentShader.replace(/}\s*$/,wash+'\n}');
   };
-  material.customProgramCacheKey=function(){return key.call(this)+'-ink-wash-v1';};material.needsUpdate=true;
+  this.hooks.set(material.onBeforeCompile,{compile,key});
+  material.customProgramCacheKey=function(){return key.call(this)+'-ink-wash-v1';};material.needsUpdate=true;return true;
  }
  private exempt(mesh:T.Mesh){
-  const keep=(source:T.Material)=>{if(source.userData.inkKeepColor)return source;if(!source.userData.sharedKit&&!this.patched.has(source)){source.userData.inkKeepColor=true;return source;}const material=source.clone(),previous=this.patched.get(source);material.onBeforeCompile=previous?.compile??source.onBeforeCompile;material.customProgramCacheKey=previous?.key??source.customProgramCacheKey;material.userData.inkKeepColor=true;material.userData.sharedKit=false;return material;};
+  const keep=(source:T.Material)=>{if(source.userData.inkKeepColor)return source;if(!source.userData.sharedKit&&!this.patched.has(source)){source.userData.inkKeepColor=true;return source;}const material=source.clone(),previous=this.patched.get(source)??this.hooks.get(source.onBeforeCompile);material.onBeforeCompile=previous?.compile??source.onBeforeCompile;material.customProgramCacheKey=previous?.key??source.customProgramCacheKey;material.userData.inkKeepColor=true;material.userData.sharedKit=false;return material;};
   mesh.material=Array.isArray(mesh.material)?mesh.material.map(keep):keep(mesh.material);
+ }
+ /** Prepare before the world's ordinary shader warm-up, while there is no active domain. */
+ prepare(scene:T.Scene,players:readonly T.Object3D[]){
+  const exempt=new Set(players);let changed=false;
+  const walk=(o:T.Object3D,keep=false)=>{if(o.userData.inkVisual)return;keep=keep||exempt.has(o);if(o instanceof T.Mesh){if(keep)this.exempt(o);else for(const m of Array.isArray(o.material)?o.material:[o.material])changed=!!this.patch(m)||changed;}for(const c of o.children)walk(c,keep);};walk(scene);return changed;
  }
  update(dt:number,domains:readonly InkDomain[],scene:T.Scene,players:readonly T.Object3D[]){
   this.count.value=Math.min(24,domains.length);this.fields.value.forEach((v,i)=>{const f=domains[i];v.set(f?.x??0,f?.z??0,f?.radius??0,0);});
-  this.clock-=dt;if(!domains.length||this.clock>0)return;this.clock=.2;const exempt=new Set(players);
-  const walk=(o:T.Object3D,keep=false)=>{keep=keep||exempt.has(o);if(o instanceof T.Mesh){if(keep)this.exempt(o);else for(const m of Array.isArray(o.material)?o.material:[o.material])this.patch(m);}for(const c of o.children)walk(c,keep);};walk(scene);
+  // Periodic discovery catches new art/flash copies; casting itself only changes the small uniform array.
+  this.clock-=dt;if(this.clock<=0){this.clock=1;this.prepare(scene,players);}
  }
  clear(){this.count.value=0;this.fields.value.forEach(v=>v.set(0,0,0,0));this.clock=0;}
 }

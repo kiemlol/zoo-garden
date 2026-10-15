@@ -1,4 +1,4 @@
-import {INK as I,INK_LOOKS,inInkDomain,type InkDomain} from './ink-skills.ts';
+import {INK as I,INK_LOOKS,inInkDomain,inkDomainRadius,type InkDomain} from './ink-skills.ts';
 import {SORCERER as S,SORCERER_LOOKS} from './sorcerer-skills.ts';
 import {BIRD, BIRD_LOOKS, birdLanding} from './bird-skills.ts';
 export interface CombatPoint { x: number; z: number }
@@ -183,8 +183,8 @@ export class CombatSimulation {
   leavePortal(){if(!this.portal)return false;const portal=this.portal;this.portal=null;this.statuses.ambush=S.portal.ambush;this.host.effect({...portal.at,kind:'cast',look:'veil-exit',radius:1.2,duration:.35,facing:portal.facing,color:'#ff963a'});return true;}
   private bands:{at:CombatPoint;until:number;next:number;rooted:Set<string>;damage:(t:CombatTarget,p:number)=>number}[]=[];
   private discs:{from:CombatPoint;at:CombatPoint;dir:CombatPoint;left:number;hit:Set<string>;damage:(t:CombatTarget,p:number)=>number}[]=[];
-  private domain:({until:number}&InkDomain)|null=null;
-  get inkDomain():InkDomain|null{return this.domain&&this.time<this.domain.until?{x:this.domain.x,z:this.domain.z,radius:this.domain.radius}:null;}
+  private domain:({started:number;until:number}&InkDomain)|null=null;
+  get inkDomain():InkDomain|null{return this.domain&&this.time<this.domain.until?{x:this.domain.x,z:this.domain.z,radius:inkDomainRadius(this.time-this.domain.started,this.domain.radius)}:null;}
   endInkDomain(){if(!this.domain)return false;this.visual('ink-domain-end',this.domain,I.domain.radius,.1,'#111419');this.domain=null;return true;}
   get inkDashing(){return this.action?.ink===true;}
   private inkZones:{at:CombatPoint;to?:CombatPoint;until:number;radius:number}[]=[];
@@ -529,7 +529,7 @@ export class CombatSimulation {
     const visual=(look:EffectLook,at:CombatPoint,radius:number,duration:number,to?:CombatPoint)=>this.host.effect({...at,kind:'cast',look,radius,duration,facing:this.host.facing(),color:'#17191e',...(to?{toX:to.x,toZ:to.z}:{}),...this.up(at)});
     if(effect==='ink-domain'){
       this.endInkDomain();
-      this.domain={...p,radius:I.domain.radius,until:this.time+I.domain.time};visual('ink-domain',p,I.domain.radius,I.domain.time);
+      this.domain={...p,radius:I.domain.radius,started:this.time,until:this.time+I.domain.time};visual('ink-domain',p,I.domain.radius,I.domain.time);
     }else if(effect==='ink-brush'){
       let target=this.chosen(I.brush.range);if(!target)return false;
       const launch=(index:number)=>{if(!target||target.hp<=0)target=this.chosen(I.brush.range);if(!target){this.busyUntil=this.time;return;}const victim=target;const from={...this.host.position()};if(Math.hypot(victim.x-from.x,victim.z-from.z)>I.brush.range+victim.radius)return;

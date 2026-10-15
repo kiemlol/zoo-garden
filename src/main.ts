@@ -1,4 +1,4 @@
-import type {InkDomain} from './ink-skills.ts';
+import {inkDomainRadius,type InkDomain} from './ink-skills.ts';
 import {InkSkillView} from './ink-skill-view.ts';
 import {InkDomainView} from './ink-domain-view.ts';
 import {SorcererView} from './sorcerer-view.ts';
@@ -317,7 +317,7 @@ const joystick=mountJoystick($('#hud'),()=>started&&!uiBlocked()&&!placement&&!f
 const combatView=new CombatView(world.scene);
 const remoteBlizzards=new Map<string,{x:number;z:number;radius:number;until:number}>();
 const inkFx=new InkSkillView(world.scene,(x,z)=>world.interior?0:Math.max(0,terrainHeight(world.environment.layout,{x,z})),owner=>owner==='self'?world.player:world.remotePlayers?.get(owner)?.mesh??null,true,()=>world.enemies);
-const inkWash=new InkDomainView(),remoteInkDomains=new Map<string,InkDomain&{until:number}>();
+const inkWash=new InkDomainView(),remoteInkDomains=new Map<string,InkDomain&{until:number;started:number}>();
 const sorcererFx=new SorcererView(world.scene,(x,z)=>world.interior?0:Math.max(0,terrainHeight(world.environment.layout,{x,z})));
 const birdFx=new BirdSkillView(world.scene,(x,z)=>world.interior?0:Math.max(0,terrainHeight(world.environment.layout,{x,z})),(x,z)=>Math.hypot(world.position.x-x,world.position.z-z)<1.5?world.player:null,()=>world.enemies);
 // Laser gaze beams, electric bolts and bursts, scorch marks and the ⚡ mark (skill-fx.ts), for the explorer and remote players alike.
@@ -348,13 +348,13 @@ const combat=new CombatSimulation({
   status:(target,kind,duration)=>{if(dungeonApi?.owns(target)||ctfApi?.owns(target)||rescueApi?.owns(target)){world.statusEnemy(target as Enemy,kind,duration);return;}if(actionHandler)return;if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
   moveTarget:(target,x,z)=>{if(dungeonApi?.owns(target)||ctfApi?.owns(target)||rescueApi?.owns(target)){moveEnemy(target as Enemy,x,z);return;}if(actionHandler)return;if(!network.moveTarget?.(target.id,x,z))moveEnemy(target as Enemy,x,z);},
 });
-world.inkDomains=()=>{const own=combat.inkDomain,fields:InkDomain[]=own?[own]:[];for(const [owner,f]of remoteInkDomains){if(f.until<=world.time)remoteInkDomains.delete(owner);else fields.push(f);}return fields;};
+world.inkDomains=()=>{const own=combat.inkDomain,fields:InkDomain[]=own?[own]:[];for(const [owner,f]of remoteInkDomains){if(f.until<=world.time)remoteInkDomains.delete(owner);else fields.push({...f,radius:inkDomainRadius(world.time-f.started,f.radius)});}return fields;};
 world.blizzardFields=()=>{const own=combat.blizzardField,fields:{x:number;z:number;radius:number}[]=own?[own]:[];for(const [owner,f]of remoteBlizzards){if(f.until<=world.time)remoteBlizzards.delete(owner);else fields.push(f);}return fields;};
 combatHud.isMarked=id=>combat.marked.has(id);
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 // Swings become additive slash trails and area skills become expanding rings with sparks.
 function showEffect(effect:CombatEffect,owner='self'){
-  if(owner!=='self'&&effect.look==='ink-domain')remoteInkDomains.set(owner,{x:effect.x,z:effect.z,radius:effect.radius,until:world.time+(effect.duration??10)});
+  if(owner!=='self'&&effect.look==='ink-domain')remoteInkDomains.set(owner,{x:effect.x,z:effect.z,radius:effect.radius,started:world.time,until:world.time+(effect.duration??10)});
   if(effect.look==='ink-domain-end')remoteInkDomains.delete(owner);
   if(effect.look==='penguin-blizzard'&&owner!=='self')remoteBlizzards.set(owner,{x:effect.x,z:effect.z,radius:effect.radius,until:world.time+(effect.duration??.2)});
   const fx=world.fx,at={x:effect.x,z:effect.z},up=Math.max(0,Math.min(8,effect.y??0)); // `up`: the height a cast from the air began at (air-cast.ts)
@@ -395,7 +395,7 @@ frameListeners.add(()=>{if(!villageNeedsKit||!sceneryKit.ready||!started)return;
 // Files landing together are handled once per frame, each refreshing only what it dresses (late-art.ts).
 KitLibrary.warmer=kit=>{void kit.warm(world.renderer,world.camera,world.scene);};
 initArtNote();installSaveGuardUi(saveGuard);window.addEventListener('storage',e=>{if(e.storageArea===localStorage)saveGuard.external(e,activeKey());});const lateArt=new LateArtQueue();onArtLoaded(url=>lateArt.add(url));
-frameListeners.add(()=>{const urls=lateArt.take();if(!urls.length)return;if(!started){world.build(state.planet);world.refreshPlayer();}else{world.refreshArt(urls);if(house.inside&&urls.includes(HOUSE_FILE))void house.house.view.refine();}if(urls.includes(KIT_FILES.fish)&&!fishGame)stockPonds();});
+frameListeners.add(()=>{const urls=lateArt.take();if(!urls.length)return;if(!started){world.build(state.planet);world.refreshPlayer();}else{world.refreshArt(urls);if(house.inside&&urls.includes(HOUSE_FILE))void house.house.view.refine();}inkWash.prepare(world.scene,[world.player,...[...world.remotePlayers?.values()??[]].map(p=>p.mesh)]);void compileAsyncSafe(world.renderer,world.scene,world.camera);if(urls.includes(KIT_FILES.fish)&&!fishGame)stockPonds();});
 
 const sfx=new Sfx();
 // Settings volume sliders (audio-settings.ts): effects preview with a click while dragging; letting go saves.
@@ -475,7 +475,7 @@ function profilePicker(){
 function welcomeDialog(){
   openDialog('welcome',t('Welcome to the game!'),`<p class="intro">${t('Hi boss! I am Pepper, your cook. Welcome to the game!')}</p><p>${t('Guess what? You are lucky today! I played the lottery and won 1,000,000 energy. Do you want it?')}</p><div class="button-row"><button class="primary" data-action="welcome-take">${t('Yes, take it!')}</button><button class="soft-button" data-action="welcome-pass">${t('No, thanks')}</button></div>`,t('YOUR COOK'),'🍳');
 }
-async function start() {if(started)return;settle();showTrimNote();await migrateDogStays();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;if(state.welcome==='pending')welcomeDialog();void compileAsyncSafe(world.renderer,world.scene,world.camera); // warm the village's shaders off the first walk
+async function start() {if(started)return;settle();showTrimNote();await migrateDogStays();const name=$<HTMLInputElement>('#name-input').value.trim().slice(0,20)||state.name;if(name!==state.name)await perform('settings',{name});started=true;$('#title-screen').hidden=true;$('#hud').hidden=false;if(state.welcome==='pending')welcomeDialog();inkWash.prepare(world.scene,[world.player,...[...world.remotePlayers?.values()??[]].map(p=>p.mesh)]);void compileAsyncSafe(world.renderer,world.scene,world.camera); // warm the village's shaders off the first walk
   applyMovePad();save();updateHud();updateLabels();toast(saved?t('Welcome back, {name}. Your garden missed you!',{name:state.name}):'Start small: click a garden bed to plant your first carrot.','🌱');showZone('Clover Village');}
 
 /** Beds that ripened while the game was closed: the helper harvests and replants each once (helper.ts catchUp). */
@@ -1839,7 +1839,7 @@ async function arrive(id:M.PlanetId){
     if(flight)exitSpace();
     ship.reset();world.build(id);world.refreshPlayer();world.applyRefinedAssets();updateLabels();settle();
     // Compile the new world's shaders in the background, so the first frames after landing don't hitch.
-    void compileAsyncSafe(world.renderer,world.scene,world.camera);
+    inkWash.prepare(world.scene,[world.player,...[...world.remotePlayers?.values()??[]].map(p=>p.mesh)]);void compileAsyncSafe(world.renderer,world.scene,world.camera);
     const p=M.PLANETS[id];
     ship.land(()=>{showZone(id==='home'?'Clover Village':t(p.name));floating(`${p.icon} ${t(p.name)}`,world.position.x,world.position.z,'level',1);toast(id==='home'?'Home, sweet home!':t('Welcome to {planet}! Watch out for its creatures.',{planet:t(p.name)}),p.icon);
       if(typeof arrived==='object'&&arrived.cleansed)cleansedFx();if(homeQueued){homeQueued=false;if(state.planet!=='home')flyHome();}});
@@ -2066,7 +2066,8 @@ function frame(now:number){
   // browser throttles rendering, and collisions do not tunnel at a low frame rate. At most four steps
   // run per frame; a longer stall turns into slow motion rather than a spiral of ever longer frames.
   updateContextWeapon();joystick.update();
-  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);stepFight(step,active,combatActive);combat.update(step,combatActive);combat.statuses.stun=Math.max(combat.statuses.stun??0,world.playerStun??0);combat.statuses.slip=Math.max(combat.statuses.slip??0,world.playerSlip??0);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerSpeedBonus=combat.speedBonus;world.playerHidden=combat.portalHidden||combat.inkDashing;world.playerStealth=combat.portalHidden||(combat.statuses.stealth??0)>0;world.playerSizeScale=combat.visualScale;world.playerShield=combat.invulnerable;world.playerBat=(combat.statuses.bats??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);skillFx.boulders.update(combatActive?step:0);skillFx.disguises.update(combatActive?step:0);birdFx.update(combatActive?step:0);sorcererFx.update(combatActive?step:0);inkFx.update(combatActive?step:0);inkWash.update(step,world.inkDomains?.()??[],world.interior?.scene??world.scene,[world.player,...[...world.remotePlayers?.values()??[]].map(p=>p.mesh)]);if(started&&!document.hidden&&!actionHandler)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
+  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);stepFight(step,active,combatActive);combat.update(step,combatActive);combat.statuses.stun=Math.max(combat.statuses.stun??0,world.playerStun??0);combat.statuses.slip=Math.max(combat.statuses.slip??0,world.playerSlip??0);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerSpeedBonus=combat.speedBonus;world.playerHidden=combat.portalHidden||combat.inkDashing;world.playerStealth=combat.portalHidden||(combat.statuses.stealth??0)>0;world.playerSizeScale=combat.visualScale;world.playerShield=combat.invulnerable;world.playerBat=(combat.statuses.bats??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);skillFx.boulders.update(combatActive?step:0);skillFx.disguises.update(combatActive?step:0);birdFx.update(combatActive?step:0);sorcererFx.update(combatActive?step:0);inkFx.update(combatActive?step:0);if(started&&!document.hidden&&!actionHandler)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
+  inkWash.update(dt,world.inkDomains?.()??[],world.interior?.scene??world.scene,[world.player,...[...world.remotePlayers?.values()??[]].map(p=>p.mesh)]);
   // Landing from the ground slam squashes the explorer and jolts the camera.
   const airborne=combat.airborne>0;if(wasAirborne&&!airborne){world.landT=.25;slamImpact();}wasAirborne=airborne;
   // The explorer's pose follows the weapon, skills, fishing line and hit invulnerability.
