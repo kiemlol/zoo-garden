@@ -1,3 +1,6 @@
+import * as T from 'three';
+import {BirdSkillView} from '../src/bird-skill-view.ts';
+import {BIRD_LOOKS} from '../src/bird-skills.ts';
 // The sixteen disguise kits: the ten the reference (Zoo Pet) also has keep its four skills (concept, order, cooldown, range,
 // damage factor, duration, effect); the six uniforms have kits that fit the outfit. Every effect runs and has a look that
 // DisguiseFx draws, and the tooltips state the numbers the simulation uses.
@@ -37,8 +40,8 @@ function arena(extra: Partial<CombatTarget>[] = []) {
   return { sim, p, effects, hits, statuses, targets, run, healed: () => healed };
 }
 
-test('all 16 disguises have exactly four skills, a kit entry, a description, a sound and an icon each', () => {
-  assert.equal(Object.keys(DISGUISES).length, 16);
+test('all 18 disguises have exactly four skills, a kit entry, a description, a sound and an icon each', () => {
+  assert.equal(Object.keys(DISGUISES).length, 18);
   for (const [id, d] of Object.entries(DISGUISES)) {
     assert.equal(d.skills.length, 4, id); assert.equal(DISGUISE_KITS[id]?.length, 4, id); assert.equal(DISGUISE_INFO[id]?.length, 4, id);
     d.skills.forEach((s, i) => { assert.ok(s.name && s.icon && s.cd > 0, `${id} ${i}`); assert.ok(skillDescription(i, { disguise: id }).length > 10); assert.ok(skillSound(i, id)); });
@@ -105,10 +108,12 @@ test('every kit skill runs, resets cleanly, and each look it emits is drawn', ()
     for (const e of a.effects) { assert.ok(Number.isFinite(e.x) && Number.isFinite(e.z) && Number.isFinite(e.radius), `${id} ${effect}`); if (e.look) seen.add(e.look); }
     a.sim.reset(); assert.equal(a.sim.projectiles.length, 0); assert.equal(a.sim.allies.length, 0); assert.deepEqual(a.sim.statuses, {});
   });
-  for (const look of seen) if (!['eyes', 'burn', 'shock', 'boulder'].includes(look)) { assert.ok(LOOKS[look], look); assert.equal(fx.play({ look: look as CombatEffect['look'], kind: 'cast', x: 0, z: 0, radius: 3, color: '#ffffff' }), true, look); }
+  const birdFx=new BirdSkillView(new T.Scene(),()=>0,()=>null,()=>[],false);
+  for (const look of seen) if((BIRD_LOOKS as readonly string[]).includes(look)){assert.ok(birdFx.play({look:look as CombatEffect['look'],kind:'cast',x:0,z:0,radius:3,color:'#ffffff'}));}else if (!['eyes', 'burn', 'shock', 'boulder'].includes(look)) { assert.ok(LOOKS[look], look); assert.equal(fx.play({ look: look as CombatEffect['look'], kind: 'cast', x: 0, z: 0, radius: 3, color: '#ffffff' }), true, look); }
   for (const look of ['flare', 'parachute', 'whistle', 'ribbon', 'fan', 'lantern', 'kite', 'ink', 'dragondance', 'starshield', 'torch', 'firework', 'bamboo', 'drum', 'bigstar']) {
     assert.ok((DISGUISE_LOOKS as readonly string[]).includes(look)); assert.ok(seen.has(look), `${look} is emitted by its skill`);
   }
+  birdFx.clear();
   // The sandbag wall is a summon now (it has hit points), drawn by its model instead of a timed look.
   for (const kind of ['parrot', 'tree', 'lighthouse', 'sandbag'] as const) { const model = makeSummon(kind); assert.equal(model.name, 'summon-' + kind); }
   assert.equal(lookOf('cork'), 'cork');

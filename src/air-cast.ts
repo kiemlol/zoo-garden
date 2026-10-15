@@ -30,6 +30,8 @@ const body: AirCastRule = { cls: 'air', at: 'body' }, ground: AirCastRule = { cl
 const move = (how: NonNullable<AirCastRule['how']>): AirCastRule => ({ cls: 'move', how });
 /** The class of every disguise skill, by its effect id (combat.ts DISGUISE_KITS). A skill without a row fails tests/air-cast.test.ts. */
 export const AIR_CAST: Readonly<Record<string, AirCastRule>> = {
+  'penguin-peck':body,'penguin-slide':plunge,'penguin-blizzard':ground,'frozen-fish':body,
+  'duck-dagger':body,'duck-grapple':move('glide'),'duck-net':ground,'duck-lantern':body,
   // Superhero: flight takes the jump over; the meteor dive is a real dive that still leaps ahead; the gaze and the throw start up there
   flight: move('flight'), dive: { cls: 'plunge', how: 'leap' }, sweep: body, boulder: body,
   // Shadow ninja

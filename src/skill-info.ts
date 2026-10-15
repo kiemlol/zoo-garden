@@ -1,3 +1,4 @@
+import {BIRD_SKILLS} from './bird-skills.ts';
 /**
  * What every fighting skill really does, in the player's words and with the numbers combat.ts uses: the skill
  * button tooltip / long-press tip, the upgrade bench and the effect sizes all read this table, so a description can
@@ -52,6 +53,7 @@ const snowMax = Math.min(2.6, .5 + DZ.snowball.grow * DZ.snowball.time);
 /** A summon's hit points as a share of yours (combat.ts SUMMON_HP). */
 const hp = (kind: string) => pct(SUMMON_HP[kind].hp);
 export const DISGUISE_INFO: Record<string, readonly string[]> = {
+  ...Object.fromEntries(Object.entries(BIRD_SKILLS).map(([id,skills])=>[id,skills.map(skill=>skill.description)])),
   dz_superhero: [`Fly for ${DZ.flight.time} s, ${pct(DZ.flight.speed)}% faster (press again to land): melee attacks miss you, only shots can reach you.`,
     `Dive ${DZ.dive.ahead} m ahead and crash down: ×${DZ.dive.power} damage within ${DZ.dive.radius} m, ×${DZ.dive.flying} if you were flying, enemies thrown up.`,
     `Twin eye lasers sweep a ${GAZE.length} m line, ${GAZE.width} m wide, across the front for ${GAZE.time} s: ×1 damage per touch, leaving scorch marks.`,
@@ -166,7 +168,7 @@ export const BUFF_CHIPS: Record<string, { icon: string; name: string }> = {
   swift: { icon: '💨', name: 'Swift' }, block: { icon: '🛡️', name: 'Blocking' }, cover: { icon: '🧱', name: 'Sandbag cover' }, rally: { icon: '🔥', name: 'Inspired' }, invuln: { icon: '✨', name: 'Untouchable' },
 };
 /** Enemy status marks over their HP bar, in priority order (the first two that apply are shown). */
-export const STATUS_MARKS: readonly [key: string, icon: string][] = [['stun', '💫'], ['shock', '⚡'], ['sheep', '🐑'], ['charm', '💗'], ['fear', '😱'], ['blind', '🌫️'], ['taunt', '💢'], ['slow', '🐌'], ['mark', '🎯']];
+export const STATUS_MARKS: readonly [key: string, icon: string][] = [['stun', '💫'], ['shock', '⚡'], ['sheep', '🐑'], ['charm', '💗'], ['fear', '😱'], ['blind', '🌫️'], ['taunt', '💢'], ['root','🕸️'], ['iceSlow','🧊'], ['attackSlow','❄️'], ['compassMark','🧭'], ['slow', '🐌'], ['mark', '🎯']];
 /** The marks a creature shows now: stun first, then ⚡ (an electric hit, skill-fx.ts), then statuses; at most two so the bar stays small. */
 export function statusMarks(e: { stun?: number; shock?: number; statuses?: Record<string, number> }, marked = false): string {
   let out = '', n = 0;

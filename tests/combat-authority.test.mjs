@@ -242,7 +242,7 @@ test('disguise freezes reach the server and the knight shield blocks only blows 
  f.peer.pose.x=0;f.peer.pose.z=31;
  // The bosun's whistle stuns everything within 8 m, bosses too; clients hear it as a 'stun' status.
  const from=f.messages.length;assert.equal(engine.sim.disguise('dz_navy',2),true);assert.equal(enemy.stun,2.5);assert.equal(boss.stun,2.5);assert.ok(f.messages.slice(from).some(m=>m.type==='status'&&m.kind==='stun'&&m.id===enemy.id));
- f.account.profile.gear.disguise='dz_knight';f.account.profile.bag.dz_knight=1;f.peer.pose.facing=0;assert.equal(engine.sim.disguise('dz_knight',0),true);
+ f.account.profile.gear.disguise='dz_knight';f.account.profile.bag.dz_knight=1;f.authority.engineFor(f.peer);f.peer.pose.facing=0;assert.equal(engine.sim.disguise('dz_knight',0),true);
  engine.healthEvents=[];engine.damageAt=0;f.authority.damage(f.peer,enemy.id);assert.equal(engine.healthEvents.length,0,'blocked from the front');
  f.peer.pose.facing=Math.PI;engine.damageAt=0;f.authority.damage(f.peer,enemy.id);assert.ok(engine.healthEvents.some(e=>e.amount<0),'hurt from behind');
 });
@@ -304,4 +304,30 @@ test('pangolin armor protects the front, not the rear, and a roll collision stun
  const engine=f.authority.engineFor(f.peer);engine.sim.basic(enemy);assert.equal(enemy.hp,enemy.maxHp);
  f.peer.pose.z=-1;engine.sim.basic(enemy);assert.ok(enemy.hp<enemy.maxHp);
  f.peer.pose.z=1;engine.damageAt=0;f.authority.damage(f.peer,enemy.id);assert.equal(engine.sim.statuses.stun,2);assert.ok(f.messages.some(m=>m.type==='creatureStatus'&&m.kind==='stun'&&m.duration===2));assert.equal(engine.sim.basic(enemy),false);
+});
+
+test('explorer duck mark is authoritative: all incoming hits gain 20% for four seconds, including a teammate',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});
+ const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_explorer_duck';p.bag.dz_explorer_duck=1;}}),enemy=f.spawn('mushroom',-30,3),engine=f.authority.engineFor(f.peer);enemy.hp=enemy.maxHp=10000;
+ f.authority.skill(f.peer,0);for(let i=0;i<12;i++)t.mock.timers.tick(50);
+ assert.ok(enemy.statuses.compassMark>3.7&&enemy.statuses.compassMark<=4);assert.ok(f.messages.some(m=>m.type==='status'&&m.kind==='compassMark'&&m.duration===4));
+ const other={...f.peer,account:{...f.account,id:'teammate'},pose:{...f.peer.pose},socket:{}};f.peers.set(other.account.id,other);f.room.members.add(other.account.id);
+ let before=enemy.hp;f.authority.bomb(other,5,1);assert.ok(Math.abs(before-enemy.hp-Game.attack(other.account.profile)*1.2)<1e-7);
+ for(let i=0;i<85;i++)t.mock.timers.tick(50);assert.equal(enemy.statuses.compassMark,0);
+ before=enemy.hp;f.authority.bomb(other,5,1);assert.equal(before-enemy.hp,Game.attack(other.account.profile));
+});
+test('server clamps grapple aim, rejects duplicate casts and clears pending bird effects on disguise changes',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});
+ const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_explorer_duck';p.bag.dz_explorer_duck=1;}}),engine=f.authority.engineFor(f.peer),from={...f.peer.pose};
+ f.authority.skill(f.peer,1,{x:1e12,z:from.z});const next=engine.nextSkill[1];for(let i=0;i<10;i++)f.authority.skill(f.peer,1,{x:1e12,z:from.z});assert.equal(engine.nextSkill[1],next);
+ for(let i=0;i<14;i++)t.mock.timers.tick(50);assert.ok(Math.abs(f.peer.pose.x-from.x-14)<1e-6);assert.equal(f.peer.pose.z,from.z);
+ f.authority.skill(f.peer,3,{x:from.x+10,z:from.z});assert.ok(engine.sim.busy);f.account.profile.gear.disguise='dz_penguin';f.authority.engineFor(f.peer);assert.equal(engine.sim.busy,false);const count=f.messages.filter(m=>m.visual?.look==='duck-fire').length;
+ for(let i=0;i<30;i++)t.mock.timers.tick(50);assert.equal(f.messages.filter(m=>m.visual?.look==='duck-fire').length,count);assert.equal(engine.nextSkill[1],next,'changing disguise never resets cooldowns');
+});
+test('server net root prevents snapshots from moving a trapped creature until the root expires',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});
+ const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_explorer_duck';p.bag.dz_explorer_duck=1;}}),enemy=f.spawn('mushroom',-30,3);enemy.hp=enemy.maxHp=10000;
+ f.authority.skill(f.peer,2);t.mock.timers.tick(50);assert.equal(enemy.statuses.root,2.5);
+ const before=enemy.z;f.authority.acceptSnapshots(f.room,[{id:enemy.id,type:enemy.type,x:enemy.x,z:before+1}]);assert.equal(enemy.z,before);
+ for(let i=0;i<52;i++)t.mock.timers.tick(50);assert.equal(enemy.statuses.root,0);f.authority.acceptSnapshots(f.room,[{id:enemy.id,type:enemy.type,x:enemy.x,z:before+1}]);assert.equal(enemy.z,before+1);
 });

@@ -1,3 +1,4 @@
+import {BIRD_SKILLS} from '../src/bird-skills.ts';
 // The outfit (clothes) specials of the six uniforms read, look and sound like the uniform disguise kits: toy and cute,
 // no real-weapon wording, a Vietnamese name and tip, a sound of their own, and a look the effects layer draws.
 import test from 'node:test';
@@ -44,5 +45,5 @@ test("content.ts keeps no reference source strings as the disguises' internal na
   const names = [...block.matchAll(/"name": "([^"]*)"/g)].map(m => m[1]);
   assert.equal(names.length, 16 * 5);
   for (const name of names) assert.doesNotMatch(name, /[À-ỹ]/u, name);
-  for (const d of Object.values(DISGUISES)) for (const s of d.skills) assert.ok(names.includes(s.name), s.name);
+  for (const d of Object.values(DISGUISES)) for (const s of d.skills) assert.ok([...names,...Object.values(BIRD_SKILLS).flat().map(s=>s.name)].includes(s.name), s.name);
 });

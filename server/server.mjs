@@ -451,7 +451,7 @@ export async function createGameServer(options = {}) {
         } else if(message.type==='basic'&&room&&!peer.visit){
           rate('basic:'+account.id,12,1000);combatAuthority.basic(peer,text(message.targetId,100));
         } else if(message.type==='skill'&&room&&!peer.visit){
-          rate('skill:'+account.id,12,1000);combatAuthority.skill(peer,message.index);
+          rate('skill:'+account.id,12,1000);combatAuthority.skill(peer,message.index,message.aim);
         } else if(message.type==='environmentAction'&&room&&!peer.visit){
           const action=message.action;
           if(action?.kind==='light-pillar'){
@@ -463,7 +463,7 @@ export async function createGameServer(options = {}) {
         } else if (message.type.startsWith('dg')) {
           dungeonLobby.message(peer, message);
         } else if (message.type === 'effect' && room) {
-          const visual=message.visual,cleanVisual=visual&&['arc','ring','impact','trail','beam','cast'].includes(visual.kind)?{kind:visual.kind,x:number(visual.x),z:number(visual.z),radius:number(visual.radius,1,0,40),facing:number(visual.facing,0,-100,100),duration:number(visual.duration,.4,0,12),...(Number.isFinite(visual.arc)?{arc:number(visual.arc,2.2,0,6.3)}:{}),...(Number.isFinite(visual.width)?{width:number(visual.width,.65,.05,4)}:{}),...(EFFECT_LOOKS.includes(visual.look)?{look:visual.look}:{}),...(visual.quiet===true?{quiet:true}:{}),color:/^#[a-f0-9]{6}$/i.test(visual.color)?visual.color:'#fff2a0'}:null;
+          const visual=message.visual,cleanVisual=visual&&['arc','ring','impact','trail','beam','cast'].includes(visual.kind)?{kind:visual.kind,x:number(visual.x),z:number(visual.z),radius:number(visual.radius,1,0,40),facing:number(visual.facing,0,-100,100),duration:number(visual.duration,.4,0,12),...(Number.isFinite(visual.arc)?{arc:number(visual.arc,2.2,0,6.3)}:{}),...(Number.isFinite(visual.width)?{width:number(visual.width,.65,.05,4)}:{}),...(EFFECT_LOOKS.includes(visual.look)?{look:visual.look}:{}),...(Number.isFinite(visual.toX)&&Number.isFinite(visual.toZ)?{toX:number(visual.toX),toZ:number(visual.toZ)}:{}),...(visual.quiet===true?{quiet:true}:{}),color:/^#[a-f0-9]{6}$/i.test(visual.color)?visual.color:'#fff2a0'}:null;
           broadcast(room, { type: 'effect', visual:cleanVisual, by: account.id, effect: text(message.effect, 30), x: number(message.x), z: number(message.z), color: /^#[a-f0-9]{6}$/i.test(message.color) ? message.color : '#fff2a0' }, account.id);
         }
       } catch (error) { send(socket, { type: 'error', ...(requestId ? { requestId } : {}), message: error.status ? error.message : 'That action could not be completed.' }); }

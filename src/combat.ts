@@ -1,6 +1,7 @@
+import {BIRD, BIRD_LOOKS, birdLanding} from './bird-skills.ts';
 export interface CombatPoint { x: number; z: number }
 export interface WeaponProfile { kind: 'fist'|'sword'|'gun'|'rod'; range?: number; cd?: number; arc?: number; special?: string; shot?: string; spread?: number; quality?: number; fx?: string }
-export interface CombatTarget extends CombatPoint { id: string; hp: number; maxHp?:number; boss?:boolean; radius: number; stun?: number; facing?:number }
+export interface CombatTarget extends CombatPoint { id: string; hp: number; maxHp?:number; boss?:boolean; radius: number; stun?: number; facing?:number; statuses?:Record<string,number> }
 export interface CombatStats { attack: number; maxHp?:number; critChance: number; critDamage?: number; haste?: number; lifesteal?: number }
 export interface CombatHit { quake?:boolean; basic?:boolean; amount: number; critical: boolean; stun: number; lift: number; knock: number; direction: CombatPoint; /** Dealt by the pet, not the explorer (timed challenges ignore it). */ helper?: boolean; /** A boss blocked part of it (jump-rules.ts BLOCK): the hit came from the ground or a single jump's height. */ blocked?: boolean }
 export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|'trail'|'beam'|'cast'|'toss'; color: string; radius: number; facing?: number; duration?: number; /** Arc width (rad) of a swing; beam width (m). */ arc?: number; width?: number;
@@ -9,14 +10,14 @@ export interface CombatEffect extends CombatPoint { kind: 'arc'|'ring'|'impact'|
   /** How the view dresses it (skill-fx.ts): 'eyes' twin eye lasers, 'burn' a laser scorch, 'shock' an electric burst. Same hit either way. */
   look?: EffectLook;
   /** A repeat tick of a cast whose look is already drawn (the whirlwind's 10 hits): hits as usual, draws nothing more. */
-  quiet?: boolean }
+  quiet?: boolean; toX?:number; toZ?:number }
 export const DISGUISE_LOOKS=['charge','smoke','heal','icefield','blackhole','moon','holy','meteor','cannonfall','hook','drain','hearts','roots','roar','freeze','portal','bite','tail','parrot','shield','rush','bolt','rainbow','bats','iceage','crater','lift','blast','magma','inferno','anchor','lotus','eagle','goldstar','bonk','whirl','surf','poof','sheep','taunt','dust',
   // The six uniform kits (DISGUISE_KITS): a toy soldier, a sailor, the ao dai lady and gentleman, the stars-and-stripes and red-flag heroes.
   'tank','sandbag','flare','parachute','whistle','ribbon','fan','lantern','kite','ink','dragondance','starshield','torch','firework','bamboo','drum','bigstar',
   // The four moves (moves.ts): the Lob's arc and landing mark, the Rain's falling shots, and the petal burst where either lands.
   'lob','lobmark','petalfall','petalburst'] as const;
-export type EffectLook='eyes'|'burn'|'shock'|'boulder'|typeof DISGUISE_LOOKS[number];
-export const EFFECT_LOOKS:readonly EffectLook[]=['eyes','burn','shock','boulder',...DISGUISE_LOOKS];
+export type EffectLook='eyes'|'burn'|'shock'|'boulder'|typeof DISGUISE_LOOKS[number]|typeof BIRD_LOOKS[number];
+export const EFFECT_LOOKS:readonly EffectLook[]=['eyes','burn','shock','boulder',...DISGUISE_LOOKS,...BIRD_LOOKS];
 /** Superhero throw: lock a landing point, then lob over intervening ground obstacles. */
 export const BOULDER={range:14,fallback:8,time:.6,arc:4,height:3,radius:4.5,power:3.2,lift:7} as const;
 /** The laser gaze (dz_superhero slot 2): one sweep of `arc` rad in `time` s, a `length` m line `width` m wide; a creature is hit again after `rehit` s. */
@@ -32,6 +33,7 @@ export const ELECTRIC_COLOR='#8fdcff';
  * slot 3 control or support, slot 4 the big one.
  */
 export const DISGUISE_KITS:Readonly<Record<string,readonly string[]>>={
+  dz_penguin:['penguin-peck','penguin-slide','penguin-blizzard','frozen-fish'],dz_explorer_duck:['duck-dagger','duck-grapple','duck-net','duck-lantern'],
   dz_superhero:['flight','dive','sweep','boulder'],dz_ninja:['clones','stealth','backstab','smoke'],dz_mage:['fireball','teleport','sheep','blackhole'],
   dz_knight:['block','knightcharge','taunt','holy'],dz_mecha:['tank','turret','missiles','energyshield'],dz_dino:['devour','tail','roar','giant'],
   dz_fairy:['heal','hover','charm','tree'],dz_pirate:['cannon','hook','parrot','broadside'],dz_vampire:['drain','bats','batcircle','bloodnova'],
@@ -104,6 +106,7 @@ import { dogTarget, DOG_TOSS_FLIGHT, DOG_TOSS_RANGE } from './guard-dog.ts';
 export interface DisguiseAir { power?:number; cap?:(target:CombatTarget)=>number; grounded?:boolean; landed?:boolean; arrive?:()=>void }
 export interface CombatHost {
   position(): CombatPoint; facing(): number; face(angle: number): void;
+  aimPoint?():CombatPoint|null;
   targets(): CombatTarget[]; weapon(): WeaponProfile; stats(): CombatStats;
   move(x: number, z: number): void; hit(target: CombatTarget, hit: CombatHit): number|void;
   effect(effect: CombatEffect): void; clearShot?(from: CombatPoint, to: CombatPoint): boolean;
@@ -117,7 +120,7 @@ export interface CombatHost {
   /** The guard dog when it may fight (following you away from home, guard-dog.ts): where it is, its toss factor and rate, and your target. */
   dog?():{x:number;z:number;dmg:number;cd:number;target?:string|null}|null;
   /** 'stun' freezes or roots a creature in place (no damage). */
-  status?(target:CombatTarget,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt'|'stun',duration:number):void;
+  status?(target:CombatTarget,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt'|'stun'|'iceSlow'|'attackSlow'|'root'|'compassMark',duration:number):void;
   moveTarget?(target:CombatTarget,x:number,z:number):void;
   /** Upgrade level of base skill slot 0-3 (skill-upgrades.ts); missing = 0. */
   skillLevel?(index:number):number;
@@ -170,9 +173,10 @@ export class CombatSimulation {
   private host:CombatHost; private random:()=>number; private time=0; private serial=0; private combo=0;
   /** Damage factor of the levelled skill being cast; delayed hits keep the factor they were cast with. */
   private power=1;private giantStep=0;private lastStep:CombatPoint|null=null;private petCooldown=0;private pet2Cooldown=0;private dogCooldown=0;
+  private birdZones:{at:CombatPoint;to?:CombatPoint;until:number;kind:'ice'|'net'|'fire';hit:Set<string>;next:number;damage:(t:CombatTarget,p:number,s?:number,l?:number,k?:number)=>number}[]=[];
   private jobs:Scheduled[]=[]; private action:{kind:'dash'|'slam'|'ready'|'rest';until:number;started:number;direction:CombatPoint;speed:number;multiplier:number;hit:Set<string>;
     /** A Quake of the moves: when its ring lands (the leap's top is timed to it). An air dash: it may still turn once. */ peak?:number; air?:boolean; turned?:boolean;
-    /** Knight's charge: carry creatures along instead of hitting them on the way. */ push?:boolean; then?:()=>void}|null=null;
+    /** Knight's charge: carry creatures along instead of hitting them on the way. */ push?:boolean; bird?:'slide'|'grapple'; birdHit?:(t:CombatTarget,p:number,s?:number,l?:number,k?:number)=>number;trailAt?:number;trailFrom?:CombatPoint; then?:()=>void}|null=null;
   /** Speed bonus (fraction) while statuses.swift runs; where the sandbag wall stands; next time each creature may be rammed or swept again. */
   private swift=0;private coverAt:CombatPoint|null=null;private rehits=new Map<string,number>();
   /**
@@ -250,9 +254,9 @@ export class CombatSimulation {
   private haste(amount:number,time:number){this.swift=(this.statuses.swift??0)>0?Math.max(this.swift,amount):amount;this.statuses.swift=Math.max(this.statuses.swift??0,time);}
   get locksMovement(){return !!this.action||(this.statuses.stun??0)>0;}
   /** Ground slam: a fast leap that snaps down onto the target when the shockwave lands at 0.42 s. */
-  get airborne(){if(this.action?.kind!=='slam')return 0;const t=(this.time-this.action.started)/(this.action.peak??.42);return t<1?Math.sin(t*Math.PI*.85)*2.6:0;}
+  get airborne(){if(this.action?.bird==='grapple')return Math.sin(Math.PI*Math.max(0,Math.min(1,(this.time-this.action.started)/(this.action.until-this.action.started))))*1.1;if(this.action?.kind!=='slam')return 0;const t=(this.time-this.action.started)/(this.action.peak??.42);return t<1?Math.sin(t*Math.PI*.85)*2.6:0;}
   /** The movement skill in progress and its elapsed time, for the explorer's pose. */
-  get pose(){const a=this.action;return a&&(a.kind==='dash'||a.kind==='slam')?{kind:a.kind,t:this.time-a.started}:a?.kind==='ready'?{kind:'dash' as const,t:0}:null;}
+  get pose(){const a=this.action;return a?.bird==='slide'?{kind:'slide' as const,t:this.time-a.started}:a&&(a.kind==='dash'||a.kind==='slam')?{kind:a.kind,t:this.time-a.started}:a?.kind==='ready'?{kind:'dash' as const,t:0}:null;}
   /** A move is in progress (a chain, a throw, a wind-up or a recovery): the next attack waits. */
   get busy(){return (this.statuses.stun??0)>0||!!this.action||this.time<this.busyUntil;}
   /** Rushing (the dash itself, on the ground or in the air): nothing hurts the explorer, ground marks included. */
@@ -260,7 +264,7 @@ export class CombatSimulation {
   /** Seconds the dash in progress still runs (0 when there is none). */
   get dashLeft(){return this.action?.kind==='dash'?Math.max(0,this.action.until-this.time):0;}
   get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0||(this.statuses.invuln??0)>0;}
-  reset(){this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  reset(){this.birdZones=[];this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook,quiet=false){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,...(look?{look}:{}),...(quiet?{quiet:true}:{}),...this.up(point)});}
@@ -499,7 +503,37 @@ export class CombatSimulation {
     const power=this.power,grounded=this.grounded,cap=this.castCap;this.power=air.power??1;this.grounded=!!air.grounded;this.castCap=air.cap??null;
     try{return this.cast(effect,air);}finally{this.power=power;this.grounded=grounded;this.castCap=cap;}
   }
+  /** Capture air-cast scaling for persistent zones as well as scheduled hits. */
+  private birdDamage(){const power=this.power,cap=this.castCap,grounded=this.grounded;return(t:CombatTarget,p:number,s=0,l=0,k=0)=>{const prev=[this.power,this.castCap,this.grounded] as const;this.power=power;this.castCap=cap;this.grounded=grounded;try{return this.damage(t,p,s,l,k);}finally{[this.power,this.castCap,this.grounded]=prev;}};}
+  private birdCast(effect:string){
+    const p={...this.host.position()},target=this.chosen(15),aim=this.host.aimPoint?.()??target,angle=effect==='penguin-slide'?this.host.facing():aim?Math.atan2(aim.x-p.x,aim.z-p.z):this.host.facing();this.host.face(angle);
+    const visual=(look:EffectLook,at:CombatPoint,radius:number,duration:number,to?:CombatPoint)=>this.host.effect({...at,kind:'cast',look,radius,duration,facing:angle,color:look.startsWith('duck')||look==='compass-mark'?'#b995ff':'#b8efff',...(to?{toX:to.x,toZ:to.z}:{}),...this.up(at)});
+    const damage=this.birdDamage();
+    if(effect==='penguin-peck'||effect==='duck-dagger'){
+      const penguin=effect==='penguin-peck',K=penguin?BIRD.peck:BIRD.dagger,t=this.chosen(K.range);if(!t)return false;
+      this.busyUntil=this.time+K.hits*K.gap;
+      for(let i=0;i<K.hits;i++)this.later(i*K.gap,()=>{if(t.hp<=0||Math.hypot(t.x-this.host.position().x,t.z-this.host.position().z)>K.range+t.radius)return;this.aim(t);visual(effect,this.host.position(),K.range,K.gap*1.5,t);damage(t,K.power,0,penguin&&i===K.hits-1?BIRD.peck.lift:0,0);
+        if(!penguin&&i===K.hits-1&&t.hp>0){this.host.status?.(t,'compassMark',BIRD.dagger.mark);visual('compass-mark',t,1.1,BIRD.dagger.mark);}});
+    }else if(effect==='penguin-slide'||effect==='duck-grapple'){
+      const slide=effect==='penguin-slide',K=slide?BIRD.slide:BIRD.grapple,to=birdLanding(p,slide?null:aim,angle,K.range),length=Math.hypot(to.x-p.x,to.z-p.z);if(length<.1)return false;
+      const dir={x:(to.x-p.x)/length,z:(to.z-p.z)/length},duration=length/K.speed;
+      this.action={kind:'dash',bird:slide?'slide':'grapple',started:this.time,until:this.time+duration,direction:dir,speed:K.speed,multiplier:0,hit:new Set(),birdHit:damage,trailAt:this.time,trailFrom:p};
+      if(!slide)visual(effect,p,.25,duration,to);
+    }else if(effect==='penguin-blizzard'){
+      for(let i=0;i<40;i++)this.later(i*.1,()=>{const at=this.host.position();visual('penguin-blizzard',at,BIRD.blizzard.radius,.2);for(const t of this.within(at,BIRD.blizzard.radius))this.host.status?.(t,'attackSlow',.2);if(i%10===0)for(const t of this.within(at,BIRD.blizzard.radius))damage(t,BIRD.blizzard.power);});
+    }else if(effect==='frozen-fish'){
+      const to=birdLanding(p,aim,angle,BIRD.fish.range);this.busyUntil=this.time+.25;
+      for(let i=0;i<BIRD.fish.count;i++)this.later(i*BIRD.fish.gap,()=>{const landing={x:to.x+Math.sin(angle+Math.PI/2)*(i-1)*1.2,z:to.z+Math.cos(angle+Math.PI/2)*(i-1)*1.2};visual('frozen-fish',this.host.position(),BIRD.fish.radius,BIRD.fish.flight,landing);this.later(BIRD.fish.flight,()=>{this.emit('ring',landing,BIRD.fish.radius,'#b8efff');for(const t of this.within(landing,BIRD.fish.radius)){damage(t,BIRD.fish.power);if(t.hp>0)this.host.status?.(t,'stun',BIRD.fish.stun);}});});
+    }else if(effect==='duck-net'){
+      visual('duck-net',p,BIRD.net.radius,BIRD.net.life);this.birdZones.push({at:p,until:this.time+BIRD.net.life,kind:'net',hit:new Set(),next:0,damage});
+    }else if(effect==='duck-lantern'){
+      const to=birdLanding(p,aim,angle,BIRD.lantern.range);this.busyUntil=this.time+.25;visual('duck-lantern',p,BIRD.lantern.radius,BIRD.lantern.flight,to);
+      this.later(BIRD.lantern.flight,()=>{visual('duck-fire',to,BIRD.lantern.radius,BIRD.lantern.time);this.birdZones.push({at:to,until:this.time+BIRD.lantern.time,kind:'fire',hit:new Set(),next:this.time,damage});});
+    }else return false;
+    return true;
+  }
   private cast(effect:string,air?:DisguiseAir){
+    if((BIRD_LOOKS as readonly string[]).includes(effect))return this.birdCast(effect);
     if(SPECIAL_SKILLS.has(effect))return this.special(effect);
     const p={...this.host.position()},angle=this.aim(),d=direction(angle),K=DZ;
     switch(effect){
@@ -664,11 +698,21 @@ export class CombatSimulation {
     for(const key of Object.keys(this.statuses))this.statuses[key]=Math.max(0,this.statuses[key]-dt);
     for(const[id,time]of this.marked){if(time<=dt)this.marked.delete(id);else this.marked.set(id,time-dt);}
     const due=this.jobs.filter(job=>job.at<=this.time);this.jobs=this.jobs.filter(job=>job.at>this.time);for(const job of due)job.run();
+    for(const zone of this.birdZones){
+      if(this.time>=zone.until)continue;
+      const targets=this.host.targets().filter(t=>t.hp>0&&(zone.kind==='ice'?distanceToSegment(t,zone.at,zone.to??zone.at)<=BIRD.slide.width+t.radius:Math.hypot(t.x-zone.at.x,t.z-zone.at.z)<=(zone.kind==='net'?BIRD.net.radius:BIRD.lantern.radius)+t.radius));
+      if(zone.kind==='ice')for(const t of targets)this.host.status?.(t,'iceSlow',BIRD.slide.trail);
+      else if(zone.kind==='net'){for(const t of targets)if(!zone.hit.has(t.id)){zone.hit.add(t.id);zone.damage(t,BIRD.net.power);if(t.hp>0)this.host.status?.(t,'root',BIRD.net.root);}}
+      else if(zone.next<zone.until-1e-7&&this.time+1e-8>=zone.next){zone.next+=BIRD.lantern.tick;for(const t of targets)zone.damage(t,BIRD.lantern.power);}
+    }
+    this.birdZones=this.birdZones.filter(zone=>zone.until>this.time);
     if(this.action){const a=this.action;if(a.kind==='dash'){
       if(a.air&&!a.turned){const turn=airDashTurn((this.time-dt-a.started)/Math.max(.01,a.until-a.started),Math.atan2(a.direction.x,a.direction.z),this.edge.stick?.()??null,false);if(turn!==null){a.direction=direction(turn);a.turned=true;this.host.face(turn);}}
       // A dash that a wind-up started on this very step (the Rush) begins moving on the next one, so it covers its length exactly.
       const from={...this.host.position()},remaining=a.started>=this.time?0:Math.max(0,Math.min(dt,a.until-(this.time-dt)));this.host.move(a.direction.x*a.speed*remaining,a.direction.z*a.speed*remaining);
       const to=this.host.position();this.emit('trail',to,.7,'#e9fbff');
+      if(a.bird){const K=a.bird==='slide'?BIRD.slide:BIRD.grapple;for(const t of this.host.targets())if(t.hp>0&&!a.hit.has(t.id)&&distanceToSegment(t,from,to)<1.2+t.radius){a.hit.add(t.id);a.birdHit?.(t,K.power,0,2,K.knock);}if(a.bird==='slide'&&(this.time-(a.trailAt??0)>=.1||this.time>=a.until)){const start=a.trailFrom??from;if(Math.hypot(to.x-start.x,to.z-start.z)>.001){this.birdZones.push({at:start,to:{...to},until:this.time+BIRD.slide.trail,kind:'ice',hit:new Set(),next:0,damage:a.birdHit!});this.host.effect({...start,toX:to.x,toZ:to.z,kind:'cast',look:'penguin-slide',radius:BIRD.slide.width,duration:BIRD.slide.trail,color:'#b8efff'});}a.trailAt=this.time;a.trailFrom={...to};}}
+
       if(a.push){for(const t of this.within(to,DZ.knightcharge.grab)){a.hit.add(t.id);if(!t.boss)this.host.moveTarget?.(t,to.x+a.direction.x*1.6,to.z+a.direction.z*1.6);}}
       else if(a.multiplier>0)for(const t of this.host.targets())if(t.hp>0&&!a.hit.has(t.id)&&distanceToSegment(t,from,to)<1.2+t.radius){a.hit.add(t.id);this.damage(t,a.multiplier,.3,0,3);}
     }if(this.time>=a.until){a.then?.();if(this.action===a)this.action=null;}}

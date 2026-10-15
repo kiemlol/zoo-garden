@@ -1,3 +1,5 @@
+import {BIRD_ITEMS,BIRD_SHOP} from './bird-disguise-content.ts';
+import {BIRD_SKILLS} from './bird-skills.ts';
 import {FESTIVAL_ITEMS,FESTIVAL_RECIPES} from './festival-content.ts';
 import { registerDyes } from './dye-skins.ts';
 import { TITAN_ITEMS, TITAN_LOOT } from './titan-content.ts';
@@ -4127,5 +4129,9 @@ LOOT_TABLES.mosslug=[['rainbow_slime',1,1,2],['moss_shell',.55,1,1]];
 LOOT_TABLES.pangolin=[['lava_scale',1,1,2],['rolling_shell',.55,1,1]];
 Object.assign(ITEMS,FESTIVAL_ITEMS);
 RECIPES.push(...FESTIVAL_RECIPES);
+Object.assign(ITEMS,BIRD_ITEMS);
+RECIPES.push(...BIRD_SHOP);
+for(const [id,skills] of Object.entries(BIRD_SKILLS))DISGUISES[id]={name:BIRD_ITEMS[id].name,emoji:BIRD_ITEMS[id].icon,color:id==='dz_penguin'?'#b8efff':'#b995ff',weapon:{kind:'fist',range:2.6,cd:.4,special:'fist'},skills};
+SHOP_CATEGORIES.find(c=>c.tab==='Disguises')?.items.push(...Object.keys(BIRD_ITEMS).map(id=>({id,cost:1})));
 // Dyes (dye-skins.ts): energy-priced recolours of existing gear, generated last so every base item exists.
 registerDyes(ITEMS);

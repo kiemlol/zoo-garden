@@ -211,7 +211,7 @@ export class World {
   lastHit?: {e:Enemy;t:number}|null;
   // Player animation timers set by combat and fishing.
   punchT=0; punchArm=0; swingT=0; aimT=0; hurtT=0; spinT=0; landT=0; castT=0; /** Seconds left of the casting pose of a skill cast from a jump (air-cast.ts). */ castAirT=0; /** A flight that took a jump over: metres the explorer still is from the flight's height (air-cast.ts flightCarry). */ airCarry=0; /** The last tap on a pond's water, for the cast point. */ pondTap:{id:string;x:number;z:number}|null=null; fishing:'idle'|'cast'|'wait'|'fight'='idle';
-  walkClock=0; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam';t:number}|null=null; fishTension=0; invulnerable=false;
+  walkClock=0; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam'|'slide';t:number}|null=null; fishTension=0; invulnerable=false;
   private shakeOffset=new T.Vector3();/** Ground distance the view reaches from the camera target (resize). */ viewReach?:number; private playerMaterials:LitMaterial[]=[];private hemi?:T.HemisphereLight;
   canvas: HTMLCanvasElement; state: SaveState;
   constructor(canvas: HTMLCanvasElement, state: SaveState, options: { antialias?: boolean } = {}) {
@@ -994,7 +994,7 @@ export class World {
   }
   groundPoint(clientX:number,clientY:number){this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);const p=this.raycaster.ray.intersectPlane(new T.Plane(UP,0),new T.Vector3());return p?{x:p.x,z:p.z}:null;}
   knockUpEnemy(e:Enemy,height=2,duration=.8){e.liftVelocity=Math.max(e.liftVelocity??0,Math.sqrt(Math.max(0,liftHeight(e.boss,height))*24));e.stun=Math.max(e.stun,duration);}
-  statusEnemy(e:Enemy,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt'|'stun',duration:number){e.statuses??={};
+  statusEnemy(e:Enemy,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt'|'stun'|'iceSlow'|'attackSlow'|'root'|'compassMark',duration:number){e.statuses??={};
     // A freeze or a root (ice age, binding tree, ink circle, whistle): held in place, bosses too, as the reference does.
     if(kind==='stun'){e.stun=Math.max(e.stun,duration);return;}
     // Bosses shrug off sheep, charm and fear (the reference's 'Kháng!'): they are only slowed for 60% of it.
@@ -1321,6 +1321,7 @@ export class World {
     if(e.hp<=0)return;
     if(!hazard&&shellBlocks(e.type,e.phase,quake,basic,e,e.mesh.rotation.y,this.position))return;
     if(e.type==='mosslug'&&quake&&e.phase==='shell'){e.phase='recover';e.phaseTime=1.2;}
+    if((e.statuses?.compassMark??0)>0)amount*=1.2;
     if(e.driver)amount=e.driver.incoming(e,amount,hazard);
     if(!hazard&&e.type==='magmaturtle')amount*=e.phase==='recover'?2:.12;
     // A hit never staggers a boss (its wind-up and skill go on, as in the reference); a hard stun only slows it.
@@ -1359,6 +1360,8 @@ export class World {
     return Math.hypot(point.x,point.z)>=Math.min(safe,Math.hypot(e.x,e.z))-.001;
   }
   private moveCreature(e:Enemy,dx:number,dz:number,allowVoid=false){
+    if((e.statuses?.root??0)>0)return;
+    if((e.statuses?.iceSlow??0)>0){dx*=.5;dz*=.5;}
     const obstacles=this.creatureObstacles(),options=this.navigationOptions(e.radius,true);
     options.walkable=p=>this.creatureWalkable(e,p,allowVoid);
     this.resolveOverlap(e,obstacles,options.clearance!);
@@ -1588,8 +1591,8 @@ export class World {
     marker.update(dt,this.time,{x:e.mesh.position.x,y:ground,z:e.mesh.position.z,footprint:data.footprint*s,height:e.mesh.position.y-ground+this.modelHeight(e)},e.radius);
   }
   private updateEnemyAi(e:Enemy,dt:number){
-    if(e.driver)return;
-    e.cooldown=Math.max(0,e.cooldown-dt);this.updateTitanAttacks(e,dt);if(e.phase==='titan-leap'&&e.titanAttacks?.some(a=>a.skill==='leap'))return;e.stun=Math.max(0,e.stun-dt);e.routeTime=Math.max(0,(e.routeTime??0)-dt);
+    if(e.driver){if(e.statuses)for(const key of ['iceSlow','attackSlow','root','compassMark'])e.statuses[key]=Math.max(0,(e.statuses[key]??0)-dt);return;}
+    e.cooldown=Math.max(0,e.cooldown-dt*((e.statuses?.attackSlow??0)>0?.5:1));this.updateTitanAttacks(e,dt);if(e.phase==='titan-leap'&&e.titanAttacks?.some(a=>a.skill==='leap'))return;e.stun=Math.max(0,e.stun-dt);e.routeTime=Math.max(0,(e.routeTime??0)-dt);
     if(e.statuses)for(const key in e.statuses)e.statuses[key]=Math.max(0,e.statuses[key]-dt); // no key array per creature per step
     if(e.hp<=0){e.respawn=Math.max(0,e.respawn-dt);if(this.authoritativeAction)return;if(e.respawn<=0&&Math.hypot(this.position.x-e.homeX,this.position.z-e.homeZ)>22&&![...this.remotePlayers?.values()??[]].some(r=>r.mesh.visible&&Math.hypot(r.pose.x-e.homeX,r.pose.z-e.homeZ)<22)){e.maxHp=e.baseMaxHp??e.maxHp;e.damage=e.baseDamage??e.damage;e.hp=e.maxHp;e.x=e.homeX;e.z=e.homeZ;e.mesh.visible=true;e.dying=0;e.phase='idle';this.fx?.burst({x:e.x,z:e.z},{n:14,color:[e.definition?.color??'#ffffff','#ffffff'],speed:3,up:5});e.route=[];e.stun=0;e.scaled=false;e.enraged=false;e.skill=undefined;e.telegraphs=[];e.skillEffects=[];}return;}
     const def=e.definition??(e.boss?DEFAULT_BOSS_AI:DEFAULT_AI);
@@ -2036,7 +2039,8 @@ export class World {
       else{const arm=this.punchArm?armR:armL;arm?.rotation.set(-1.6*e,0,0);twist=(this.punchArm?-.4:.4)*e;lean=.15*e;}
     }
     // Skills.
-    if(this.spinT>0){armL?.rotation.set(0,0,-1.45);armR?.rotation.set(kind==='sword'?-1.4:0,0,1.45);if(head)head.rotation.x=.15;}
+    if(pose?.kind==='slide'){lean=1.45;lift=.48;armL?.rotation.set(0,0,-.5);armR?.rotation.set(0,0,.5);legL?.rotation.set(0,0,0);legR?.rotation.set(0,0,0);}
+    else if(this.spinT>0){armL?.rotation.set(0,0,-1.45);armR?.rotation.set(kind==='sword'?-1.4:0,0,1.45);if(head)head.rotation.x=.15;}
     else if(pose?.kind==='dash'){lean=.55;armL?.rotation.set(1.2,0,-.3);armR?.rotation.set(kind==='sword'?-1.3:1.2,0,.3);legL?.rotation.set(.8,0,0);legR?.rotation.set(-.4,0,0);lift=.15;}
     else if(pose?.kind==='slam'){
       if(pose.t<.42){const e=pose.t/.42;lean=-e*.4;const up=-2.9*Math.min(1,e*2);armL?.rotation.set(up,0,-.2);armR?.rotation.set(up,0,.2);legL?.rotation.set(-.5,0,0);legR?.rotation.set(-.5,0,0);}
@@ -2052,7 +2056,7 @@ export class World {
     }
     if(this.hurtT>0){const k=1+this.hurtT*.4;sx*=k;sy*=k;sz*=k;}
     if(this.landT>0){const k=Math.sin(this.landT/.25*Math.PI);sx*=1+k*.18;sy*=1-k*.22;sz*=1+k*.18;}
-    p.rotation.y=this.spinT>0?this.facing+(2.2-this.spinT)*22:this.facing+twist;
+    p.rotation.y=this.spinT>0&&pose?.kind!=='slide'?this.facing+(2.2-this.spinT)*22:this.facing+twist;
     p.rotation.x=lean;p.position.y+=lift;p.scale.x*=sx;p.scale.y*=sy;p.scale.z*=sz;
     if(flying){p.position.y-=lift;p.scale.y/=sy;superheroFlightPose(p,this.moving&&this.state.gear.disguise==='dz_superhero');if(head&&gaze!=null){const turn=Math.atan2(Math.sin(gaze-this.facing),Math.cos(gaze-this.facing));head.rotation.y=Math.max(-1.2,Math.min(1.2,turn));}}
     if(this.spinT>0&&this.fx&&Math.random()<dt*12)this.fx.burst(this.position,{n:1,color:['#ffffff','#d4f1ff'],glow:true,size:.08,speed:4,up:1,life:.3,y:.6,gravity:0});

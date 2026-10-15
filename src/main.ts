@@ -1,3 +1,4 @@
+import {BirdSkillView} from './bird-skill-view.ts';
 import {lockBrowserGestures} from './browser-gestures.ts';
 lockBrowserGestures();
 import {PANGOLIN} from './wild-creatures.ts';
@@ -214,9 +215,9 @@ let modes:typeof import('./modes.ts')|null=null,modesLoading:Promise<void>|null=
  * refusal of a `quiet` intent, which the helpers send by themselves (another worker or the player got there first).
  */
 async function perform<T=any>(type:string,payload:Record<string,unknown>={},{quiet=false}:{quiet?:boolean}={}):Promise<T|undefined>{
-  const before=state.level,original=state,online=!!actionHandler;
+  const before=state.level,original=state,online=!!actionHandler,previousDisguise=state.gear.disguise;
   try{const result=actionHandler?(await actionHandler({type,payload})).result:applyGameAction(state,{type,payload},{now:Date.now(),random:Math.random});
-    if(state!==original)return undefined;if(!online)levelCheck(before);save();updateHud();return result as T;
+    if(state!==original)return undefined;if(!online)levelCheck(before);if(previousDisguise!==state.gear.disguise){combat.reset();birdFx.clear();world.spinT=0;}save();updateHud();return result as T;
   }catch(error){if(state===original)reportRefusal(type,payload,error,quiet);return undefined;}
 }
 function reportRefusal(type:string,payload:Record<string,unknown>,error:unknown,quiet:boolean){
@@ -310,6 +311,7 @@ const minimap=new Minimap($<HTMLCanvasElement>('#minimap'),$('#map-caption'),()=
 const movement = new MovementControls(world.keys);
 const joystick=mountJoystick($('#hud'),()=>started&&!uiBlocked()&&!placement&&!flight,direction=>{world.joystickInput=direction;});
 const combatView=new CombatView(world.scene);
+const birdFx=new BirdSkillView(world.scene,(x,z)=>world.interior?0:Math.max(0,terrainHeight(world.environment.layout,{x,z})),(x,z)=>Math.hypot(world.position.x-x,world.position.z-z)<1.5?world.player:null,()=>world.enemies);
 // Laser gaze beams, electric bolts and bursts, scorch marks and the ⚡ mark (skill-fx.ts), for the explorer and remote players alike.
 const skillFx=new SkillFx(world.scene,world.fx??null,{
   explorerAt:(x,z)=>Math.hypot(world.position.x-x,world.position.z-z)<1.5?world.player:[...world.remotePlayers.values()].find(r=>r.mesh.visible&&Math.hypot(r.pose.x-x,r.pose.z-z)<1.5)?.mesh??null,
@@ -319,6 +321,7 @@ combatView.electric=(x,y,z,dx,dz)=>skillFx.crackle(x,y,z,dx,dz);
 combatView.trail=(x,y,z,color)=>world.fx?.burst({x,z},{n:1,glow:true,color,size:.06,life:.38,speed:.25,up:.15,gravity:0,y:y-.15,spread:.1});
 world.onElectricShot=(x,y,z,dx,dz)=>skillFx.crackle(x,y,z,dx,dz);world.onElectricPop=(x,z)=>skillFx.shock({x,z,kind:'impact',radius:.7,color:'#8fdcff',look:'shock'},false,false);
 const combat=new CombatSimulation({
+  aimPoint:()=>birdAim(),
   position:()=>world.position,facing:()=>world.facing,face:angle=>world.facing=angle,
   moving:()=>world.moving,skillLevel:i=>M.skillLevel(state,i),
   // In a jump (solo, with jumping on) what the explorer casts or fires begins at its height (combat.ts up, shoot).
@@ -343,6 +346,7 @@ const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else wo
 function showEffect(effect:CombatEffect){
   const fx=world.fx,at={x:effect.x,z:effect.z},up=Math.max(0,Math.min(8,effect.y??0)); // `up`: the height a cast from the air began at (air-cast.ts)
   if(effect.quiet)return; // a repeat tick of a cast already drawn (the whirlwind's hits)
+  if(birdFx.play(effect)){if((effect.look==='penguin-peck'||effect.look==='duck-dagger')&&Math.hypot(effect.x-world.position.x,effect.z-world.position.z)<.5)world.playerAttack(effect.look==='duck-dagger'?'sword':'fist');return;}
   if(skillFx.disguises.play(effect))return;
   if(effect.kind==='toss'){world.guardDogs?.toss(effect);return;}
   if(effect.look==='boulder'&&effect.kind==='cast'){skillFx.boulders.throw(effect);return;}
@@ -1408,13 +1412,16 @@ function diveStrike(multiplier:number,landing:Landing){
 let plungeCast:{disguise:string;index:number;height:number;jumps:number;drift?:{x:number;z:number;left:number}}|null=null;
 const moveExplorer=(x:number,z:number)=>{const steps=Math.max(1,Math.ceil(Math.hypot(x,z)/.2));for(let i=0;i<steps;i++)world.move(x/steps,z/steps);};
 /** One disguise skill is cast: its cooldown, its name over the explorer, its sound. `air`: how a cast from a jump differs (combat.ts DisguiseAir). */
+function birdAim(){const selected=world.selected?.kind==='enemy'?world.selected as Enemy:null;return selected&&selected.hp>0?{x:selected.x,z:selected.z}:world.destination?{x:world.destination.x,z:world.destination.z}:null;}
 function castDisguise(disguise:string,index:number,air?:DisguiseAir){
+  const aim=birdAim();
   if(!combat.disguise(disguise,index,air))return false;
+  if(disguise==='dz_penguin'&&index===2)world.spinT=4;
   const skills=skillList(),time=M.skillCooldown(state,index,skills[index].cd,true)/Math.max(.2,1+M.activeStats(state).haste);skillDurations[index]=time;cooldowns[index]=time;
   world.fx?.text({x:world.position.x,y:SKILL_NAME_RISE+(world.jump?.height??0),z:world.position.z},t(skills[index].name),`skillname s${index}`);
   if(!actionHandler)change(()=>recordEvent(state,'skill'));
   if((disguise==='dz_knight'&&index===1)||(disguise==='dz_vietnam'&&index===1))world.fx?.burst(world.position,{n:10,color:'#f3e2bd',size:.14,speed:3,up:2,y:.1});
-  tone(skillSound(index,disguise,M.weaponStats(state).special));emitAction({kind:'skill',index,special:disguise});
+  tone(skillSound(index,disguise,M.weaponStats(state).special));emitAction({kind:'skill',index,special:disguise,...(aim?{aim}:{})});
   return true;
 }
 /** A disguise skill pressed in the air window, by its class (air-cast.ts AIR_CAST). */
@@ -1671,7 +1678,7 @@ combatView.extraAllies=()=>{
   if(remoteSummonIds.size>256)remoteSummonIds.clear();
   return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
 };
-function resetCombat(){venom.clear();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){venom.clear();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();birdFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
@@ -1687,8 +1694,8 @@ export const gameBridge:GameBridge={
   setPersistence(handler){persistence=handler;},
   setActionHandler(handler){actionHandler=handler;world.authoritativeAction=handler?intent=>handler(intent).then(reply=>reply.result):undefined;},
   applyAuthoritativeState(next){
-    const planetChanged=next.planet!==state.planet,wasDead=state.hp<=0;const heldRod=M.ITEMS[state.gear.weapon??'']?.weapon?.kind==='rod'?state.gear.weapon:undefined;const previousGear=JSON.stringify(state.gear),wasFishing=!!world.fishing&&world.fishing!=='idle',plotsChanged=next.plots.length!==state.plots.length,decorChanged=JSON.stringify(next.decorations)!==JSON.stringify(state.decorations);
-    const beforeLevel=state.level;const current=state as unknown as Record<string,unknown>;for(const key of Object.keys(current))if(!Object.hasOwn(next,key))delete current[key];Object.assign(state,next);if(wasFishing&&!planetChanged){const rod=contextGear.forFishing(state);if(rod)state.gear.weapon=rod;}else if(!planetChanged&&gearWater&&heldRod&&(state.bag[heldRod]??0)>0)state.gear.weapon=heldRod;const gearChanged=JSON.stringify(state.gear)!==previousGear;levelCheck(beforeLevel);if(planetChanged){visiting=null;visitHome=null;world.state=state;endFishing();resetCombat();world.build(state.planet);world.refreshPlayer();if(wasDead)toast('You are safe at home.','🏡');}if(!visiting){world.state=state;if(plotsChanged){const position=world.position.clone();rebuildHomePresentation(state.planet);world.position.copy(position);}else{world.syncCrops();if(decorChanged)world.syncDecorations();}if(gearChanged)world.refreshPlayer();world.syncDropped();}
+    const planetChanged=next.planet!==state.planet,wasDead=state.hp<=0;const heldRod=M.ITEMS[state.gear.weapon??'']?.weapon?.kind==='rod'?state.gear.weapon:undefined;const previousDisguise=state.gear.disguise,previousGear=JSON.stringify(state.gear),wasFishing=!!world.fishing&&world.fishing!=='idle',plotsChanged=next.plots.length!==state.plots.length,decorChanged=JSON.stringify(next.decorations)!==JSON.stringify(state.decorations);
+    const beforeLevel=state.level;const current=state as unknown as Record<string,unknown>;for(const key of Object.keys(current))if(!Object.hasOwn(next,key))delete current[key];Object.assign(state,next);if(wasFishing&&!planetChanged){const rod=contextGear.forFishing(state);if(rod)state.gear.weapon=rod;}else if(!planetChanged&&gearWater&&heldRod&&(state.bag[heldRod]??0)>0)state.gear.weapon=heldRod;const gearChanged=JSON.stringify(state.gear)!==previousGear;levelCheck(beforeLevel);if(planetChanged){visiting=null;visitHome=null;world.state=state;endFishing();resetCombat();world.build(state.planet);world.refreshPlayer();if(wasDead)toast('You are safe at home.','🏡');}if(!visiting){world.state=state;if(plotsChanged){const position=world.position.clone();rebuildHomePresentation(state.planet);world.position.copy(position);}else{world.syncCrops();if(decorChanged)world.syncDecorations();}if(gearChanged){if(previousDisguise!==state.gear.disguise){combat.reset();birdFx.clear();world.spinT=0;}world.refreshPlayer();}world.syncDropped();}
     updateHud();updateLabels();
   },
   spawnNetworkDrop,removeNetworkDrop,releaseNetworkDrop(id){for(const meta of networkDrops.values())if(meta.drop.id===id)meta.drop.releaseAt=0;},clearNetworkDrops(){networkDrops.clear();drops.clear();},
@@ -2042,7 +2049,7 @@ function frame(now:number){
   // browser throttles rendering, and collisions do not tunnel at a low frame rate. At most four steps
   // run per frame; a longer stall turns into slow motion rather than a spiral of ever longer frames.
   updateContextWeapon();joystick.update();
-  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);stepFight(step,active,combatActive);combat.update(step,combatActive);combat.statuses.stun=Math.max(combat.statuses.stun??0,world.playerStun??0);combat.statuses.slip=Math.max(combat.statuses.slip??0,world.playerSlip??0);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerSpeedBonus=combat.speedBonus;world.playerStealth=(combat.statuses.stealth??0)>0;world.playerSizeScale=combat.visualScale;world.playerShield=combat.invulnerable;world.playerBat=(combat.statuses.bats??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);skillFx.boulders.update(combatActive?step:0);skillFx.disguises.update(combatActive?step:0);if(started&&!document.hidden&&!actionHandler)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
+  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);stepFight(step,active,combatActive);combat.update(step,combatActive);combat.statuses.stun=Math.max(combat.statuses.stun??0,world.playerStun??0);combat.statuses.slip=Math.max(combat.statuses.slip??0,world.playerSlip??0);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerSpeedBonus=combat.speedBonus;world.playerStealth=(combat.statuses.stealth??0)>0;world.playerSizeScale=combat.visualScale;world.playerShield=combat.invulnerable;world.playerBat=(combat.statuses.bats??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);skillFx.boulders.update(combatActive?step:0);skillFx.disguises.update(combatActive?step:0);birdFx.update(combatActive?step:0);if(started&&!document.hidden&&!actionHandler)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
   // Landing from the ground slam squashes the explorer and jolts the camera.
   const airborne=combat.airborne>0;if(wasAirborne&&!airborne){world.landT=.25;slamImpact();}wasAirborne=airborne;
   // The explorer's pose follows the weapon, skills, fishing line and hit invulnerability.

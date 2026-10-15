@@ -26,7 +26,7 @@ function fixture(layout='classic'){
     previous:0,performance:{now:()=>12345},graphics:{sample:(...args)=>calls.push(['graphicsSample',...args])},
     $:()=>({querySelectorAll:()=>[]}),uiBlocked:()=>!!ctx.modal||ctx.nativeDialog,
     tryLanding:()=>calls.push(['land']),cancelPlacement:()=>{calls.push(['cancelPlacement']);ctx.placement=null;},confirmPlacement:()=>calls.push(['place']),rotatePlacement:()=>calls.push(['rotate']),
-    closeDialog:()=>{calls.push(['close']);ctx.modal='';movement.clear();},start:()=>calls.push(['start']),inventory:()=>calls.push(['bag']),quests:()=>calls.push(['journal']),map:()=>calls.push(['map']),quickEat:()=>calls.push(['eat']),skill:index=>calls.push(['skill',index]),basicAttack:()=>calls.push(['attack']),
+    closeDialog:()=>{calls.push(['close']);ctx.modal='';movement.clear();},start:()=>calls.push(['start']),inventory:()=>calls.push(['bag']),quests:()=>calls.push(['journal']),map:()=>calls.push(['map']),quickEat:()=>calls.push(['eat']),skill:index=>calls.push(['skill',index]),basicAttack:()=>calls.push(['attack']),attackPad:()=>calls.push(['attack']),
     gestures:{clear:()=>calls.push(['gesturesClear'])},save:()=>calls.push(['save']),
   });
   vm.runInContext(compiled,ctx);

@@ -42,10 +42,10 @@ test('the starting skills read naturally in Vietnamese', async () => {
 
 test('the HUD markup uses the icon set and the new names, and offers the attack pad', () => {
   const main = read('main.ts'), hud = main.slice(main.indexOf('<div id="hud" hidden>'), main.indexOf('<div id="space-hud" hidden>'));
-  for (const name of ['sprout', 'bolt', 'bag', 'journal', 'ranking', 'help', 'settings', 'gale', 'breeze', 'quake', 'paw', 'attack', 'home']) assert.ok(hud.includes(`\${hudIcon('${name}')}`), `${name} is drawn in the HUD`);
+  for (const name of ['sprout', 'bolt', 'bag', 'journal', 'ranking', 'help', 'settings', 'gale', 'breeze', 'quake', 'paw', 'home']) assert.ok(hud.includes(`\${hudIcon('${name}')}`), `${name} is drawn in the HUD`);
   for (const emoji of ['🎒', '📖', '🏆', '⚙', '🌀', '➶', '💥', '⌂']) assert.ok(!hud.slice(0, hud.indexOf('id="touch-controls"')).replace(/class="tracker-stack".*?class="minimap"/s, '').includes(emoji), `${emoji} is still in the dock or the fight cluster`);
   assert.doesNotMatch(hud, /Whirlwind|Ground stomp|Star punch/);
-  assert.match(hud, /<button class="attack-pad" data-action="attack" aria-label="Basic attack"/);
+  assert.match(hud, /<button class="attack-pad" data-action="attack" aria-label="Tornado"/);
   assert.match(hud, /<div class="skills"[^>]*>(?:<button class="skill [^"]+" data-action="skill" data-index="[0-3]".*?<\/button>){4}<button class="attack-pad"/s, 'the pad sits in the fight cluster after the four skills');
 });
 

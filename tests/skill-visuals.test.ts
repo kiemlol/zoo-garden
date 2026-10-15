@@ -1,3 +1,5 @@
+import {BIRD_LOOKS} from '../src/bird-skills.ts';
+import {BirdSkillView} from '../src/bird-skill-view.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
@@ -29,7 +31,9 @@ test('every look an emitted effect carries is drawn by DisguiseFx', () => {
   for (const id of ['volley', 'anchor', 'lotus', 'dragon', 'eagle', 'goldstar', 'wave', 'tsunami', 'magma', 'thunder', 'bonk', 'whirl', 'starfall', 'inferno', 'laser']) run(s => s.special(id));
   for (const id of Object.keys(DISGUISE_INFO)) for (let slot = 0; slot < 4; slot++) run(s => s.disguise(id, slot));
   const fx = new DisguiseFx(host);
-  for (const look of seen) if (look !== 'eyes' && look !== 'burn' && look !== 'shock' && look !== 'boulder') assert.equal(fx.play({ look, kind: 'cast', x: 0, z: 0, radius: 3, color: '#ffffff' } as CombatEffect), true, look);
+  const bird=new BirdSkillView(new T.Scene(),()=>0,()=>null,()=>[],false);
+  for (const look of seen) if((BIRD_LOOKS as readonly string[]).includes(look)){assert.ok(bird.play({look:look as CombatEffect['look'],kind:'cast',x:0,z:0,radius:3,color:'#ffffff'}));}else if (look !== 'eyes' && look !== 'burn' && look !== 'shock' && look !== 'boulder') assert.equal(fx.play({ look, kind: 'cast', x: 0, z: 0, radius: 3, color: '#ffffff' } as CombatEffect), true, look);
+  bird.clear();
   for (const look of ['anchor', 'bolt', 'rainbow', 'shield', 'blast', 'surf', 'lotus', 'crater', 'iceage', 'rush', 'bats']) assert.ok(seen.has(look), `${look} is emitted by combat`);
 });
 

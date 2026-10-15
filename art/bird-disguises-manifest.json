@@ -1,0 +1,44 @@
+{
+  "file": "public/assets/models/bird-disguises.glb",
+  "bytes": 432428,
+  "models": {
+    "dz_penguin": {
+      "triangles": 4420,
+      "parts": [
+        "head",
+        "body",
+        "arm-left",
+        "arm-right",
+        "leg-left",
+        "leg-right"
+      ],
+      "skillOnly": false
+    },
+    "dz_explorer_duck": {
+      "triangles": 5994,
+      "parts": [
+        "head",
+        "body",
+        "arm-left",
+        "arm-right",
+        "leg-left",
+        "leg-right"
+      ],
+      "skillOnly": false
+    },
+    "explorer_lantern": {
+      "triangles": 7358,
+      "parts": [
+        "body"
+      ],
+      "skillOnly": true
+    },
+    "explorer_dagger": {
+      "triangles": 1736,
+      "parts": [
+        "body"
+      ],
+      "skillOnly": true
+    }
+  }
+}

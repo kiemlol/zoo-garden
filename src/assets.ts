@@ -47,6 +47,7 @@ export const KIT_FILES = {
   farm: modelUrl('farm.glb'),
   swampGear: modelUrl('swamp-gear.glb'),
   wildCreatures: modelUrl('wild-creatures.glb'),
+  birdDisguises:modelUrl('bird-disguises.glb'),
   festival: modelUrl('festival-gear.glb'),
   creatures: modelUrl('creatures.glb'),
   forestBirds: modelUrl('forest-birds.glb'),
@@ -542,7 +543,7 @@ export const festivalKit = new KitLibrary([KIT_FILES.festival]);
 export const weaponKit = new KitLibrary([KIT_FILES.weapons,KIT_FILES.swampGear,KIT_FILES.wildCreatures]);
 /** New gameplay item, existing Blender trident geometry; no duplicate weapon download. */
 export const weaponModelName = (id: string) => id === 'harpoon' ? 'trident' : id;
-export const disguiseKit = new KitLibrary([KIT_FILES.disguises]);
+export const disguiseKit = new KitLibrary([KIT_FILES.disguises,KIT_FILES.birdDisguises]);
 export const petKit = new KitLibrary([KIT_FILES.pets]);
 /** Little boss companions (pet_b_<boss>), loaded the first time one is worn. */
 export const bossPetKit = new KitLibrary([KIT_FILES.bossPets]);
@@ -560,3 +561,6 @@ export const farmKit = new KitLibrary([KIT_FILES.farm]);
 export const helperKit = new KitLibrary([KIT_FILES.helper]);
 /** The prisoners' cages (cage-view.ts), loaded the first time a cage is shown. */
 export const cageKit = new KitLibrary([KIT_FILES.cage]);
+
+/** Skill props intentionally have no inventory entry. */
+export const birdSkillKit=new KitLibrary([KIT_FILES.birdDisguises]);
