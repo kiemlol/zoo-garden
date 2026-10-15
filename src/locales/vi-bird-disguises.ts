@@ -10,7 +10,7 @@ export const VI_BIRD_DISGUISES:Record<string,string>={
 const descriptions=[
  ['Mổ liên hoàn 5 hit vào một mục tiêu trong 3,2 m; hit cuối hất tung quái.',
  'Trượt bụng 14 m, húc văng quái trên đường. Vệt băng giảm 50% tốc chạy trong 3 giây.',
- 'Xoay tạo bão tuyết theo người trong 4 giây: sát thương mỗi giây trong 4,8 m và giảm 50% tốc đánh của quái.',
+ 'Xoay tạo bão tuyết theo người trong 4 giây: sát thương vừa mỗi giây trong 4,8 m, giảm 30% sát thương quái gây ra và 50% tốc chạy/tốc đánh, chặn quái lướt vào.',
  'Ném vòng cung 3 cá đông lạnh tới điểm ngắm cách tối đa 15 m. Mỗi cá nổ trong 2,6 m và làm choáng 1,5 giây.'],
  ['Chém dao găm 5 hit trong 3,4 m. Hit cuối đóng dấu la bàn: mục tiêu nhận thêm 20% sát thương trong 4 giây.',
  'Bắn móc tới điểm ngắm cách tối đa 14 m, kéo bản thân bay tới và hất văng mọi quái trên đường.',

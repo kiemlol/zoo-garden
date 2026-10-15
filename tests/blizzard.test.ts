@@ -1,0 +1,20 @@
+import {ENEMY_TYPES} from '../src/enemy-types.ts';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as T from 'three';
+import {BIRD,BIRD_SKILLS} from '../src/bird-skills.ts';
+import {blizzardDashContact,blizzardDamageFactor,inBlizzard} from '../src/blizzard.ts';
+import {CombatSimulation} from '../src/combat.ts';
+import {World} from '../src/world.ts';
+const field={x:0,z:30,radius:BIRD.blizzard.radius};
+const world=()=>{const w:any=Object.create(World.prototype);Object.assign(w,{blizzardFields:()=>[field],creatureObstacles:()=>[],navigationOptions:()=>({}),creatureWalkable:()=>true,resolveOverlap:()=>{},updateTitanAttacks:()=>{},enemyTarget:()=>({x:0,z:30}),hitEnemyTarget:()=>{throw new Error('a blocked dash must not deal contact damage');},planet:'forest',position:new T.Vector3(0,0,30),enemies:[]});return w;};
+const creature=(type='boar',phase='charge',z=38):any=>({id:type,type,phase,x:0,z,homeX:0,homeZ:z,hp:100,maxHp:100,damage:10,radius:.5,stun:0,cooldown:0,statuses:{},targetX:0,targetZ:20,phaseTime:2,mesh:new T.Group(),definition:ENEMY_TYPES[type]??{behavior:'charger',speed:3,reach:1.5,cooldown:2,sight:15}});
+
+test('the requested base cooldowns replace only the specified moves',()=>{assert.deepEqual(BIRD_SKILLS.dz_penguin.map(s=>s.cd),[3,6,10,7]);assert.deepEqual(BIRD_SKILLS.dz_explorer_duck.map(s=>s.cd),[3,5,9,10]);});
+test('blizzard reduces outgoing damage by 30% only for creatures within a live storm; multiple storms do not stack',()=>{assert.equal(blizzardDamageFactor({x:0,z:30},[field]),.7);assert.equal(blizzardDamageFactor({x:0,z:40},[field]),1);assert.equal(blizzardDamageFactor({x:0,z:30},[field,field]),.7);assert.equal(blizzardDamageFactor({x:0,z:30},[]),1);});
+test('swept dash collision catches a whole crossed storm, tangents and creatures starting inside',()=>{const at=blizzardDashContact({x:0,z:42,radius:.5},{x:0,z:15},[field]);assert.ok(at&&at.z>=35.3&&at.z<35.301);assert.deepEqual(blizzardDashContact({x:0,z:30},{x:10,z:30},[field]),{x:0,z:30});assert.ok(blizzardDashContact({x:-10,z:34.8},{x:10,z:34.8},[field]));assert.equal(blizzardDashContact({x:-10,z:40},{x:10,z:40},[field]),null);});
+test('charging boars and eagles stop at the boundary and cannot land their dash hit',()=>{for(const type of ['boar','forest_raptor']){const w=world(),e=creature(type);w.updateEnemyAi(e,1);assert.equal(e.phase,'recover');assert.ok(e.z>=35.3);assert.ok(e.cooldown>=1);assert.equal(e.skill,undefined);}});
+test('a rolling pangolin stops instead of bouncing through the storm or stunning the player',()=>{const w=world(),e=creature('pangolin','roll');assert.equal(w.updateWildCreature(e,1,{x:0,z:30},false),true);assert.equal(e.phase,'recover');assert.ok(e.z>=35.3);assert.equal(e.mesh.userData.rollHit,undefined);});
+test('ordinary movement in the storm is 50% slower and returns to normal outside it',()=>{const w=world(),e=creature('wolf','chase',30);w.moveCreature(e,2,0);assert.equal(e.x,1);e.x=10;w.moveCreature(e,2,0);assert.equal(e.x,12);});
+test('a live blizzard follows its caster for four active seconds, pauses and resets',()=>{const p={x:0,z:30},sim=new CombatSimulation({position:()=>p,facing:()=>0,face:()=>{},targets:()=>[],weapon:()=>({kind:'fist'}),stats:()=>({attack:10,critChance:0}),move:()=>{},hit:()=>{},effect:()=>{}});sim.disguise('dz_penguin',2);assert.ok(sim.blizzardField);p.x=8;assert.equal(sim.blizzardField?.x,8);sim.update(10,false);assert.ok(sim.blizzardField);for(let i=0;i<161;i++)sim.update(.025);assert.equal(sim.blizzardField,null);sim.disguise('dz_penguin',2);sim.reset();assert.equal(sim.blizzardField,null);});
+test('offline damage settlement reads the creature current position rather than permanently mutating its damage',()=>{const w=world(),e=creature('wolf','idle',30);w.enemies=[e];assert.equal(w.enemyDamageFactor(e.id),.7);assert.equal(e.damage,10);e.z=40;assert.equal(w.enemyDamageFactor(e.id),1);});

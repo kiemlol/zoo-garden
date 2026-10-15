@@ -1,3 +1,4 @@
+import {aimPortrait} from '../src/hero-portrait.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -25,7 +26,7 @@ function checkCostume(root:T.Group,id:string){
 }
 
 test('complete bird costumes replace all original meshes for every body and height, including ears and animal hoods',()=>{
- const w=world();for(const id of ids)for(const body of ROWS.body)for(const height of ROWS.height){const look=`${body}-${height}-bunny-fox` as LookId,c=w.lookAvatar('#ff00ff',{disguise:id,hat:'hat_straw',outfit:'armor_knight',boots:'boots_rocket'},look);checkCostume(c,id);assert.equal(c.userData.look,DEFAULT_LOOK,'complete costume proportions are independent of the mirror body');assert.equal(c.userData.fit,undefined);}
+ const w=world();for(const id of ids)for(const body of ROWS.body)for(const height of ROWS.height){const look=`${body}-${height}-bunny-fox` as LookId,c=w.lookAvatar('#ff00ff',{disguise:id,hat:'hat_straw',outfit:'armor_knight',boots:'boots_rocket'},look);checkCostume(c,id);assert.equal(c.userData.look,look,'the selected mirror look also controls complete costumes');assert.ok(c.userData.fit['hand-right'],'retargeted hand anchors still accept held gear');}
 });
 test('idle, walking, jumping, attacks and belly-slide poses never reveal an original mesh',()=>{
  const w=world();for(const id of ids){w.state.gear.disguise=id;w.jump=new JumpState();w.player=w.lookAvatar('#00ffff',{disguise:id},DEFAULT_LOOK);
@@ -47,4 +48,15 @@ test('the original explorer and older disguises remain visible and styled after 
 test('a costume awaiting its GLB keeps the visible fallback, then replaces it once ready',()=>{
  const w=world(),ready=disguiseKit.ready;try{disguiseKit.ready=false;const c=w.lookAvatar('#ff00ff',{disguise:'dz_penguin'},DEFAULT_LOOK);assert.ok(meshes(c).some(m=>m.visible&&!m.name.startsWith('dz_penguin')));}finally{disguiseKit.ready=ready;}
  checkCostume(w.lookAvatar('#ff00ff',{disguise:'dz_penguin'},DEFAULT_LOOK),'dz_penguin');
+});
+
+
+test('costumes change height and build without exposing the base or mutating shared models',()=>{
+ const w=world(),size=(id:string,look:LookId)=>{const c=w.lookAvatar('#ff00ff',{disguise:id},look),bounds=new T.Box3(),part=new T.Box3();c.updateMatrixWorld(true);c.traverseVisible((o:T.Object3D)=>{if(o instanceof T.Mesh&&!o.userData.outline){o.geometry.computeBoundingBox();bounds.union(part.copy(o.geometry.boundingBox!).applyMatrix4(o.matrixWorld));}});checkCostume(c,id);return bounds.getSize(new T.Vector3());};
+ for(const id of ids){const heights=ROWS.height.map(h=>size(id,`boy-${h}-none-bare` as LookId).y);for(let i=1;i<heights.length;i++)assert.ok(heights[i]>heights[i-1],`${id}: ${heights}`);assert.ok(size(id,'sturdy-chibi-none-bare').x>size(id,'slim-chibi-none-bare').x);const before=size(id,DEFAULT_LOOK);size(id,'girl-grown-bunny-fox');assert.deepEqual(size(id,DEFAULT_LOOK),before,'shared kit geometry stays unchanged');}
+});
+
+
+test('portrait framing follows the visible costume head at every selected height',()=>{
+ const w=world();for(const id of ids)for(const h of ROWS.height){const c=w.lookAvatar('#fff',{disguise:id},`girl-${h}-none-bare`),holder=new T.Group().add(c),camera=new T.PerspectiveCamera(30,1,.01,100);aimPortrait(camera,holder);camera.updateMatrixWorld(true);holder.updateMatrixWorld(true);const bounds=new T.Box3(),box=new T.Box3();c.getObjectByName('head')!.traverseVisible((o:T.Object3D)=>{if(o instanceof T.Mesh&&!o.userData.outline){o.geometry.computeBoundingBox();bounds.union(box.copy(o.geometry.boundingBox!).applyMatrix4(o.matrixWorld));}});const centre=bounds.getCenter(new T.Vector3()).project(camera);assert.ok(Math.abs(centre.x)<.7&&Math.abs(centre.y)<.7&&centre.z<1,`${id} ${h}: ${centre.toArray()}`);}
 });

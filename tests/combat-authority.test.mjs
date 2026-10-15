@@ -46,6 +46,7 @@ test('boss crowd control resists charm and hard stun, while launch still interru
  boss.phase='windup';engine.sim.skill(2);engine.sim.update(.43);assert.ok(boss.liftVelocity>0);assert.equal(boss.phase,'chase');assert.ok(boss.stun>=.8);assert.ok(boss.statuses.slow>=.48);
 });
 test('magma turtle shell and recovery modifiers apply on the authoritative damage path',async t=>{
+ t.mock.method(Math,'random',()=>.5); // The armor comparison measures ordinary hits, not a random critical.
  const f=await fixture(t,{planet:'lava'}),enemy=f.spawn('magmaturtle');const engine=f.authority.engineFor(f.peer),before=enemy.hp;
  f.authority.basic(f.peer,enemy.id);const armored=before-enemy.hp;assert.ok(armored>0&&armored<4);engine.nextBasic=0;enemy.phase='recover';const hp=enemy.hp;f.authority.basic(f.peer,enemy.id);assert.ok(hp-enemy.hp>armored*5);
 });
@@ -330,4 +331,23 @@ test('server net root prevents snapshots from moving a trapped creature until th
  f.authority.skill(f.peer,2);t.mock.timers.tick(50);assert.equal(enemy.statuses.root,2.5);
  const before=enemy.z;f.authority.acceptSnapshots(f.room,[{id:enemy.id,type:enemy.type,x:enemy.x,z:before+1}]);assert.equal(enemy.z,before);
  for(let i=0;i<52;i++)t.mock.timers.tick(50);assert.equal(enemy.statuses.root,0);f.authority.acceptSnapshots(f.room,[{id:enemy.id,type:enemy.type,x:enemy.x,z:before+1}]);assert.equal(enemy.z,before+1);
+});
+
+test('penguin storm weakens canonical melee and shots only while the creature is inside the moving field',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_penguin';p.bag.dz_penguin=1;}}),enemy=f.spawn('mushroom',-30,3),engine=f.authority.engineFor(f.peer);enemy.hp=enemy.maxHp=10000;enemy.damage=100;
+ f.authority.skill(f.peer,2);const defense=Game.defense(f.account.profile)+engine.sim.defenseBonus,expected=Math.max(1,Math.round(100*.7*60/(defense+60)));
+ for(const source of ['melee','shot']){engine.damageAt=0;engine.healthEvents=[];f.authority.damage(f.peer,enemy.id,source);assert.equal(-engine.healthEvents[0].amount,expected);}
+ enemy.z=20;engine.damageAt=0;engine.healthEvents=[];f.authority.damage(f.peer,enemy.id,'shot');assert.equal(-engine.healthEvents[0].amount,Math.max(1,Math.round(100*60/(defense+60))));
+ enemy.z=3;engine.sim.reset();engine.damageAt=0;engine.healthEvents=[];f.authority.damage(f.peer,enemy.id);assert.equal(-engine.healthEvents[0].amount,Math.max(1,Math.round(100*60/(defense+60))));
+});
+test('canonical storm blocks dash snapshots crossing the whole area and refuses the interrupted contact hit',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_penguin';p.bag.dz_penguin=1;}}),enemy=f.spawn('boar',-30,9),engine=f.authority.engineFor(f.peer);enemy.hp=enemy.maxHp=10000;f.authority.skill(f.peer,2);t.mock.timers.tick(500);
+ enemy.phase='charge';f.authority.acceptSnapshots(f.room,[{id:enemy.id,type:enemy.type,x:-30,z:-3,phase:'charge'}]);assert.equal(enemy.phase,'recover');assert.ok(enemy.z>=f.peer.pose.z+4.8+enemy.radius);assert.ok(enemy.blizzardBlockedUntil>Date.now());engine.damageAt=0;engine.healthEvents=[];f.authority.damage(f.peer,enemy.id);assert.equal(engine.healthEvents.length,0);
+});
+test('a teammate storm provides the same protection and the requested cooldowns are enforced by authority',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_penguin';p.bag.dz_penguin=1;}}),engine=f.authority.engineFor(f.peer),enemy=f.spawn('mushroom',-30,3);enemy.hp=enemy.maxHp=10000;
+ f.authority.skill(f.peer,2);assert.equal(engine.nextSkill[2]-Date.now(),10000);
+ const friend={...f.peer,account:{...f.account,id:'friend'},pose:{...f.peer.pose},socket:{}};f.peers.set('friend',friend);f.room.members.add('friend');const other=f.authority.engineFor(friend);other.damageAt=0;f.authority.damage(friend,enemy.id);const defense=Game.defense(friend.account.profile);assert.equal(-other.healthEvents[0].amount,Math.max(1,Math.round(enemy.damage*.7*60/(defense+60))));
+ engine.sim.reset();f.authority.skill(f.peer,1);assert.equal(engine.nextSkill[1]-Date.now(),6000);engine.sim.reset();f.authority.skill(f.peer,3);assert.equal(engine.nextSkill[3]-Date.now(),7000);
+ f.account.profile.gear.disguise='dz_explorer_duck';f.account.profile.bag.dz_explorer_duck=1;f.authority.engineFor(f.peer);engine.nextSkill.fill(0);f.authority.skill(f.peer,1,{x:-26,z:1});assert.equal(engine.nextSkill[1]-Date.now(),5000);engine.sim.reset();f.authority.skill(f.peer,2);assert.equal(engine.nextSkill[2]-Date.now(),9000);
 });

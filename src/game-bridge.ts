@@ -35,7 +35,7 @@ export interface GameBridge {
   applyRemoteDamage(amount:number,source?:string):void;
   /** The server's health count of one of this explorer's summons (0: it popped). */
   applyDecoyHp(id:number,hp:number,kind:string,x:number,z:number):void;
-  applyRemoteEffect(effect:CombatEffect):void;
+  applyRemoteEffect(effect:CombatEffect,owner?:string):void;
   setVisiting(owner:string|null,homeState?:Partial<SaveState>):void;
   showNotice(text:string):void;
   /** AI neighbours (bots.ts): does the player already have this item; hand over a gift (items and/or energy; false when it cannot be given now); may a neighbour walk up and talk now. */

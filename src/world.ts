@@ -1,3 +1,5 @@
+import {inBlizzard,blizzardDamageFactor,blizzardDashContact,isCreatureDash,interruptBlizzardDash,type BlizzardField} from './blizzard.ts';
+import {fitBirdDisguise} from './bird-disguise-fit.ts';
 import {BIRD_SKILLS} from './bird-skills.ts';
 import {MOSSLUG,PANGOLIN,inHabitat,shellBlocks,slimeAt,type SlimePatch} from './wild-creatures.ts';
 import {disguiseForm} from './disguise-form.ts';
@@ -738,10 +740,10 @@ export class World {
     const disguise=gear.disguise?M.DISGUISES[gear.disguise]:undefined,id=gear.disguise??'';
     const kitDisguise=!!id&&!!this.kitFor(id)&&heroKit.ready,fullBodyDisguise=kitDisguise&&Object.hasOwn(BIRD_SKILLS,id);
     // A body style downloads on first use; the default explorer stands in until it arrives.
-    // Complete costumes use their authored proportions, independent of the underlying mirror body.
-    const combo=fullBodyDisguise?DEFAULT_LOOK:toLook(look)??DEFAULT_LOOK,styled=heroKitFor(combo);if(styled!==heroKit&&!styled.requested)void styled.load().then(()=>{if(styled.ready)this.refreshAvatars();});
+    // Complete costumes keep a hidden base rig; their own geometry is fitted continuously to the selected look.
+    const combo=toLook(look)??DEFAULT_LOOK,styled=heroKitFor(fullBodyDisguise?DEFAULT_LOOK:combo);if(styled!==heroKit&&!styled.requested)void styled.load().then(()=>{if(styled.ready)this.refreshAvatars();});
     const base=styled.ready&&heroKit.ready?styled:heroKit,tint=disguise&&!kitDisguise?disguise.color:color,c=base.instance(tint)??this.chibi(tint);
-    c.userData.look=base===heroKit?DEFAULT_LOOK:combo;const fit=fitOf(combo);if(base!==heroKit&&Object.keys(fit).length)c.userData.fit=fit;
+    c.userData.look=fullBodyDisguise?combo:base===heroKit?DEFAULT_LOOK:combo;const fit=fitOf(combo);if(base!==heroKit&&Object.keys(fit).length)c.userData.fit=fit;
     // The sprout pokes through hats and most costumes; the fairy crown and hero mask leave it showing.
     // A hat kept under a costume is not drawn (below), so only the costume decides then.
     const top=id?kitDisguise&&['dz_fairy','dz_superhero'].includes(id):!gear.hat,leaf=c.getObjectByName('head-leaf');if(leaf)leaf.visible=top;tuckEars(c,!top);
@@ -757,6 +759,7 @@ export class World {
     // Hiding only the shirt leaves skin, shorts, hair, backpack and styled tails poking through when posed.
     if(fullBodyDisguise)c.traverse(o=>{if(o instanceof T.Mesh)o.visible=false;});
     if(kitDisguise)this.wearKit(c,id,'body');
+    if(fullBodyDisguise)fitBirdDisguise(c,id,combo);
     if(gear.weapon&&!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);
     // Up to two pets beside them (pet-slots.ts): the first on the left as ever, the second on the right; with their dog out (drawn by dog-world.ts on the left) the one pet takes the right.
     for(let i=0;i<2;i++){const id=M.companionId(gear,i);if(!id)break;const pet=this.petFor(id);pet.name='remote-pet';pet.position.set(i||M.dogWorn(gear)?1:-1,0,-.6);c.add(pet);}
@@ -1364,9 +1367,14 @@ export class World {
     const safe=(this.planet==='home'?18:11)+1.5;
     return Math.hypot(point.x,point.z)>=Math.min(safe,Math.hypot(e.x,e.z))-.001;
   }
+  /** Local live storm plus other players' latest shared storm centres. */
+  blizzardFields?:()=>readonly BlizzardField[];
+  enemyDamageFactor(id:string|undefined){const e=id?this.enemies.find(e=>e.id===id):undefined;return e?blizzardDamageFactor(e,this.blizzardFields?.()??[]):1;}
+  private blockBlizzardDash(e:Enemy,to:Point){if(!isCreatureDash(e))return false;const at=blizzardDashContact(e,to,this.blizzardFields?.()??[]);if(!at)return false;interruptBlizzardDash(e,at);return true;}
   private moveCreature(e:Enemy,dx:number,dz:number,allowVoid=false){
+    if(this.blockBlizzardDash(e,{x:e.x+dx,z:e.z+dz}))return;
     if((e.statuses?.root??0)>0)return;
-    if((e.statuses?.iceSlow??0)>0){dx*=.5;dz*=.5;}
+    if((e.statuses?.iceSlow??0)>0||inBlizzard(e,this.blizzardFields?.()??[])){dx*=.5;dz*=.5;}
     const obstacles=this.creatureObstacles(),options=this.navigationOptions(e.radius,true);
     options.walkable=p=>this.creatureWalkable(e,p,allowVoid);
     this.resolveOverlap(e,obstacles,options.clearance!);
@@ -1466,6 +1474,7 @@ export class World {
     if(!e.titanAttacks?.length)return;if(e.hp<=0){e.titanAttacks=[];e.titanLift=0;return;}
     const environment=this.environment;
     for(const a of e.titanAttacks){const result=stepTitanAttack(a,dt,e,this.titanTargets());
+      if(result.move){const at=blizzardDashContact(e,result.move,this.blizzardFields?.()??[]);if(at){interruptBlizzardDash(e,at);a.age=a.life;continue;}}
       if(authoritative)for(const hit of result.hits){const cls=attackClass(a.skill);if(hit.id===(this.localPlayerId??'local'))this.onDamage(e.damage*hit.multiplier,hit.source,e.id,cls);else if(!this.remoteDodges(hit.id,cls))this.onRemoteDamage?.(hit.id,e.damage*hit.multiplier,hit.source,e.id);if(this.environment!==environment)return;}
       // Each client applies its own pull from shared state; damage still belongs to the host.
       for(const p of result.pulls)if(p.id===(this.localPlayerId??'local'))this.move(p.x,p.z,true);
@@ -1596,6 +1605,7 @@ export class World {
     marker.update(dt,this.time,{x:e.mesh.position.x,y:ground,z:e.mesh.position.z,footprint:data.footprint*s,height:e.mesh.position.y-ground+this.modelHeight(e)},e.radius);
   }
   private updateEnemyAi(e:Enemy,dt:number){
+    if(this.blockBlizzardDash(e,e))return;
     if(e.driver){if(e.statuses)for(const key of ['iceSlow','attackSlow','root','compassMark'])e.statuses[key]=Math.max(0,(e.statuses[key]??0)-dt);return;}
     e.cooldown=Math.max(0,e.cooldown-dt*((e.statuses?.attackSlow??0)>0?.5:1));this.updateTitanAttacks(e,dt);if(e.phase==='titan-leap'&&e.titanAttacks?.some(a=>a.skill==='leap'))return;e.stun=Math.max(0,e.stun-dt);e.routeTime=Math.max(0,(e.routeTime??0)-dt);
     if(e.statuses)for(const key in e.statuses)e.statuses[key]=Math.max(0,e.statuses[key]-dt); // no key array per creature per step
@@ -1643,6 +1653,7 @@ export class World {
     if(e.phase==='charge'){
       const dx=(e.targetX??e.x)-e.x,dz=(e.targetZ??e.z)-e.z,d=Math.hypot(dx,dz);
       if(d>.1)this.moveCreature(e,dx/d*(e.skill==='charge'?18:13)*dt,dz/d*(e.skill==='charge'?18:13)*dt);
+      if(e.phase!=='charge')return;
       if(target&&distance<(e.boss&&e.skill==='charge'?e.radius+.6:def.reach+.4)&&!e.mesh.userData.chargeHit){this.hitEnemyTarget(target,e.damage*1.3,'melee',e.id,attackClass(e.boss?'charge':'rush'));e.mesh.userData.chargeHit=true;}
       e.phaseTime=(e.phaseTime??0)-dt;if((e.phaseTime??0)<=0||d<.3){e.phase='recover';e.phaseTime=e.boss?.7:.45;e.cooldown=def.cooldown*bossCooldownScale(e);}return;
     }
@@ -1703,7 +1714,7 @@ export class World {
     }
     if(e.phase==='roll'){
       const dx=(e.targetX??e.x)-e.x,dz=(e.targetZ??e.z)-e.z,d=Math.hypot(dx,dz)||1,old={x:e.x,z:e.z};
-      this.moveCreature(e,dx/d*PANGOLIN.rollSpeed*dt,dz/d*PANGOLIN.rollSpeed*dt);e.mesh.rotation.y=Math.atan2(dx,dz);
+      this.moveCreature(e,dx/d*PANGOLIN.rollSpeed*dt,dz/d*PANGOLIN.rollSpeed*dt);if(e.phase!=='roll')return true;e.mesh.rotation.y=Math.atan2(dx,dz);
       if(Math.hypot(e.x-old.x,e.z-old.z)<PANGOLIN.rollSpeed*dt*.5&&target){
         this.moveCreature(e,-dx/d*.3,-dz/d*.3);
         const hit=this.creatureObstacles().find(o=>Math.hypot(e.x-o.x,e.z-o.z)<o.r+e.radius+.7);

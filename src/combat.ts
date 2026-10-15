@@ -173,6 +173,9 @@ export class CombatSimulation {
   private host:CombatHost; private random:()=>number; private time=0; private serial=0; private combo=0;
   /** Damage factor of the levelled skill being cast; delayed hits keep the factor they were cast with. */
   private power=1;private giantStep=0;private lastStep:CombatPoint|null=null;private petCooldown=0;private pet2Cooldown=0;private dogCooldown=0;
+  private blizzardUntil=0;
+  /** A live, moving field shared with navigation and authoritative damage settlement. */
+  get blizzardField(){return this.time<this.blizzardUntil?{...this.host.position(),radius:BIRD.blizzard.radius}:null;}
   private birdZones:{at:CombatPoint;to?:CombatPoint;until:number;kind:'ice'|'net'|'fire';hit:Set<string>;next:number;damage:(t:CombatTarget,p:number,s?:number,l?:number,k?:number)=>number}[]=[];
   private jobs:Scheduled[]=[]; private action:{kind:'dash'|'slam'|'ready'|'rest';until:number;started:number;direction:CombatPoint;speed:number;multiplier:number;hit:Set<string>;
     /** A Quake of the moves: when its ring lands (the leap's top is timed to it). An air dash: it may still turn once. */ peak?:number; air?:boolean; turned?:boolean;
@@ -264,7 +267,7 @@ export class CombatSimulation {
   /** Seconds the dash in progress still runs (0 when there is none). */
   get dashLeft(){return this.action?.kind==='dash'?Math.max(0,this.action.until-this.time):0;}
   get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0||(this.statuses.invuln??0)>0;}
-  reset(){this.birdZones=[];this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  reset(){this.blizzardUntil=0;this.birdZones=[];this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook,quiet=false){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,...(look?{look}:{}),...(quiet?{quiet:true}:{}),...this.up(point)});}
@@ -520,7 +523,8 @@ export class CombatSimulation {
       this.action={kind:'dash',bird:slide?'slide':'grapple',started:this.time,until:this.time+duration,direction:dir,speed:K.speed,multiplier:0,hit:new Set(),birdHit:damage,trailAt:this.time,trailFrom:p};
       if(!slide)visual(effect,p,.25,duration,to);
     }else if(effect==='penguin-blizzard'){
-      for(let i=0;i<40;i++)this.later(i*.1,()=>{const at=this.host.position();visual('penguin-blizzard',at,BIRD.blizzard.radius,.2);for(const t of this.within(at,BIRD.blizzard.radius))this.host.status?.(t,'attackSlow',.2);if(i%10===0)for(const t of this.within(at,BIRD.blizzard.radius))damage(t,BIRD.blizzard.power);});
+      this.blizzardUntil=this.time+BIRD.blizzard.time;
+      for(let i=0;i<BIRD.blizzard.time*10;i++)this.later(i*.1,()=>{const at=this.host.position();visual('penguin-blizzard',at,BIRD.blizzard.radius,Math.min(.2,BIRD.blizzard.time-i*.1));for(const t of this.within(at,BIRD.blizzard.radius))this.host.status?.(t,'attackSlow',.2);if(i%10===0)for(const t of this.within(at,BIRD.blizzard.radius))damage(t,BIRD.blizzard.power);});
     }else if(effect==='frozen-fish'){
       const to=birdLanding(p,aim,angle,BIRD.fish.range);this.busyUntil=this.time+.25;
       for(let i=0;i<BIRD.fish.count;i++)this.later(i*BIRD.fish.gap,()=>{const landing={x:to.x+Math.sin(angle+Math.PI/2)*(i-1)*1.2,z:to.z+Math.cos(angle+Math.PI/2)*(i-1)*1.2};visual('frozen-fish',this.host.position(),BIRD.fish.radius,BIRD.fish.flight,landing);this.later(BIRD.fish.flight,()=>{this.emit('ring',landing,BIRD.fish.radius,'#b8efff');for(const t of this.within(landing,BIRD.fish.radius)){damage(t,BIRD.fish.power);if(t.hp>0)this.host.status?.(t,'stun',BIRD.fish.stun);}});});

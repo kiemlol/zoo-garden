@@ -311,6 +311,7 @@ const minimap=new Minimap($<HTMLCanvasElement>('#minimap'),$('#map-caption'),()=
 const movement = new MovementControls(world.keys);
 const joystick=mountJoystick($('#hud'),()=>started&&!uiBlocked()&&!placement&&!flight,direction=>{world.joystickInput=direction;});
 const combatView=new CombatView(world.scene);
+const remoteBlizzards=new Map<string,{x:number;z:number;radius:number;until:number}>();
 const birdFx=new BirdSkillView(world.scene,(x,z)=>world.interior?0:Math.max(0,terrainHeight(world.environment.layout,{x,z})),(x,z)=>Math.hypot(world.position.x-x,world.position.z-z)<1.5?world.player:null,()=>world.enemies);
 // Laser gaze beams, electric bolts and bursts, scorch marks and the ⚡ mark (skill-fx.ts), for the explorer and remote players alike.
 const skillFx=new SkillFx(world.scene,world.fx??null,{
@@ -340,10 +341,12 @@ const combat=new CombatSimulation({
   status:(target,kind,duration)=>{if(dungeonApi?.owns(target)||ctfApi?.owns(target)||rescueApi?.owns(target)){world.statusEnemy(target as Enemy,kind,duration);return;}if(actionHandler)return;if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
   moveTarget:(target,x,z)=>{if(dungeonApi?.owns(target)||ctfApi?.owns(target)||rescueApi?.owns(target)){moveEnemy(target as Enemy,x,z);return;}if(actionHandler)return;if(!network.moveTarget?.(target.id,x,z))moveEnemy(target as Enemy,x,z);},
 });
+world.blizzardFields=()=>{const own=combat.blizzardField,fields:{x:number;z:number;radius:number}[]=own?[own]:[];for(const [owner,f]of remoteBlizzards){if(f.until<=world.time)remoteBlizzards.delete(owner);else fields.push(f);}return fields;};
 combatHud.isMarked=id=>combat.marked.has(id);
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 // Swings become additive slash trails and area skills become expanding rings with sparks.
-function showEffect(effect:CombatEffect){
+function showEffect(effect:CombatEffect,owner='self'){
+  if(effect.look==='penguin-blizzard'&&owner!=='self')remoteBlizzards.set(owner,{x:effect.x,z:effect.z,radius:effect.radius,until:world.time+(effect.duration??.2)});
   const fx=world.fx,at={x:effect.x,z:effect.z},up=Math.max(0,Math.min(8,effect.y??0)); // `up`: the height a cast from the air began at (air-cast.ts)
   if(effect.quiet)return; // a repeat tick of a cast already drawn (the whirlwind's hits)
   if(birdFx.play(effect)){if((effect.look==='penguin-peck'||effect.look==='duck-dagger')&&Math.hypot(effect.x-world.position.x,effect.z-world.position.z)<.5)world.playerAttack(effect.look==='duck-dagger'?'sword':'fist');return;}
@@ -1648,6 +1651,7 @@ world.onDamage=(amount,source='melee',enemyId,cls='body')=>{
   // The knight's raised shield stops blows and shots from creatures in front (combat.blocks).
   // A shot is also bounced back at its shooter (combat.reflect; world.ts flies the ball home).
   {const from=enemyId?world.enemies.find(e=>e.id===enemyId):undefined;if(from&&combat.blocks(from)){world.fx?.burst(world.position,{n:6,color:['#fff3c4','#ffffff'],glow:true,size:.12,speed:3,up:2,y:1});if(source==='shot'){combat.reflect(from,Math.hypot(from.x-world.position.x,from.z-world.position.z)/DZ.block.speed);tone('hit');}return;}}
+  amount*=world.enemyDamageFactor(enemyId);
   const defense=M.activeStats(state).defense+combat.defenseBonus+(combat.statuses.armor>0?80:0),damage=Math.max(1,Math.round(amount*60/(defense+60)));
   if(fishGame)endFishing('The fish got away when you were hit.');
   if(enemyId){const from=world.enemies.find(e=>e.id===enemyId);if(from?.type==='pangolin'&&from.phase==='roll')world.playerStun=PANGOLIN.stun;}
@@ -1663,7 +1667,7 @@ world.localDecoys=()=>combat.decoys();
 world.playerBlocks=from=>combat.blocks(from);
 world.onDecoyDamage=(owner,id,amount,source,enemyId)=>{
   if(network.role){if(network.role==='host'&&enemyId)network.reportDecoy?.(owner,id,enemyId,source);return;}
-  if(owner===null)combat.hurtAlly(id,amount);
+  if(owner===null)combat.hurtAlly(id,amount*world.enemyDamageFactor(enemyId));
 };
 watchTabScroll($('#dialog-body'));
 const gardenGuide=mountGardenGuide({world,hud:$('#hud'),state:()=>state,bedAt:i=>M.bedPosition(state,i),active:()=>started&&!uiBlocked()&&!visiting&&!world.interior&&state.hp>0&&world.state===state&&world.planet==='home'});frameListeners.add(dt=>gardenGuide.frame(dt));
@@ -1678,7 +1682,7 @@ combatView.extraAllies=()=>{
   if(remoteSummonIds.size>256)remoteSummonIds.clear();
   return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
 };
-function resetCombat(){venom.clear();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();birdFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){remoteBlizzards.clear();venom.clear();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();birdFx.clear();world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
@@ -1705,7 +1709,7 @@ export const gameBridge:GameBridge={
   applyRemoteStatus(id,kind,duration){const enemy=world.enemies.find(e=>e.id===id);if(enemy)world.statusEnemy(enemy,kind,Math.min(12,duration));},
   applyRemoteMove(id,x,z){const enemy=world.enemies.find(e=>e.id===id);if(enemy)moveEnemy(enemy,x,z);},
   applySharedKill(id,xp,boss,type){if(sharedKills.has(id))return;sharedKills.add(id);if(sharedKills.size>500)sharedKills.delete(sharedKills.values().next().value!);const enemy=world.enemies.find(e=>e.id===id);grantDefeat({id,xp,boss,type,x:enemy?.x,z:enemy?.z});},
-  applyRemoteEffect(effect){showEffect(effect);},
+  applyRemoteEffect(effect,owner){showEffect(effect,owner);},
   applyRemoteDamage(amount,source){world.onDamage(amount,source==='shot'||source==='hazard'?source:'melee');},
   applyDecoyHp(id,hp,kind,x,z){
     // The server's copy of a summon may carry another id than this browser's: the same kind nearest the spot then.

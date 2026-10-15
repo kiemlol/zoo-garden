@@ -76,6 +76,8 @@ export function aimPortrait(camera: T.PerspectiveCamera, holder: T.Object3D): vo
     reach(m, up, allU); reach(m, right, allR);
     if (!isWorn(m)) { reach(m, up, faceU); reach(m, right, faceR); face.union(part); }
   });
+  // A complete disguise hides the original head; use its visible authored head instead of the chibi fallback.
+  if(face.isEmpty()&&Number.isFinite(allU.lo))root.traverseVisible(o=>{if(o instanceof T.Mesh&&!o.userData.outline){reach(o,up,faceU);reach(o,right,faceR);face.union(part);}});
   if (face.isEmpty()) { face.setFromCenterAndSize(mid.set(0, 1.6, 0), half.set(1.2, 1.2, 1.2)); faceU.lo = allU.lo = 1.6 * up.y - .6; faceU.hi = allU.hi = 1.6 * up.y + .6; faceR.lo = allR.lo = -.6; faceR.hi = allR.hi = .6; }
   if (!head) { faceU.lo = allU.lo = (faceU.lo + faceU.hi) / 2; }
   const tall = faceU.hi - faceU.lo, wide = faceR.hi - faceR.lo, floor = faceU.lo - PORTRAIT.chin * tall;
