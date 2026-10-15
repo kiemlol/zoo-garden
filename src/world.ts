@@ -37,7 +37,8 @@ import { QUALITY, type QualityProfile } from './graphics.ts';
 import { CropCards, CROP_PRESENTATION_SCALE, SOIL_Y, cropStage, popScale, stageScale, type BedCrop } from './crop-cards.ts';
 import { GardenBeds } from './garden-beds.ts';
 import { PlacementGhost } from './placement-ghost.ts';
-import {GhostCarriageRide} from './ghost-carriage.ts';
+import {GhostCarriageRide,drawCarriagePassenger} from './ghost-carriage.ts';
+import type {CarriagePose} from './carriage-pose.ts';
 import { FarmPenView, farmKit, PEN_PROPS, BACK_FENCE, BACK_FENCE_Z } from './farm-view.ts';
 import { GuardDogs } from './dog-world.ts';
 import { PetCompanion } from './pet-world.ts';
@@ -88,7 +89,7 @@ export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;
 /** A boss attacks faster as it weakens, like the reference (bundle @837714): ×0.7 below half health, ×0.6 once enraged.
  * Applies to its skills and its basic attacks and charges alike. */
 export const bossCooldownScale=(e:{boss:boolean;hp:number;maxHp:number;enraged?:boolean})=>e.boss?(e.hp<e.maxHp*.5?.7:1)*(e.enraged?.6:1):1;
-export interface AvatarVisual {hidden?:boolean;size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean}
+export interface AvatarVisual {hidden?:boolean;size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean;carriage?:CarriagePose|null}
 export interface Enemy {wildCooldown?:number;titanAttacks?:TitanAttack[];titanLift?:number}
 /** An enemy run by its own module (colossus.ts): no generic AI or drawing here; `incoming` may scale a blow before it lands. */
 export interface Enemy {driver?:{incoming(e:Enemy,amount:number,hazard:boolean):number}}
@@ -568,7 +569,7 @@ export class World {
     this.syncCrops();this.syncBeds();
   }
   build(planet: PlanetId) {
-    this.carriage?.leave();
+    if(planet!==this.planet)this.carriage?.leave();
     // A rebuild (travel, visiting, reset) always lands outdoors.
     if(this.interior){const inside=this.interior;this.interior=null;inside.drop();}
     this.slimePatches=[];this.playerStun=0;this.playerSlip=0;this.farmView?.dispose();this.farmView=undefined;this.titanView?.clear();this.joystickInput=null;
@@ -999,14 +1000,14 @@ export class World {
     return null;
   }
   syncDecorations(){
-    this.carriage?.leave();
     if(this.state.decorations?.some(d=>d.id==='deco_ghost_carriage')&&!festivalKit.requested)void festivalKit.load().then(()=>{if(festivalKit.ready&&this.planet==='home')this.syncDecorations();});
     for(const e of this.entities.filter(e=>e.kind==='decoration')){this.root.remove(e.mesh);this.disposeTree(e.mesh);}
     this.entities=this.entities.filter(e=>e.kind!=='decoration');this.obstacles=this.obstacles.filter(o=>!o.tag?.startsWith('decor:'));
-    if(this.planet!=='home')return;
+    if(this.planet!=='home'){this.carriage?.leave();return;}
     for(const d of this.state.decorations??[]){const item=M.ITEMS[d.id];if(!item)continue;const g=buildDecoration(d.id);
       g.rotation.y=d.rotation;const e=this.addEntity('decoration',item.name,item.icon??'🏡',g,d.x,d.z,item.collider??.9);e.id=`home:decoration:${d.uid}`;g.userData.decorationUid=d.uid;this.obstacles.push({x:d.x,z:d.z,r:item.collider??.65,tag:'decor:'+d.uid});
     }
+    this.carriage?.rebind();
   }
   groundPoint(clientX:number,clientY:number){this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);const p=this.raycaster.ray.intersectPlane(new T.Plane(UP,0),new T.Vector3());return p?{x:p.x,z:p.z}:null;}
   knockUpEnemy(e:Enemy,height=2,duration=.8){e.liftVelocity=Math.max(e.liftVelocity??0,Math.sqrt(Math.max(0,liftHeight(e.boss,height))*24));e.stun=Math.max(e.stun,duration);}
@@ -1061,6 +1062,10 @@ export class World {
       if(l.legL)l.legL.rotation.x=0;if(l.legR)l.legR.rotation.x=0;if(l.armL)l.armL.rotation.x=0;if(l.armR)l.armR.rotation.x=0;
       const bob=applyGait(l,g,gaitSwing(u.speed,leg)),body=m.children[0];if(body)body.position.y=bob;
       if(flying){superheroFlightPose(m,moving&&remote.pose.gear?.disguise==='dz_superhero');if(body)body.position.y=0;g.blend=0;}
+      const passenger=remote.pose.visual?.carriage;
+      if(passenger){if(body)body.position.y=0;g.blend=0;drawCarriagePassenger(m,passenger);}
+      else if(u.wasPassenger){m.rotation.x=m.rotation.z=0;for(const name of ['leg-left','leg-right','arm-left','arm-right','head'])part(m,name)?.rotation.set(0,0,0);m.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,remote.pose.visual?.size??1)));}
+      u.wasPassenger=!!passenger;
       // Their pet waits at their own pen while they are in the safe village (pet-pen.ts): it is drawn beside them only away from it.
       const pets=(u.pets??=m.children.filter(o=>o.name==='remote-pet')) as T.Object3D[],follows=pets.length>0&&petFollows(remote.pose.planet??this.planet,remote.pose);for(const pet of pets)pet.visible=follows;
     }
@@ -1072,8 +1077,8 @@ export class World {
       // Its jump height, for ground attacks (remoteDodges): read from the pose, and only for as long as a real jump can last.
       {const air=indoor||!this.environment?0:poseAir(ty,terrainHeight(this.environment.layout,current),current.visual?.flight?1.7:0),now=this.time??0;if(air>0){u.airSince??=now;u.air=now-u.airSince<=MAX_AIR_SECONDS?air:0;}else{u.airSince=undefined;u.air=0;}}
       if(!u.placed||Math.hypot(p.x-current.x,p.z-current.z)>8||Math.abs(p.y-ty)>3){p.set(current.x,ty,current.z);remote.mesh.rotation.y=u.target.f;u.placed=true;}}
-    this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=!current.visual?.hidden&&(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
-  visualSnapshot():AvatarVisual{return {hidden:this.playerHidden,size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat};}
+    this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(current.visual?.carriage?.scale??HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));if(current.visual?.carriage)drawCarriagePassenger(remote.mesh,current.visual.carriage);remote.mesh.visible=!current.visual?.hidden&&(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
+  visualSnapshot():AvatarVisual{return {hidden:this.playerHidden,size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat,carriage:this.carriage?.snapshot()??null};}
   private applyAvatarVisual(mesh:T.Group,visual?:Partial<AvatarVisual>){
     // Nothing to change until stealth first fades the explorer: a new avatar starts fully opaque, so it is never copied for opacity 1
     // (the copy used to replace the flash materials and the ink outlines' push-out shader, which Material.clone does not carry).
@@ -1151,7 +1156,7 @@ export class World {
   }
   /** A tap: an entity picked in screen space (or by the short raycast fallback), else a walk unless it would change nothing. */
   pointer(clientX:number,clientY:number) {
-    if(this.carriage?.active){this.carriage.leave();return;}
+    if(this.carriage?.active)return;
     if(this.onRemotePlayerClick&&this.remotePlayers?.size){this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);const meshes=[...this.remotePlayers.values()].filter(r=>r.mesh.visible).map(r=>r.mesh);for(const hit of this.raycaster.intersectObjects(meshes,true)){let o:T.Object3D|null=hit.object;while(o&&!o.userData.remoteId)o=o.parent;if(o){this.destination=null;this.route=[];this.selected=null;this.onRemotePlayerClick(o.userData.remoteId);return;}}}
     const entity=this.pickEntity(clientX,clientY);
     // A tap on a pond also says where to cast: the point under the finger on the water's surface (as the reference's plan()).
@@ -1219,7 +1224,7 @@ export class World {
   }
   private interactionRange(e:Entity) { return e.kind==='enemy'?attackRange(M.weaponStats(this.state),e.radius):e.radius+1.45; }
   select(e:Entity) {
-    if(this.carriage?.active){const same=this.carriage.entity===e;if(!this.carriage.leave()||same)return;}
+    if(this.carriage?.active)return;
     if(!this.validTarget(e))return;
     this.selected=e;this.ring.visible=e.kind!=='enemy'&&!e.pond;this.ring.scale.setScalar(e.radius);this.ring.position.set(e.x,.12,e.z);
     if(this.position.distanceTo(new T.Vector3(e.x,0,e.z))<=this.interactionRange(e)){this.destination=null;this.route=[];this.marker.visible=false;if(e.kind==='enemy')this.onAttackEnemy(e as Enemy);else {this.selected=null;this.ring.visible=false;this.onInteract(e);}return;}
@@ -1251,7 +1256,7 @@ export class World {
   private navigationOptions(clearance=.36,allowVoid=false):NavigationOptions{if(this.interior)return {bounds:WORLD_BOUNDS,clearance,gridSize:.5,walkable:this.interior.walkable};return {bounds:WORLD_BOUNDS,clearance,walkable:p=>Math.hypot(p.x,p.z)<=WORLD_BOUNDS&&(allowVoid||this.playerFlying||!this.environment||environmentWalkable(this.environment.layout,p))};}
   blocked(x:number,z:number) {return blocked({x,z},this.collisionObstacles(),this.navigationOptions());}
   walkTo(x:number,z:number,keepSelected=false) {
-    if(this.carriage?.active&&!this.carriage.leave())return;
+    if(this.carriage?.active)return;
     const distance=Math.hypot(x,z);if(distance>WORLD_BOUNDS-1){x*=((WORLD_BOUNDS-1)/distance);z*=((WORLD_BOUNDS-1)/distance);}if(!keepSelected)this.selected=null;
     if(this.blocked(x,z)){const obstacle=this.collisionObstacles().find(o=>Math.hypot(x-o.x,z-o.z)<o.r+.36);if(obstacle){const d=this.position.clone().sub(new T.Vector3(obstacle.x,0,obstacle.z)).normalize();x=obstacle.x+d.x*(obstacle.r+.6);z=obstacle.z+d.z*(obstacle.r+.6);}}
     this.destination=new T.Vector3(x,0,z);this.route=this.findPath(this.destination);this.marker.position.set(x,.08,z);this.marker.visible=true;
@@ -1270,7 +1275,7 @@ export class World {
     return nearest;
   }
   /** True when something was in reach to act on. */
-  interactNearest() {const e=this.nearest();if(e)this.select(e);return !!e;}
+  interactNearest() {if(this.carriage?.active){this.carriage.dismount();return true;}const e=this.nearest();if(e)this.select(e);return !!e;}
   boardCarriage(e:Entity){return (this.carriage??=new GhostCarriageRide(this)).board(e);}
   burst(x:number,z:number,color:string,count=14) {
     if(this.fx){this.fx.burst({x,z},{n:count,color:[color,'#ffffff'],speed:4,up:5,size:.13});this.fx.burst({x,z},{n:Math.ceil(count/2),color,glow:true,size:.12,speed:3,up:4,life:.5});return;}
@@ -1860,7 +1865,7 @@ export class World {
     this.onStep?.(dt);
     // The jump runs on the world's clock. Indoors, aboard the ship, thrown by the Colossus or carried by the world it ends at once.
     {const j=this.jump??=new JumpState();if(j.airborne&&(this.interior||this.boarded||(this.playerLift??0)>0||this.environment?.airborne))j.cancel();
-      if(active||simulateWorld){const landing=j.step(dt);if(landing&&!this.carriage?.active){this.landT=.2;this.onLanded?.(landing);}}}
+      if(active||simulateWorld||this.carriage?.active){const landing=j.step(dt);if(landing&&!this.carriage?.active){this.landT=.2;this.onLanded?.(landing);}}}
     this.environment??=new EnvironmentSimulation(createEnvironmentLayout(this.planet));this.enemyShots??=[];this.dynamicObstacles??=[];this.resourceTimers??=new Map();
     const environmentForFrame=this.environment;
     for(const e of this.enemies)if(e.hp>0&&e.type==='mosslug'){const u=e.mesh.userData;if(!u.trailAt||Math.hypot(e.x-u.trailAt.x,e.z-u.trailAt.z)>.65){u.trailAt={x:e.x,z:e.z};(this.slimePatches??=[]).push({x:e.x,z:e.z,life:MOSSLUG.trailLife});}}

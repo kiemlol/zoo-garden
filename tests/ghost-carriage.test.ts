@@ -13,7 +13,7 @@ async function scene(file:string){const b=readFileSync(new URL('../public/assets
 (festivalKit as any).loadScene=()=>scene('festival-gear.glb');(heroKit as any).loadScene=()=>scene('hero.glb');
 await Promise.all([festivalKit.load(),heroKit.load()]);
 function fixture(rotation=Math.PI/3){
-  const state=newGame();state.decorations=[{uid:1,id:GHOST_CARRIAGE,x:4,z:-4,rotation}];
+  const state=newGame();state.decorations=[{uid:'decor-1',id:GHOST_CARRIAGE,x:4,z:-4,rotation}];
   const w=Object.assign(Object.create(World.prototype),{
     state,scene:new T.Scene(),camera:new T.PerspectiveCamera(40,4/3,.5,300),root:new T.Group(),player:new T.Group(),companion:new T.Group(),position:new T.Vector3(),
     destination:null,route:[],selected:null,obstacles:[],entities:[],enemies:[],plotMeshes:[],cropSignatures:[],particles:[],keys:new Set<string>(),facing:0,time:0,planet:'home',hazardTimer:0,
@@ -22,6 +22,7 @@ function fixture(rotation=Math.PI/3){
   w.build('home');w.refreshPlayer();w.position.set(1.6,0,-4);w.update(.01,true,false);
   return {w,e:w.entities.find(e=>e.kind==='decoration')!};
 }
+function finishExit(w:World){for(let i=0;i<40;i++)w.update(.025,true,false);assert.equal(w.carriage?.active,false);}
 function settle(w:World){for(let i=0;i<40;i++)w.update(.025,true,false);assert.equal(w.carriage?.seated,true);}
 
 test('boarding uses the existing jump, shrinks into a rotated seat, and the green interaction dismounts',()=>{
@@ -35,7 +36,7 @@ test('boarding uses the existing jump, shrinks into a rotated seat, and the gree
   assert.equal(w.player.getObjectByName('leg-left')!.rotation.x,-Math.PI/2);
   const ratio=new T.Box3().setFromObject(w.player).getSize(new T.Vector3()).y/new T.Box3().setFromObject(e.mesh).getSize(new T.Vector3()).y;
   assert.ok(ratio>=.6&&ratio<=.7,`seated height ratio ${ratio}`);assert.ok(w.player.scale.x<HERO_SCALE);
-  assert.equal(w.nearest(),e);w.interactNearest();assert.equal(w.carriage!.active,false);
+  assert.equal(w.nearest(),e);w.interactNearest();assert.equal(w.carriage!.leaving,true);finishExit(w);
   assert.equal(w.jump.airborne,false);assert.equal(w.blocked(w.position.x,w.position.z),false);assert.equal(w.player.getObjectByName('leg-left')!.rotation.x,0);
   w.keys.add('ArrowRight');const old=w.position.clone();w.update(.05,true,false);assert.ok(w.position.distanceTo(old)>0);assert.ok(Math.abs(w.player.scale.x-HERO_SCALE)<1e-8);
 });
@@ -47,16 +48,16 @@ test('distant and stale carriages cannot board; clicking a distant carriage stil
   assert.equal(w.carriage?.active,true);w.carriage!.leave();e.mesh.visible=false;assert.equal(w.boardCarriage(e),false);
 });
 
-test('menus, a second interaction mid-jump, movement, removal, defeat and world changes release the passenger',()=>{
-  for(const seated of [false,true])for(const cancel of ['menu','button','move','remove','defeat','world','teleport'] as const){
+test('only explicit exit or movement dismounts; actual removal, defeat and world changes release stale state',()=>{
+  for(const seated of [false,true])for(const cancel of ['button','move','remove','defeat','world','teleport'] as const){
     const {w,e}=fixture();assert.equal(w.boardCarriage(e),true);if(seated)settle(w);else w.update(.1,true,false);
-    if(cancel==='menu')w.update(.025,false,false);
     if(cancel==='button')w.interactNearest();
     if(cancel==='move'){w.joystickInput={x:1,z:0};w.update(.025,true,false);}
-    if(cancel==='remove')w.syncDecorations();
+    if(cancel==='remove'){w.state.decorations=[];w.syncDecorations();}
     if(cancel==='defeat'){w.state.hp=0;w.update(.025,true,false);}
     if(cancel==='world')w.build('candy');
     if(cancel==='teleport'){w.position.set(-2,0,0);w.update(.025,true,false);assert.equal(w.position.x,-2);}
+    if(cancel==='button'||cancel==='move'){w.joystickInput=null;finishExit(w);}
     assert.equal(w.carriage!.active,false,`${cancel}, seated=${seated}`);assert.equal(w.jump.airborne,false);
     assert.equal(w.blocked(w.position.x,w.position.z),false,`${cancel} leaves free ground`);
     assert.equal(w.player.getObjectByName('leg-left')!.rotation.x,0);
@@ -87,8 +88,52 @@ test('repeated boarding and cancellation restores normal scale without accumulat
   const {w,e}=fixture();
   for(let i=0;i<12;i++){
     assert.equal(w.boardCarriage(e),true);if(i%2)settle(w);else w.update(.1,true,false);
-    assert.equal(w.carriage!.leave(),true);w.update(.025,true,false);
+    assert.equal(w.carriage!.leave(),true);for(let f=0;f<30;f++)w.update(.025,true,false);
     assert.ok(Math.abs(w.player.scale.x-HERO_SCALE)<1e-8);assert.equal(w.player.getObjectByName('leg-left')!.rotation.x,0);
     assert.equal(w.blocked(w.position.x,w.position.z),false);
   }
+});
+
+
+test('menus, ground taps, other objects and same-world rebuilds preserve the passenger',()=>{
+  for(const seated of [false,true]){
+    const {w,e}=fixture();assert.equal(w.boardCarriage(e),true);if(seated)settle(w);
+    for(let i=0;i<30;i++)w.update(.025,false,false);
+    assert.equal(w.carriage!.seated,true,'boarding finishes safely behind a menu');
+    const point=w.position.clone();w.pointer(400,300);w.steer(400,300);w.walkTo(0,0);w.select(w.entities.find(e=>e.kind==='shop')!);
+    assert.equal(w.carriage!.seated,true);assert.ok(w.position.distanceTo(point)<1e-8);
+    w.syncDecorations();w.build('home');w.update(.025,false,false);
+    assert.equal(w.carriage!.seated,true);assert.equal(w.carriage!.entity!.id,e.id);assert.ok(w.position.distanceTo(point)<1e-8);
+  }
+});
+
+test('repeated leave events and delayed interactions cannot automatically reboard',()=>{
+  const {w,e}=fixture();assert.equal(w.boardCarriage(e),true);settle(w);
+  assert.equal(w.carriage!.dismount(),true);
+  for(let i=0;i<12;i++){w.carriage!.dismount();w.interactNearest();w.update(.025,true,false);}
+  while(w.carriage!.active)w.update(.025,true,false);
+  w.onInteract=entity=>{w.boardCarriage(entity);};
+  for(let i=0;i<5;i++){w.interactNearest();assert.equal(w.carriage!.active,false);w.update(.025,true,false);}
+  assert.equal(w.selected,null);assert.equal(w.destination,null);
+  for(let i=0;i<100;i++)w.update(.025,true,false);
+  assert.equal(w.carriage!.active,false,'idle frames do not board again');
+});
+
+test('changing gardens does not attach the rider to a different carriage with the same decoration ID',()=>{
+  const {w,e}=fixture();w.boardCarriage(e);settle(w);
+  w.state=structuredClone(w.state);w.build('home');
+  assert.equal(w.carriage!.active,false);assert.equal(w.blocked(w.position.x,w.position.z),false);
+});
+
+test('remote poses preserve seated scale through menus and incremental updates, then clear on dismount',()=>{
+  const {w,e}=fixture();w.boardCarriage(e);settle(w);
+  const pose=w.visualSnapshot(),at=w.position.clone();assert.equal(pose.carriage!.phase,'seated');
+  w.addRemotePlayer('passenger',{x:at.x,z:at.z,y:w.player.position.y,visual:pose});w.update(.025,false,false);
+  const remote=w.remotePlayers.get('passenger')!.mesh;
+  assert.equal(remote.getObjectByName('leg-left')!.rotation.x,-Math.PI/2);assert.equal(remote.scale.x,pose.carriage!.scale);
+  w.updateRemotePlayer('passenger',{x:at.x,z:at.z,hp:80});w.update(.025,false,false);
+  assert.equal(remote.getObjectByName('leg-left')!.rotation.x,-Math.PI/2);
+  w.carriage!.dismount();w.update(.1,true,false);assert.equal(w.visualSnapshot().carriage!.phase,'leaving');finishExit(w);
+  w.updateRemotePlayer('passenger',{x:w.position.x,z:w.position.z,y:0,visual:w.visualSnapshot()});w.update(.025,true,false);
+  assert.equal(remote.getObjectByName('leg-left')!.rotation.x,0);assert.equal(remote.scale.x,HERO_SCALE);
 });
