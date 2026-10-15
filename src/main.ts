@@ -300,6 +300,7 @@ initDockFraming(world.camera); // desktop menus dock right; slide the picture so
 // Your guard dog: none while visiting someone else's garden (it stays at your own pen).
 world.ownDog=()=>visiting?null:dogCoatOf(state);
 world.petStaysHome=()=>!!visiting; // and your pet waits there too (pet-pen.ts)
+world.joystickEnabled=joystickEnabled;
 world.applyGraphics(graphics.profile, graphics.ratio);world.fx?.setTextLayer($('#floating-text'));
 // Over-head HP bars, target frame and boss bar; the trackers fold to a chip in fights ('auto'), or as the player asks.
 // The timed bonus line (hud-challenge.ts) and the desktop keyboard guide (hud-keys.ts).

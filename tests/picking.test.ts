@@ -22,6 +22,48 @@ function world(camera:T.Camera=ortho()) {
 }
 const block=(size:number)=>{const g=new T.Group(),m=new T.Mesh(new T.BoxGeometry(size,size,size),new T.MeshBasicMaterial());m.position.y=size/2;g.add(m);return g;};
 
+test('joystick setting blocks ground taps and holds, and disabling it restores both immediately',()=>{
+  for(const input of ['pointer','steer'] as const){
+    const w=world();let enabled=true,walks=0;
+    w.joystickEnabled=()=>enabled;w.marker.visible=false;w.ring.visible=false;
+    const walkTo=w.walkTo.bind(w);w.walkTo=(...args)=>{walks++;walkTo(...args);};
+    const gestures=new GroundGestures({tap:(x,y)=>w.pointer(x,y),walk:(x,y)=>w.steer(x,y),zoom(){},stop(){}});
+    const press=()=>{gestures.down(1,400,300);gestures.update(input==='pointer'?.1:.3);gestures.up(1);};
+    press();
+    assert.equal(walks,0);assert.equal(w.destination,null);assert.deepEqual(w.route,[]);
+    assert.equal(w.marker.visible,false);assert.equal(w.ring.visible,false);assert.equal(w.selected,null);
+    enabled=false;press();
+    assert.equal(walks,1);assert.ok(w.destination);assert.ok(w.destination!.length()<.001);
+    assert.ok(w.route.length>0);assert.equal(w.marker.visible,true);
+    enabled=true;w[input](400+2*PX,300);
+    assert.equal(walks,1,'enabling the joystick also blocks subsequent retargets');
+    assert.ok(w.destination!.length()<.001);
+  }
+});
+
+test('ground input with joystick enabled leaves an entity chase and its rings unchanged',()=>{
+  const w=world();w.joystickEnabled=()=>true;w.spawnEnemy(-2,-2,0,'Target');w.root.updateMatrixWorld(true);
+  w.select(w.enemies[0]);const selected=w.selected,destination=w.destination,route=w.route;
+  assert.ok(selected&&destination);const marker=w.marker.visible,ring=w.ring.visible;
+  w.walkTo=()=>assert.fail('ground input must not start or retarget a walk');
+  w.pointer(400+2*PX,300);w.steer(400+2*PX,300);w.steer(400,550);
+  assert.equal(w.selected,selected);assert.equal(w.destination,destination);assert.equal(w.route,route);
+  assert.equal(w.marker.visible,marker);assert.equal(w.ring.visible,ring);
+});
+
+test('joystick mode preserves creature attacks and entity interactions, including approach paths',()=>{
+  for(const enabled of [true,false])for(const kind of ['enemy','npc','gift','craft'] as const)for(const near of [true,false]){
+    const w=world();w.joystickEnabled=()=>enabled;w.position.set(0,0,near?.5:8);
+    const entity=kind==='enemy'?(w.spawnEnemy(0,0,0,'Target'),w.enemies[0]):w.addEntity(kind,'Target','',block(.6),0,0,.5);
+    w.root.updateMatrixWorld(true);let attacks=0,interactions=0;
+    w.onAttackEnemy=e=>{assert.equal(e,entity);attacks++;};
+    w.onInteract=e=>{assert.equal(e,entity);interactions++;};
+    w.pointer(400,300);
+    if(near){assert.equal(attacks,kind==='enemy'?1:0);assert.equal(interactions,kind==='enemy'?0:1);assert.equal(w.destination,null);}
+    else{assert.equal(w.selected,entity);assert.ok(w.destination);assert.ok(w.route.length>0);assert.equal(attacks+interactions,0);}
+  }
+});
+
 test('screen picking: the circle holding the tap most deeply wins, under orthographic and perspective cameras',()=>{
   for(const camera of [ortho(),topDown(new T.PerspectiveCamera(40,800/600,.1,50))]){
     const near={x:.2,y:.6,z:0,radius:50},far={x:-.3,y:.6,z:0,radius:50},out={x:2,y:.6,z:0,radius:50};

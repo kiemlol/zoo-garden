@@ -174,6 +174,8 @@ export class World {
   /** A creature has just noticed the explorer. */
   onAlert?: (e: Enemy) => void;
   joystickInput:Point|null=null;onRemotePlayerClick?:(id:string)=>void;
+  /** Main supplies the current setting; entity taps still work while ground movement is disabled. */
+  joystickEnabled?:()=>boolean;
   playerSizeScale=1;playerShield=false;playerBat=false;
   authoritativeAction?:(intent:{type:string;payload?:Record<string,unknown>})=>Promise<unknown>;
   private progressPending=new Set<string>();private titanView?:TitanAttackView;
@@ -1149,11 +1151,13 @@ export class World {
     // A tap on a pond also says where to cast: the point under the finger on the water's surface (as the reference's plan()).
     if(entity?.pond){const p=this.raycaster.ray.intersectPlane(new T.Plane(UP,-entity.pond.surface),new T.Vector3());this.pondTap=p?{id:entity.id,x:p.x,z:p.z}:null;if(p)this.fx?.ring(p,{from:.9,to:.2,life:.35,thick:.25,y:entity.pond.surface+.02});}
     if(entity){this.select(entity);return;}
+    if(this.joystickEnabled?.())return;
     const point=this.groundPoint(clientX,clientY);if(!point||ignoreRetarget(point,this.selected?null:this.destination,this.position,false))return;
     this.selected=null;this.ring.visible=false;this.walkTo(point.x,point.z);
   }
   /** Hold-to-steer, throttled to every 0.2 s by GroundGestures: a new path only when the target really moves. */
   steer(clientX:number,clientY:number) {
+    if(this.joystickEnabled?.())return;
     const point=this.groundPoint(clientX,clientY);if(!point)return;
     // A finger resting on the explorer stops it (a chase too), unless it is just arriving under the finger.
     if(holdsHero(point,this.position)){if(!this.selected&&ignoreRetarget(point,this.destination,this.position,false))return;this.selected=null;this.ring.visible=false;this.destination=null;this.route=[];this.marker.visible=false;return;}
