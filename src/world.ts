@@ -37,6 +37,7 @@ import { QUALITY, type QualityProfile } from './graphics.ts';
 import { CropCards, CROP_PRESENTATION_SCALE, SOIL_Y, cropStage, popScale, stageScale, type BedCrop } from './crop-cards.ts';
 import { GardenBeds } from './garden-beds.ts';
 import { PlacementGhost } from './placement-ghost.ts';
+import {GhostCarriageRide} from './ghost-carriage.ts';
 import { FarmPenView, farmKit, PEN_PROPS, BACK_FENCE, BACK_FENCE_Z } from './farm-view.ts';
 import { GuardDogs } from './dog-world.ts';
 import { PetCompanion } from './pet-world.ts';
@@ -174,6 +175,7 @@ export class World {
   /** A creature has just noticed the explorer. */
   onAlert?: (e: Enemy) => void;
   joystickInput:Point|null=null;onRemotePlayerClick?:(id:string)=>void;
+  carriage?:GhostCarriageRide;
   /** Main supplies the current setting; entity taps still work while ground movement is disabled. */
   joystickEnabled?:()=>boolean;
   playerSizeScale=1;playerShield=false;playerBat=false;
@@ -566,6 +568,7 @@ export class World {
     this.syncCrops();this.syncBeds();
   }
   build(planet: PlanetId) {
+    this.carriage?.leave();
     // A rebuild (travel, visiting, reset) always lands outdoors.
     if(this.interior){const inside=this.interior;this.interior=null;inside.drop();}
     this.slimePatches=[];this.playerStun=0;this.playerSlip=0;this.farmView?.dispose();this.farmView=undefined;this.titanView?.clear();this.joystickInput=null;
@@ -996,6 +999,7 @@ export class World {
     return null;
   }
   syncDecorations(){
+    this.carriage?.leave();
     if(this.state.decorations?.some(d=>d.id==='deco_ghost_carriage')&&!festivalKit.requested)void festivalKit.load().then(()=>{if(festivalKit.ready&&this.planet==='home')this.syncDecorations();});
     for(const e of this.entities.filter(e=>e.kind==='decoration')){this.root.remove(e.mesh);this.disposeTree(e.mesh);}
     this.entities=this.entities.filter(e=>e.kind!=='decoration');this.obstacles=this.obstacles.filter(o=>!o.tag?.startsWith('decor:'));
@@ -1147,6 +1151,7 @@ export class World {
   }
   /** A tap: an entity picked in screen space (or by the short raycast fallback), else a walk unless it would change nothing. */
   pointer(clientX:number,clientY:number) {
+    if(this.carriage?.active){this.carriage.leave();return;}
     if(this.onRemotePlayerClick&&this.remotePlayers?.size){this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);const meshes=[...this.remotePlayers.values()].filter(r=>r.mesh.visible).map(r=>r.mesh);for(const hit of this.raycaster.intersectObjects(meshes,true)){let o:T.Object3D|null=hit.object;while(o&&!o.userData.remoteId)o=o.parent;if(o){this.destination=null;this.route=[];this.selected=null;this.onRemotePlayerClick(o.userData.remoteId);return;}}}
     const entity=this.pickEntity(clientX,clientY);
     // A tap on a pond also says where to cast: the point under the finger on the water's surface (as the reference's plan()).
@@ -1158,6 +1163,7 @@ export class World {
   }
   /** Hold-to-steer, throttled to every 0.2 s by GroundGestures: a new path only when the target really moves. */
   steer(clientX:number,clientY:number) {
+    if(this.carriage?.active)return;
     if(this.joystickEnabled?.())return;
     const point=this.groundPoint(clientX,clientY);if(!point)return;
     // A finger resting on the explorer stops it (a chase too), unless it is just arriving under the finger.
@@ -1213,6 +1219,7 @@ export class World {
   }
   private interactionRange(e:Entity) { return e.kind==='enemy'?attackRange(M.weaponStats(this.state),e.radius):e.radius+1.45; }
   select(e:Entity) {
+    if(this.carriage?.active){const same=this.carriage.entity===e;if(!this.carriage.leave()||same)return;}
     if(!this.validTarget(e))return;
     this.selected=e;this.ring.visible=e.kind!=='enemy'&&!e.pond;this.ring.scale.setScalar(e.radius);this.ring.position.set(e.x,.12,e.z);
     if(this.position.distanceTo(new T.Vector3(e.x,0,e.z))<=this.interactionRange(e)){this.destination=null;this.route=[];this.marker.visible=false;if(e.kind==='enemy')this.onAttackEnemy(e as Enemy);else {this.selected=null;this.ring.visible=false;this.onInteract(e);}return;}
@@ -1244,6 +1251,7 @@ export class World {
   private navigationOptions(clearance=.36,allowVoid=false):NavigationOptions{if(this.interior)return {bounds:WORLD_BOUNDS,clearance,gridSize:.5,walkable:this.interior.walkable};return {bounds:WORLD_BOUNDS,clearance,walkable:p=>Math.hypot(p.x,p.z)<=WORLD_BOUNDS&&(allowVoid||this.playerFlying||!this.environment||environmentWalkable(this.environment.layout,p))};}
   blocked(x:number,z:number) {return blocked({x,z},this.collisionObstacles(),this.navigationOptions());}
   walkTo(x:number,z:number,keepSelected=false) {
+    if(this.carriage?.active&&!this.carriage.leave())return;
     const distance=Math.hypot(x,z);if(distance>WORLD_BOUNDS-1){x*=((WORLD_BOUNDS-1)/distance);z*=((WORLD_BOUNDS-1)/distance);}if(!keepSelected)this.selected=null;
     if(this.blocked(x,z)){const obstacle=this.collisionObstacles().find(o=>Math.hypot(x-o.x,z-o.z)<o.r+.36);if(obstacle){const d=this.position.clone().sub(new T.Vector3(obstacle.x,0,obstacle.z)).normalize();x=obstacle.x+d.x*(obstacle.r+.6);z=obstacle.z+d.z*(obstacle.r+.6);}}
     this.destination=new T.Vector3(x,0,z);this.route=this.findPath(this.destination);this.marker.position.set(x,.08,z);this.marker.visible=true;
@@ -1254,6 +1262,7 @@ export class World {
   }
   /** The thing the context button acts on: the current target while it is still in reach (so the prompt and the target frame agree and a press never swaps creatures mid-fight), else the nearest valid entity in reach. */
   nearest() {
+    if(this.carriage?.active)return this.carriage.entity!;
     const s=this.selected;if(s&&this.validTarget(s)&&Math.hypot(s.x-this.position.x,s.z-this.position.z)<s.radius+2)return s;
     // Same door priority and stable tie order, without filtering/sorting the whole world every HUD tick.
     let nearest:Entity|undefined,best=Infinity;
@@ -1262,6 +1271,7 @@ export class World {
   }
   /** True when something was in reach to act on. */
   interactNearest() {const e=this.nearest();if(e)this.select(e);return !!e;}
+  boardCarriage(e:Entity){return (this.carriage??=new GhostCarriageRide(this)).board(e);}
   burst(x:number,z:number,color:string,count=14) {
     if(this.fx){this.fx.burst({x,z},{n:count,color:[color,'#ffffff'],speed:4,up:5,size:.13});this.fx.burst({x,z},{n:Math.ceil(count/2),color,glow:true,size:.12,speed:3,up:4,life:.5});return;}
     for(let i=0;i<count;i++){const p=ball(color,.06+Math.random()*.05,x,.6,z,0);this.scene.add(p);this.particles.push({mesh:p,velocity:new T.Vector3((Math.random()-.5)*4,2+Math.random()*3,(Math.random()-.5)*4),life:.6+Math.random()*.4,max:1});}
@@ -1347,6 +1357,7 @@ export class World {
       if(this.selected===e){this.selected=null;this.destination=null;this.route=[];this.ring.visible=false;}}
   }
   move(dx:number,dz:number,allowVoid=false) {
+    if(this.carriage?.active)return;
     const obstacles=this.collisionObstacles(),options=this.navigationOptions(.36,allowVoid);
     const next={x:this.position.x+dx,z:this.position.z+dz};
     if(clearSegment(this.position,next,obstacles,options)){this.position.x=next.x;this.position.z=next.z;return;}
@@ -1849,17 +1860,17 @@ export class World {
     this.onStep?.(dt);
     // The jump runs on the world's clock. Indoors, aboard the ship, thrown by the Colossus or carried by the world it ends at once.
     {const j=this.jump??=new JumpState();if(j.airborne&&(this.interior||this.boarded||(this.playerLift??0)>0||this.environment?.airborne))j.cancel();
-      if(active||simulateWorld){const landing=j.step(dt);if(landing){this.landT=.2;this.onLanded?.(landing);}}}
+      if(active||simulateWorld){const landing=j.step(dt);if(landing&&!this.carriage?.active){this.landT=.2;this.onLanded?.(landing);}}}
     this.environment??=new EnvironmentSimulation(createEnvironmentLayout(this.planet));this.enemyShots??=[];this.dynamicObstacles??=[];this.resourceTimers??=new Map();
     const environmentForFrame=this.environment;
     for(const e of this.enemies)if(e.hp>0&&e.type==='mosslug'){const u=e.mesh.userData;if(!u.trailAt||Math.hypot(e.x-u.trailAt.x,e.z-u.trailAt.z)>.65){u.trailAt={x:e.x,z:e.z};(this.slimePatches??=[]).push({x:e.x,z:e.z,life:MOSSLUG.trailLife});}}
     this.playerStun=Math.max(0,(this.playerStun??0)-dt);this.playerSlip=Math.max(0,(this.playerSlip??0)-dt);this.slimePatches=(this.slimePatches??[]).filter(p=>(p.life-=dt)>0);
     if(!this.playerFlying&&!this.playerSafe()&&slimeAt(this.slimePatches,this.position))this.playerSlip=MOSSLUG.slip;
-    if(this.playerSlip>0&&active&&!this.movementLocked)this.move(Math.sin(this.facing)*dt*1.8,Math.cos(this.facing)*dt*1.8);
+    if(this.playerSlip>0&&active&&!this.movementLocked&&!this.carriage?.active)this.move(Math.sin(this.facing)*dt*1.8,Math.cos(this.facing)*dt*1.8);
 
     if(active||simulateWorld)this.time+=dt;
     let dx=0,dz=0,routeTarget:T.Vector3|undefined;
-    if(active&&!this.movementLocked&&!this.environment.airborne){
+    if(active&&!this.movementLocked&&!this.environment.airborne&&!this.carriage?.active){
       dx=Number(this.keys.has('ArrowRight'))-Number(this.keys.has('ArrowLeft'));dz=Number(this.keys.has('ArrowDown'))-Number(this.keys.has('ArrowUp'));if(!dx&&!dz&&this.joystickInput){dx=this.joystickInput.x;dz=this.joystickInput.z;}
       if(dx||dz){this.destination=null;this.route=[];this.selected=null;this.marker.visible=false;this.ring.visible=false;}
       else if(this.route.length){routeTarget=this.route[0];dx=routeTarget.x-this.position.x;dz=routeTarget.z-this.position.z;if(Math.hypot(dx,dz)<.001){this.route.shift();dx=dz=0;}}
@@ -1894,7 +1905,7 @@ export class World {
       this.environmentView?.update(this.environment);this.refreshEnvironmentNodes();this.syncWeatherNodes();
       for(const e of this.entities)if(e.kind==='turtle'){e.x=e.mesh.position.x;e.z=e.mesh.position.z;}
     }
-    if(active&&!this.movementLocked&&!this.environment.airborne){
+    if(active&&!this.movementLocked&&!this.environment.airborne&&!this.carriage?.active){
       if(this.selected&&!this.validTarget(this.selected)){this.selected=null;this.destination=null;this.route=[];this.ring.visible=false;this.marker.visible=false;}
       if(this.selected){const e=this.selected;this.ring.position.set(e.x,.1,e.z);if(Math.hypot(e.x-this.position.x,e.z-this.position.z)<=this.interactionRange(e)){this.destination=null;this.route=[];this.marker.visible=false;if(e.kind==='enemy')this.onAttackEnemy(e as Enemy);else{this.selected=null;this.ring.visible=false;this.onInteract(e);}}else if((e.kind==='enemy'||e.kind==='turtle'||e.kind==='animal')&&(!this.destination||Math.hypot(this.destination.x-e.x,this.destination.z-e.z)>4))this.select(e);}
     }
@@ -1935,10 +1946,11 @@ export class World {
     // Home heals 4x faster (home-care.ts); this line had slipped into the comment above, so offline the village never healed.
     this.homeRecovering=atHome(this.planet,this.position,!!this.interior)&&this.state.hp>0&&this.state.hp<stats.maxHp;if(!this.authoritativeAction&&active&&this.homeRecovering)this.state.hp=Math.min(stats.maxHp,this.state.hp+homeRecoveryBonus(stats.regen)*dt);
     if(this.airCarry)this.airCarry=this.playerFlying?carryStep(this.airCarry,dt):0;
+    this.carriage?.update(active);
     this.player.position.copy(this.position);this.player.position.y+=(this.playerLift??0)+this.jump.height+(this.airCarry||0);this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
     // The companion waits by the pen at home and trails behind and to one side away from it; flyers hover and flap, walkers hop.
     (this.petPen??=new PetCompanion()).update(this,dt);(this.petPen2??=new PetCompanion(1)).update(this,dt);
-    this.animatePlayer(dt);this.player.rotation.z=this.playerSlip>0?Math.sin(this.time*13)*.12:0;this.animateRemotes(dt);
+    this.animatePlayer(dt);this.player.rotation.z=this.playerSlip>0?Math.sin(this.time*13)*.12:0;this.carriage?.draw();this.animateRemotes(dt);
     this.player.visible=!this.boarded&&!this.playerHidden;this.companion.visible=!this.boarded&&this.petPen.shown;if(this.companion2)this.companion2.visible=!this.boarded&&this.petPen2.shown;
     // The reference's follow: 9/s on the explorer, 5/s on the starship in cut-scenes, always looking straight at the target.
     this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.camera.position.copy(this.cameraTarget).add(this.viewOffset??=cameraOffset(16/9));this.camera.lookAt(this.cameraTarget);

@@ -602,3 +602,5 @@ body.air-combat { --fight-width: calc(var(--sk) * 3.784); }
 @media (min-aspect-ratio: 1/1) and (max-width: 720px) {
   #app.boss-on #hud .colossus-banner .cb-icon { display: none; }
 }
+/* A passenger cannot cast; keep the green exit button clear of the touch combat cluster. */
+#app #hud.carriage-riding .skills { visibility: hidden; pointer-events: none; }

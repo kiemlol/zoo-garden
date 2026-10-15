@@ -15,5 +15,7 @@ export const VI_FESTIVAL:Record<string,string>={
  'Flex high-top sneakers':'Giày cổ cao Flex',
  'Red, white and black high-tops with white laces, padded tongues and gold ankle accents.':'Giày cổ cao đỏ trắng đen, dây trắng, lưỡi giày đệm và điểm nhấn vàng ở cổ chân.',
  'Halloween ghost carriage':'Cỗ xe ma Halloween',
+ 'Board carriage':'Lên xe',
+ 'Leave carriage':'Rời xe',
  'A red velvet carriage drawn by a white ghost, with cobweb wheels, black bats and cyan lanterns. Place it in your garden.':'Xe nhung đỏ do ma trắng kéo, bánh mạng nhện, dơi đen và đèn lồng xanh ngọc. Đặt trong vườn của bạn.',
 };

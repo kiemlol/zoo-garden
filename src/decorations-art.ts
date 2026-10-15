@@ -27,7 +27,7 @@ class Sculptor {
   eyes(x:number,y:number,z:number,gap=.18,parent:T.Object3D=this.root,color='#3e3848'){for(const side of [-1,1])this.ball(color,.045,[x+side*gap,y,z],[1,1.18,.6],parent);}
   finish(id:string){
     this.root.name=`decoration:${id}`;this.root.userData.decorationId=id;this.root.updateMatrixWorld(true);
-    const bounds=new T.Box3().setFromObject(this.root);if(Number.isFinite(bounds.min.y))for(const child of this.root.children)child.position.y-=bounds.min.y;
+    const bounds=new T.Box3().setFromObject(this.root);if(Number.isFinite(bounds.min.y)){for(const child of this.root.children)child.position.y-=bounds.min.y;if(this.root.userData.carriageSeat)this.root.userData.carriageSeat[1]-=bounds.min.y;}
     this.root.updateMatrixWorld(true);return this.root;
   }
 }
@@ -37,7 +37,7 @@ const builders:Record<string,(s:Sculptor)=>void>={
     s.box('#292631',[1.15,.18,1.8],[0,.5,-.2],s.root,true);s.box('#af2938',[1,.13,1],[0,.66,-.45],s.root,true);s.box('#b52d3a',[1.1,.9,.14],[0,1.08,-.92],s.root,true);
     for(const x of [-.68,.68])for(const [z,r]of [[-.65,.5],[.65,.3]]){const wheel=s.ring('#332e3a',r,.04,[x,r,z]);wheel.rotation.y=Math.PI/2;}
     for(const x of [-.43,.43]){s.rod('#332e3a',[x,.7,.22],[x,1.3,.22],.04);s.ball('#80eee5',.18,[x,1.4,.22]);}
-    s.ball('#edfff9',.4,[0,.65,1.35],[.8,1.4,.8]);s.eyes(0,.87,1.62,.11);s.root.userData.feature='ghost-drawn-red-carriage';
+    s.ball('#edfff9',.4,[0,.65,1.35],[.8,1.4,.8]);s.eyes(0,.87,1.62,.11);s.root.userData.feature='ghost-drawn-red-carriage';s.root.userData.carriageSeat=[0,.725,-.45];
   },
   deco_volcano(s){
     s.cylinder('#7c6870',.72,.91,.16,[0,.08,0],s.root,9);
