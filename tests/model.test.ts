@@ -56,7 +56,7 @@ test('exactly one equipped copy is protected through selling, storage and death'
   assert.equal(M.unequip(s,'hat'),true);assert.equal(M.looseQuantity(s,'hat_straw'),2);assert.equal(M.unequip(s,'hat'),false);
 });
 test('all eighteen disguises provide four skill definitions and override weapon metadata',()=>{
-  const s=M.newGame();assert.equal(Object.keys(M.DISGUISES).length,18);assert.equal(M.weaponStats(s).kind,'fist');
+  const s=M.newGame();assert.equal(Object.keys(M.DISGUISES).length,19);assert.equal(M.weaponStats(s).kind,'fist');
   for(const[id,d]of Object.entries(M.DISGUISES)){assert.equal(d.skills.length,4);M.addItem(s,id);assert.equal(M.equip(s,id),true);assert.equal(M.weaponStats(s).kind,d.weapon.kind);assert.ok(M.weaponStats(s).range>0);assert.ok(M.weaponStats(s).cd>0);}
   assert.equal(M.unequip(s,'disguise'),true);M.addItem(s,'rod');M.equip(s,'rod');assert.equal(M.weaponStats(s).kind,'rod');
 });

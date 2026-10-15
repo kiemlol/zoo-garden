@@ -1,3 +1,4 @@
+import {SORCERER_LOOKS} from '../src/sorcerer-skills.ts';
 import {BIRD_LOOKS} from '../src/bird-skills.ts';
 // Round 26 (fx builder): the superhero's laser gaze drawn where it hits, the battle robot's electric attacks, ponds that
 // refill in seconds with twice the fish, an 18 s harpoon restock, and line-break chances per rod (60/30/10 %) that the
@@ -118,7 +119,7 @@ test('the gaze view draws twin beams from the eyes to the line end, a ground ban
 // ---- 2. The battle robot is electric ------------------------------------------------------------------------------
 test('the battle robot fires electricity: volt bolts, a tesla turret, shock missiles and an electric tank wave', () => {
   assert.equal(M.DISGUISES.dz_mecha.weapon!.shot, 'volt'); assert.equal(M.ITEMS.pet_robot.pet!.shot, 'volt');
-  assert.ok(ELECTRIC_SHOTS.has('volt') && ELECTRIC_SHOTS.has('missile')); assert.deepEqual([...EFFECT_LOOKS].sort(), ['boulder', 'burn', 'eyes', 'shock', ...DISGUISE_LOOKS,...BIRD_LOOKS].sort());
+  assert.ok(ELECTRIC_SHOTS.has('volt') && ELECTRIC_SHOTS.has('missile')); assert.deepEqual([...EFFECT_LOOKS].sort(), ['boulder', 'burn', 'eyes', 'shock', ...DISGUISE_LOOKS,...BIRD_LOOKS,...SORCERER_LOOKS].sort());
   const ring = () => [at(0, 3, 'a'), at(1, 4, 'b'), at(-1, 5, 'c')];
   // Missiles: every impact and blast is an electric burst; no stun added (they never stunned).
   const m = rig(ring()); m.sim.disguise('dz_mecha', 2); run(m.sim, 2);

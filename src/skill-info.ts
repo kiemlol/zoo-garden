@@ -1,3 +1,4 @@
+import {SORCERER_SKILLS} from './sorcerer-skills.ts';
 import {BIRD_SKILLS} from './bird-skills.ts';
 /**
  * What every fighting skill really does, in the player's words and with the numbers combat.ts uses: the skill
@@ -53,6 +54,7 @@ const snowMax = Math.min(2.6, .5 + DZ.snowball.grow * DZ.snowball.time);
 /** A summon's hit points as a share of yours (combat.ts SUMMON_HP). */
 const hp = (kind: string) => pct(SUMMON_HP[kind].hp);
 export const DISGUISE_INFO: Record<string, readonly string[]> = {
+  dz_sorcerer:SORCERER_SKILLS.map(s=>s.description),
   ...Object.fromEntries(Object.entries(BIRD_SKILLS).map(([id,skills])=>[id,skills.map(skill=>skill.description)])),
   dz_superhero: [`Fly for ${DZ.flight.time} s, ${pct(DZ.flight.speed)}% faster (press again to land): melee attacks miss you, only shots can reach you.`,
     `Dive ${DZ.dive.ahead} m ahead and crash down: ×${DZ.dive.power} damage within ${DZ.dive.radius} m, ×${DZ.dive.flying} if you were flying, enemies thrown up.`,

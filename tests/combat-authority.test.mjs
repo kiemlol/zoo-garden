@@ -351,3 +351,10 @@ test('a teammate storm provides the same protection and the requested cooldowns 
  engine.sim.reset();f.authority.skill(f.peer,1);assert.equal(engine.nextSkill[1]-Date.now(),6000);engine.sim.reset();f.authority.skill(f.peer,3);assert.equal(engine.nextSkill[3]-Date.now(),7000);
  f.account.profile.gear.disguise='dz_explorer_duck';f.account.profile.bag.dz_explorer_duck=1;f.authority.engineFor(f.peer);engine.nextSkill.fill(0);f.authority.skill(f.peer,1,{x:-26,z:1});assert.equal(engine.nextSkill[1]-Date.now(),5000);engine.sim.reset();f.authority.skill(f.peer,2);assert.equal(engine.nextSkill[2]-Date.now(),9000);
 });
+
+test('sorcerer portal authority validates early exit during cooldown and rejects incoming damage while hidden',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});
+ const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_sorcerer';p.bag.dz_sorcerer=1;}}),enemy=f.spawn('mushroom'),e=f.authority.engineFor(f.peer);enemy.hp=10000;enemy.maxHp=10000;
+ f.authority.skill(f.peer,1);const next=e.nextSkill[1];assert.equal(next,Date.now()+12000);assert.equal(e.sim.portalHidden,true);assert.equal(e.sim.invulnerable,true);const hp=f.account.profile.hp;f.authority.damage(f.peer,enemy.id,'melee');assert.equal(e.healthEvents.length,0);assert.equal(f.account.profile.hp,hp);
+ f.authority.skill(f.peer,0);assert.equal(e.sim.portalHidden,true);assert.equal(e.nextSkill[0],0);f.authority.skill(f.peer,1);assert.equal(e.sim.portalHidden,false);assert.equal(e.nextSkill[1],next);assert.equal(e.sim.statuses.ambush,1);f.authority.skill(f.peer,1);assert.equal(e.sim.portalHidden,false,'cannot reopen until the original 12 s cooldown finishes');
+});

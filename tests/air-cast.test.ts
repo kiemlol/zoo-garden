@@ -27,11 +27,11 @@ function arena(spots: Array<{ x: number; z: number; radius?: number; boss?: bool
 const kitOf = (effect: string) => { for (const [id, kit] of Object.entries(DISGUISE_KITS)) { const i = kit.indexOf(effect); if (i >= 0) return [id, i] as const; } throw new Error('no kit has ' + effect); };
 const all = Object.entries(DISGUISE_KITS).flatMap(([id, kit]) => kit.map((effect, index) => ({ id, index, effect })));
 
-test('every disguise skill has an air class: 18 disguises x 4, no skill without a row and no row without a skill', () => {
-  assert.equal(Object.keys(DISGUISE_KITS).length, 18); assert.equal(all.length, 72);
+test('every disguise skill has an air class: 19 disguises x 4, no skill without a row and no row without a skill', () => {
+  assert.equal(Object.keys(DISGUISE_KITS).length, 19); assert.equal(all.length, 76);
   assert.deepEqual(Object.keys(DISGUISE_KITS).sort(), Object.keys(DISGUISES).sort(), 'the kits are the disguises of content.ts');
   for (const { id, index, effect } of all) assert.ok(AIR_CAST[effect], `${id} skill ${index + 1} (${effect}) has no air class: add it to air-cast.ts AIR_CAST`);
-  const used = new Set(all.map(s => s.effect)); assert.equal(used.size, 72, 'no effect is in two kits');
+  const used = new Set(all.map(s => s.effect)); assert.equal(used.size, 76, 'no effect is in two kits');
   assert.deepEqual(Object.keys(AIR_CAST).filter(effect => !used.has(effect)), [], 'a row for a skill no disguise has');
   for (const [effect, rule] of Object.entries(AIR_CAST)) {
     assert.ok(['air', 'plunge', 'move'].includes(rule.cls), effect);
@@ -40,7 +40,7 @@ test('every disguise skill has an air class: 18 disguises x 4, no skill without 
     if (rule.cls === 'plunge') { assert.equal(rule.at, undefined); assert.ok(rule.how === undefined || rule.how === 'leap'); }
   }
   const count = (cls: string) => Object.values(AIR_CAST).filter(r => r.cls === cls).length;
-  assert.deepEqual([count('air'), count('plunge'), count('move')], [46, 18, 8]);
+  assert.deepEqual([count('air'), count('plunge'), count('move')], [49, 19, 8]);
   // The classes the owner named: flights, a ground charge, a ground ring, a shot, a shield.
   assert.deepEqual(['flight', 'hover', 'kite'].map(e => AIR_CAST[e].how), ['flight', 'flight', 'flight']);
   for (const e of ['knightcharge', 'surfride', 'giant', 'tank', 'iceage', 'icefloor', 'sandbag', 'smoke', 'drum', 'ink', 'tail', 'anchor']) assert.equal(AIR_CAST[e].cls, 'plunge', e);

@@ -86,7 +86,7 @@ export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;
 /** A boss attacks faster as it weakens, like the reference (bundle @837714): ×0.7 below half health, ×0.6 once enraged.
  * Applies to its skills and its basic attacks and charges alike. */
 export const bossCooldownScale=(e:{boss:boolean;hp:number;maxHp:number;enraged?:boolean})=>e.boss?(e.hp<e.maxHp*.5?.7:1)*(e.enraged?.6:1):1;
-export interface AvatarVisual {size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean}
+export interface AvatarVisual {hidden?:boolean;size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean}
 export interface Enemy {wildCooldown?:number;titanAttacks?:TitanAttack[];titanLift?:number}
 /** An enemy run by its own module (colossus.ts): no generic AI or drawing here; `incoming` may scale a blow before it lands. */
 export interface Enemy {driver?:{incoming(e:Enemy,amount:number,hazard:boolean):number}}
@@ -176,7 +176,7 @@ export class World {
   playerSizeScale=1;playerShield=false;playerBat=false;
   authoritativeAction?:(intent:{type:string;payload?:Record<string,unknown>})=>Promise<unknown>;
   private progressPending=new Set<string>();private titanView?:TitanAttackView;
-  environment!:EnvironmentSimulation;environmentView!:EnvironmentView;movementLocked=false;/** In the village or the cottage and hurt: home-care.ts heals 4x, the HUD shows a chip. */ homeRecovering=false;playerFlying=false;playerStealth=false;/** Extra move speed from a skill (combat.speedBonus): flight, vanish, tank mode, bat form, the ice rink. */ playerSpeedBonus=0;
+  environment!:EnvironmentSimulation;environmentView!:EnvironmentView;movementLocked=false;/** In the village or the cottage and hurt: home-care.ts heals 4x, the HUD shows a chip. */ homeRecovering=false;playerFlying=false;playerStealth=false;playerHidden=false;/** Extra move speed from a skill (combat.speedBonus): flight, vanish, tank mode, bat form, the ice rink. */ playerSpeedBonus=0;
   networkRole:'host'|'peer'|null=null;remotePlayers=new Map<string,{mesh:T.Group;pose:RemotePose}>();/** Friends' account ids (online.ts keeps it current): their nameplates get a heart. */friendIds=new Set<string>();remoteRoot=new T.Group();
   onRemoteDamage:(id:string,amount:number,source?:'melee'|'shot'|'hazard',enemyId?:string)=>void=()=>{};
   /** This explorer's hittable summons (combat.decoys): creatures may go for them instead (combat.ts SUMMON_HP). */
@@ -658,7 +658,7 @@ export class World {
     for(const name of kitsFor(planet)){const kit=SCENERY_KITS[name];if(!kit.ready)void kit.load().then(()=>{if(kit.ready&&this.planet===planet)this.refreshScenery();});}
     this.batchScenery();this.refreshScenery();this.root.add(this.player,this.companion,this.companion2??=new T.Group());this.cameraTarget.copy(this.position);this.cropCards?.reset();this.syncCrops();this.syncDropped();this.applyRefinedAssets();this.syncDecorations();this.refreshEnvironmentNodes();
     if(this.remoteRoot&&!this.remoteRoot.parent)this.scene.add(this.remoteRoot);
-    for(const remote of this.remotePlayers?.values()??[])remote.mesh.visible=!remote.pose.planet||remote.pose.planet===planet;
+    for(const remote of this.remotePlayers?.values()??[])remote.mesh.visible=!remote.pose.visual?.hidden&&(!remote.pose.planet||remote.pose.planet===planet);
     this.onBuilt?.();
   }
 
@@ -738,7 +738,7 @@ export class World {
    */
   private avatar(color:string,gear:SaveState['gear']={},look:LookId|string=DEFAULT_LOOK){
     const disguise=gear.disguise?M.DISGUISES[gear.disguise]:undefined,id=gear.disguise??'';
-    const kitDisguise=!!id&&!!this.kitFor(id)&&heroKit.ready,fullBodyDisguise=kitDisguise&&Object.hasOwn(BIRD_SKILLS,id);
+    const kitDisguise=!!id&&!!this.kitFor(id)&&heroKit.ready,fullBodyDisguise=kitDisguise&&(Object.hasOwn(BIRD_SKILLS,id)||id==='dz_sorcerer');
     // A body style downloads on first use; the default explorer stands in until it arrives.
     // Complete costumes keep a hidden base rig; their own geometry is fitted continuously to the selected look.
     const combo=toLook(look)??DEFAULT_LOOK,styled=heroKitFor(fullBodyDisguise?DEFAULT_LOOK:combo);if(styled!==heroKit&&!styled.requested)void styled.load().then(()=>{if(styled.ready)this.refreshAvatars();});
@@ -1064,8 +1064,8 @@ export class World {
       // Its jump height, for ground attacks (remoteDodges): read from the pose, and only for as long as a real jump can last.
       {const air=indoor||!this.environment?0:poseAir(ty,terrainHeight(this.environment.layout,current),current.visual?.flight?1.7:0),now=this.time??0;if(air>0){u.airSince??=now;u.air=now-u.airSince<=MAX_AIR_SECONDS?air:0;}else{u.airSince=undefined;u.air=0;}}
       if(!u.placed||Math.hypot(p.x-current.x,p.z-current.z)>8||Math.abs(p.y-ty)>3){p.set(current.x,ty,current.z);remote.mesh.rotation.y=u.target.f;u.placed=true;}}
-    this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
-  visualSnapshot():AvatarVisual{return {size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat};}
+    this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));remote.mesh.visible=!current.visual?.hidden&&(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
+  visualSnapshot():AvatarVisual{return {hidden:this.playerHidden,size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat};}
   private applyAvatarVisual(mesh:T.Group,visual?:Partial<AvatarVisual>){
     // Nothing to change until stealth first fades the explorer: a new avatar starts fully opaque, so it is never copied for opacity 1
     // (the copy used to replace the flash materials and the ink outlines' push-out shader, which Material.clone does not carry).
@@ -1403,6 +1403,7 @@ export class World {
     // Nothing piles onto the explorer: creatures are pushed out of a circle around it. Only the creature moves, so
     // walking and knockback feel the same. A charge or a bat's dive runs through the explorer to the far side, and a boss
     // in the middle of a skill keeps its course and telegraphs.
+    if(this.playerHidden)return;
     const px=this.position.x,pz=this.position.z;
     for(const e of living){
       if(!((e.definition?.speed??2.4)>0)||e.phase==='charge'||e.boss&&(e.phase==='windup'&&!!e.skill||e.phase==='bspin'))continue;
@@ -1416,7 +1417,7 @@ export class World {
     if((e.statuses?.charm??0)>0){let best:Enemy|undefined,bestD=Infinity;for(const other of this.enemies){if(other===e||other.hp<=0||this.planet==='home'&&!inHabitat({x:e.homeX,z:e.homeZ},other))continue;const d=Math.hypot(other.x-e.x,other.z-e.z);if(d<bestD){bestD=d;best=other;}}return best?{x:best.x,z:best.z,enemy:best}:undefined;}
     const eligible=(p:Point)=>this.planet!=='home'||inHabitat({x:e.homeX,z:e.homeZ},p);
     const safe=this.planet==='home'?18:11;let bx=0,bz=0,bid:string|undefined,bestD=Infinity;
-    if(!this.playerStealth&&eligible(this.position)&&Math.hypot(this.position.x,this.position.z)>=safe){bx=this.position.x;bz=this.position.z;bestD=Math.hypot(bx-e.x,bz-e.z);}
+    if(!this.playerHidden&&!this.playerStealth&&eligible(this.position)&&Math.hypot(this.position.x,this.position.z)>=safe){bx=this.position.x;bz=this.position.z;bestD=Math.hypot(bx-e.x,bz-e.z);}
     if(this.remotePlayers)for(const [id,remote] of this.remotePlayers)if(eligible(remote.pose)&&remote.mesh.visible&&!remote.pose.visual?.stealth&&(remote.pose.hp??1)>0&&Math.hypot(remote.pose.x,remote.pose.z)>=safe){const d=Math.hypot(remote.pose.x-e.x,remote.pose.z-e.z);if(d<bestD){bestD=d;bx=remote.pose.x;bz=remote.pose.z;bid=id;}}
     // Summons creatures can fight (combat.ts SUMMON_HP): a decoy within DECOY.lure m wins over every explorer, any other
     // summon is attacked when it is the nearest target. The knight's challenge (taunt) keeps a creature on the knight.
@@ -1909,7 +1910,7 @@ export class World {
         const sp=shot.mesh.position;for(const d of this.decoyList??[]){if(shot.life<=0)break;const at=d.ring?decoyPoint(d,sp):d;if(Math.hypot(sp.x-at.x,sp.z-at.z)<.4+d.r){this.onDecoyDamage?.(d.owner,d.id,shot.damage,'shot',shot.ownerId);shot.life=0;}}
         // The knight's raised shield sends a shot from in front back at its shooter: the host's rules deal the damage
         // (onDamage: combat.reflect offline, the server online); here the ball only flies home.
-        if(shot.life>0&&Math.hypot(sp.x-this.position.x,sp.z-this.position.z)<.65){const owner=this.enemies.find(e=>e.id===shot.ownerId);this.onDamage(shot.damage,'shot',shot.ownerId);if(owner&&owner.hp>0&&this.playerBlocks?.(owner))this.reflectShot(shot,owner);else shot.life=0;}
+        if(!this.playerHidden&&shot.life>0&&Math.hypot(sp.x-this.position.x,sp.z-this.position.z)<.65){const owner=this.enemies.find(e=>e.id===shot.ownerId);this.onDamage(shot.damage,'shot',shot.ownerId);if(owner&&owner.hp>0&&this.playerBlocks?.(owner))this.reflectShot(shot,owner);else shot.life=0;}
         for(const [id,remote] of this.remotePlayers??[])if(shot.life>0&&!shot.reflected&&remote.mesh.visible&&Math.hypot(sp.x-remote.pose.x,sp.z-remote.pose.z)<.65){this.onRemoteDamage?.(id,shot.damage,'shot',shot.ownerId);const owner=this.enemies.find(e=>e.id===shot.ownerId),f=remote.pose.facing??0;if(owner&&owner.hp>0&&remote.pose.block&&(owner.x-remote.pose.x)*Math.sin(f)+(owner.z-remote.pose.z)*Math.cos(f)>0)this.reflectShot(shot,owner);else shot.life=0;}
       }
       }
@@ -1925,7 +1926,7 @@ export class World {
     // The companion waits by the pen at home and trails behind and to one side away from it; flyers hover and flap, walkers hop.
     (this.petPen??=new PetCompanion()).update(this,dt);(this.petPen2??=new PetCompanion(1)).update(this,dt);
     this.animatePlayer(dt);this.player.rotation.z=this.playerSlip>0?Math.sin(this.time*13)*.12:0;this.animateRemotes(dt);
-    this.player.visible=!this.boarded;this.companion.visible=!this.boarded&&this.petPen.shown;if(this.companion2)this.companion2.visible=!this.boarded&&this.petPen2.shown;
+    this.player.visible=!this.boarded&&!this.playerHidden;this.companion.visible=!this.boarded&&this.petPen.shown;if(this.companion2)this.companion2.visible=!this.boarded&&this.petPen2.shown;
     // The reference's follow: 9/s on the explorer, 5/s on the starship in cut-scenes, always looking straight at the target.
     this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.camera.position.copy(this.cameraTarget).add(this.viewOffset??=cameraOffset(16/9));this.camera.lookAt(this.cameraTarget);
     if(this.fx)this.camera.position.add(this.fx.shakeOffset(dt,this.shakeOffset));

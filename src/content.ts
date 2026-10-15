@@ -1,3 +1,5 @@
+import {SORCERER_ITEM} from './sorcerer-content.ts';
+import {SORCERER_SKILLS} from './sorcerer-skills.ts';
 import {BIRD_ITEMS,BIRD_SHOP} from './bird-disguise-content.ts';
 import {BIRD_SKILLS} from './bird-skills.ts';
 import {FESTIVAL_ITEMS,FESTIVAL_RECIPES} from './festival-content.ts';
@@ -4129,6 +4131,10 @@ LOOT_TABLES.mosslug=[['rainbow_slime',1,1,2],['moss_shell',.55,1,1]];
 LOOT_TABLES.pangolin=[['lava_scale',1,1,2],['rolling_shell',.55,1,1]];
 Object.assign(ITEMS,FESTIVAL_ITEMS);
 RECIPES.push(...FESTIVAL_RECIPES);
+ITEMS.dz_sorcerer=SORCERER_ITEM;
+DISGUISES.dz_sorcerer={name:SORCERER_ITEM.name,emoji:SORCERER_ITEM.icon,color:'#ff963a',weapon:{kind:'fist',range:2.6,cd:.4,special:'fist'},skills:SORCERER_SKILLS};
+RECIPES.push({result:'dz_sorcerer',energy:1,materials:{},category:'Disguises',station:'shop'});
+SHOP_CATEGORIES.find(c=>c.tab==='Disguises')?.items.push({id:'dz_sorcerer',cost:1});
 Object.assign(ITEMS,BIRD_ITEMS);
 RECIPES.push(...BIRD_SHOP);
 for(const [id,skills] of Object.entries(BIRD_SKILLS))DISGUISES[id]={name:BIRD_ITEMS[id].name,emoji:BIRD_ITEMS[id].icon,color:id==='dz_penguin'?'#b8efff':'#b995ff',weapon:{kind:'fist',range:2.6,cd:.4,special:'fist'},skills};

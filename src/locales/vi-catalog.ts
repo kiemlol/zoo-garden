@@ -1,3 +1,4 @@
+import {VI_SORCERER} from './vi-sorcerer.ts';
 import {VI_BIRD_DISGUISES} from './vi-bird-disguises.ts';
 import {VI_FESTIVAL} from './vi-festival.ts';
 import {VI_WILD_CREATURES} from './vi-wild-creatures.ts';
@@ -878,4 +879,4 @@ Object.assign(VI_CATALOG,VI_WILD_CREATURES);
 
 Object.assign(VI_CATALOG,VI_FESTIVAL);
 
-Object.assign(VI_CATALOG,VI_BIRD_DISGUISES);
+Object.assign(VI_CATALOG,VI_BIRD_DISGUISES,VI_SORCERER);

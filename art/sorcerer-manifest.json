@@ -1,0 +1,17 @@
+{
+  "file": "public/assets/models/sorcerer.glb",
+  "bytes": 215912,
+  "models": {
+    "dz_sorcerer": {
+      "triangles": 8952,
+      "parts": [
+        "head",
+        "body",
+        "arm-left",
+        "arm-right",
+        "leg-left",
+        "leg-right"
+      ]
+    }
+  }
+}

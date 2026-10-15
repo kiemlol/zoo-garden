@@ -3,7 +3,7 @@ import type { World } from './world.ts';
 import type { CombatHit, CombatEffect } from './combat.ts';
 import type {GameIntent,ActionReply} from './actions.ts';
 export type EnemyStatus='fear'|'charm'|'slow'|'blind'|'sheep'|'taunt'|'stun'|'iceSlow'|'attackSlow'|'root'|'compassMark';
-export interface GamePresence { y:number;x:number;z:number;facing:number;planet:string;name:string;color:string;level:number;hp:number;maxHp:number;gear:SaveState['gear'];moving:boolean;visible:boolean;visual?:{size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean} }
+export interface GamePresence { y:number;x:number;z:number;facing:number;planet:string;name:string;color:string;level:number;hp:number;maxHp:number;gear:SaveState['gear'];moving:boolean;visible:boolean;visual?:{hidden?:boolean;size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean} }
 export interface GameAction { kind:'basic'|'skill'|'effect';aim?:{x:number;z:number};targetId?:string;index?:number;special?:string;x:number;z:number;facing:number;effect?:unknown }
 export interface NetworkHooks {
   role:'host'|'peer'|null;

@@ -1,3 +1,4 @@
+import {SORCERER as S,SORCERER_LOOKS} from './sorcerer-skills.ts';
 import {BIRD, BIRD_LOOKS, birdLanding} from './bird-skills.ts';
 export interface CombatPoint { x: number; z: number }
 export interface WeaponProfile { kind: 'fist'|'sword'|'gun'|'rod'; range?: number; cd?: number; arc?: number; special?: string; shot?: string; spread?: number; quality?: number; fx?: string }
@@ -16,8 +17,8 @@ export const DISGUISE_LOOKS=['charge','smoke','heal','icefield','blackhole','moo
   'tank','sandbag','flare','parachute','whistle','ribbon','fan','lantern','kite','ink','dragondance','starshield','torch','firework','bamboo','drum','bigstar',
   // The four moves (moves.ts): the Lob's arc and landing mark, the Rain's falling shots, and the petal burst where either lands.
   'lob','lobmark','petalfall','petalburst'] as const;
-export type EffectLook='eyes'|'burn'|'shock'|'boulder'|typeof DISGUISE_LOOKS[number]|typeof BIRD_LOOKS[number];
-export const EFFECT_LOOKS:readonly EffectLook[]=['eyes','burn','shock','boulder',...DISGUISE_LOOKS,...BIRD_LOOKS];
+export type EffectLook='eyes'|'burn'|'shock'|'boulder'|typeof DISGUISE_LOOKS[number]|typeof BIRD_LOOKS[number]|typeof SORCERER_LOOKS[number];
+export const EFFECT_LOOKS:readonly EffectLook[]=['eyes','burn','shock','boulder',...DISGUISE_LOOKS,...BIRD_LOOKS,...SORCERER_LOOKS];
 /** Superhero throw: lock a landing point, then lob over intervening ground obstacles. */
 export const BOULDER={range:14,fallback:8,time:.6,arc:4,height:3,radius:4.5,power:3.2,lift:7} as const;
 /** The laser gaze (dz_superhero slot 2): one sweep of `arc` rad in `time` s, a `length` m line `width` m wide; a creature is hit again after `rehit` s. */
@@ -33,6 +34,7 @@ export const ELECTRIC_COLOR='#8fdcff';
  * slot 3 control or support, slot 4 the big one.
  */
 export const DISGUISE_KITS:Readonly<Record<string,readonly string[]>>={
+  dz_sorcerer:['mandala','veil-portal','crimson-bands','meteor-gate'],
   dz_penguin:['penguin-peck','penguin-slide','penguin-blizzard','frozen-fish'],dz_explorer_duck:['duck-dagger','duck-grapple','duck-net','duck-lantern'],
   dz_superhero:['flight','dive','sweep','boulder'],dz_ninja:['clones','stealth','backstab','smoke'],dz_mage:['fireball','teleport','sheep','blackhole'],
   dz_knight:['block','knightcharge','taunt','holy'],dz_mecha:['tank','turret','missiles','energyshield'],dz_dino:['devour','tail','roar','giant'],
@@ -173,6 +175,12 @@ export class CombatSimulation {
   private host:CombatHost; private random:()=>number; private time=0; private serial=0; private combo=0;
   /** Damage factor of the levelled skill being cast; delayed hits keep the factor they were cast with. */
   private power=1;private giantStep=0;private lastStep:CombatPoint|null=null;private petCooldown=0;private pet2Cooldown=0;private dogCooldown=0;
+  private portal:{at:CombatPoint;facing:number;until:number}|null=null;
+  get portalHidden(){return this.portal!==null;}
+  /** Recasting Rush returns through the original stationary portal without restarting its cooldown. */
+  leavePortal(){if(!this.portal)return false;const portal=this.portal;this.portal=null;this.statuses.ambush=S.portal.ambush;this.host.effect({...portal.at,kind:'cast',look:'veil-exit',radius:1.2,duration:.35,facing:portal.facing,color:'#ff963a'});return true;}
+  private bands:{at:CombatPoint;until:number;next:number;rooted:Set<string>;damage:(t:CombatTarget,p:number)=>number}[]=[];
+  private discs:{from:CombatPoint;at:CombatPoint;dir:CombatPoint;left:number;hit:Set<string>;damage:(t:CombatTarget,p:number)=>number}[]=[];
   private blizzardUntil=0;
   /** A live, moving field shared with navigation and authoritative damage settlement. */
   get blizzardField(){return this.time<this.blizzardUntil?{...this.host.position(),radius:BIRD.blizzard.radius}:null;}
@@ -255,19 +263,19 @@ export class CombatSimulation {
     else if(ally.kind==='tree'||ally.kind==='cannon'||ally.kind==='turret')this.visual('dust',at,1.4,.7,'#d8c59a');
   }
   private haste(amount:number,time:number){this.swift=(this.statuses.swift??0)>0?Math.max(this.swift,amount):amount;this.statuses.swift=Math.max(this.statuses.swift??0,time);}
-  get locksMovement(){return !!this.action||(this.statuses.stun??0)>0;}
+  get locksMovement(){return this.portalHidden||!!this.action||(this.statuses.stun??0)>0;}
   /** Ground slam: a fast leap that snaps down onto the target when the shockwave lands at 0.42 s. */
   get airborne(){if(this.action?.bird==='grapple')return Math.sin(Math.PI*Math.max(0,Math.min(1,(this.time-this.action.started)/(this.action.until-this.action.started))))*1.1;if(this.action?.kind!=='slam')return 0;const t=(this.time-this.action.started)/(this.action.peak??.42);return t<1?Math.sin(t*Math.PI*.85)*2.6:0;}
   /** The movement skill in progress and its elapsed time, for the explorer's pose. */
   get pose(){const a=this.action;return a?.bird==='slide'?{kind:'slide' as const,t:this.time-a.started}:a&&(a.kind==='dash'||a.kind==='slam')?{kind:a.kind,t:this.time-a.started}:a?.kind==='ready'?{kind:'dash' as const,t:0}:null;}
   /** A move is in progress (a chain, a throw, a wind-up or a recovery): the next attack waits. */
-  get busy(){return (this.statuses.stun??0)>0||!!this.action||this.time<this.busyUntil;}
+  get busy(){return this.portalHidden||(this.statuses.stun??0)>0||!!this.action||this.time<this.busyUntil;}
   /** Rushing (the dash itself, on the ground or in the air): nothing hurts the explorer, ground marks included. */
   get rushing(){return this.action?.kind==='dash';}
   /** Seconds the dash in progress still runs (0 when there is none). */
   get dashLeft(){return this.action?.kind==='dash'?Math.max(0,this.action.until-this.time):0;}
-  get invulnerable(){return this.action?.kind==='dash'||(this.statuses.shield??0)>0||(this.statuses.invuln??0)>0;}
-  reset(){this.blizzardUntil=0;this.birdZones=[];this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  get invulnerable(){return this.portalHidden||this.action?.kind==='dash'||(this.statuses.shield??0)>0||(this.statuses.invuln??0)>0;}
+  reset(){this.portal=null;this.bands=[];this.discs=[];this.blizzardUntil=0;this.birdZones=[];this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook,quiet=false){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,...(look?{look}:{}),...(quiet?{quiet:true}:{}),...this.up(point)});}
@@ -288,7 +296,7 @@ export class CombatSimulation {
     if(target.hp<=0)return 0;const stats=this.host.stats(),p=this.host.position();
     const own=!this.helperShot&&!this.summonHit,sure=own&&(this.forced||this.edge.sure);
     const critical=this.random()<stats.critChance||sure,angle=Math.atan2(target.x-p.x,target.z-p.z);
-    const bonus=(this.statuses.giant>0?1.6:1)*(this.statuses.stealth>0?DZ.stealth.bonus:1)*(this.marked.has(target.id)?1.5:1)*((this.statuses.rally??0)>0?1+DZ.torch.bonus:1);
+    const bonus=((this.statuses.ambush??0)>0?1+S.portal.bonus:1)*(this.statuses.giant>0?1.6:1)*(this.statuses.stealth>0?DZ.stealth.bonus:1)*(this.marked.has(target.id)?1.5:1)*((this.statuses.rally??0)>0?1+DZ.torch.bonus:1);
     this.statuses.stealth=0;
     const share=this.edge.scale?.(target)??1;
     const amount=Math.max(1,Math.min(this.hitCap,own&&this.castCap?this.castCap(target):Infinity,Math.round(stats.attack*multiplier*this.power*bonus*(own?this.edge.bonus:1)*share*(critical?((own?this.edge.crit?.():undefined)??stats.critDamage??2):1)*(.9+this.random()*.2))));
@@ -322,7 +330,7 @@ export class CombatSimulation {
   }
   /** `factor` scales the hit (an air swing, jump-rules.ts AIR.swing); the server never passes it. */
   basic(target?:CombatTarget,factor=1){
-    if((this.statuses.stun??0)>0||this.action||this.time<this.busyUntil)return false;const weapon=this.host.weapon();if(weapon.kind==='rod')return false;
+    if(this.portalHidden||(this.statuses.stun??0)>0||this.action||this.time<this.busyUntil)return false;const weapon=this.host.weapon();if(weapon.kind==='rod')return false;
     target??=this.nearest(attackRange(weapon));if(!target)return false;
     const p=this.host.position();if(Math.hypot(target.x-p.x,target.z-p.z)>attackRange(weapon,target.radius))return false;
     const angle=this.aim(target);
@@ -500,6 +508,7 @@ export class CombatSimulation {
    * blink has moved the explorer.
    */
   disguise(id:string,index:number,air?:DisguiseAir){
+    if(this.portalHidden)return id==='dz_sorcerer'&&index===1?this.leavePortal():false;
     if(this.busy||(this.statuses.stun??0)>0)return false;
     const effect=DISGUISE_KITS[id]?.[index];if(!effect)return false;
     if(!air)return this.cast(effect);
@@ -507,7 +516,23 @@ export class CombatSimulation {
     try{return this.cast(effect,air);}finally{this.power=power;this.grounded=grounded;this.castCap=cap;}
   }
   /** Capture air-cast scaling for persistent zones as well as scheduled hits. */
-  private birdDamage(){const power=this.power,cap=this.castCap,grounded=this.grounded;return(t:CombatTarget,p:number,s=0,l=0,k=0)=>{const prev=[this.power,this.castCap,this.grounded] as const;this.power=power;this.castCap=cap;this.grounded=grounded;try{return this.damage(t,p,s,l,k);}finally{[this.power,this.castCap,this.grounded]=prev;}};}
+  private birdDamage(){const ambush=(this.statuses.ambush??0)>0?1+S.portal.bonus:1,power=this.power,cap=this.castCap,grounded=this.grounded;return(t:CombatTarget,p:number,s=0,l=0,k=0)=>{const prev=[this.power,this.castCap,this.grounded] as const;this.power=power;this.castCap=cap;this.grounded=grounded;try{return this.damage(t,p*ambush/((this.statuses.ambush??0)>0?1+S.portal.bonus:1),s,l,k);}finally{[this.power,this.castCap,this.grounded]=prev;}};}
+  private sorcererCast(effect:string){
+    const p={...this.host.position()},target=this.chosen(S.meteor.range),aim=this.host.aimPoint?.()??target,angle=aim?Math.atan2(aim.x-p.x,aim.z-p.z):this.host.facing(),d=direction(angle),damage=this.birdDamage();this.host.face(angle);
+    const visual=(look:EffectLook,at:CombatPoint,radius:number,duration:number,to?:CombatPoint)=>this.host.effect({...at,kind:'cast',look,radius,duration,facing:angle,color:'#ff963a',...(to?{toX:to.x,toZ:to.z}:{}),...this.up(at)});
+    if(effect==='mandala'){
+      const t=this.chosen(S.mandala.range);if(!t)return false;this.busyUntil=this.time+S.mandala.hits*S.mandala.gap;
+      for(let i=0;i<S.mandala.hits;i++)this.later(i*S.mandala.gap,()=>{const at=this.host.position();visual('mandala',at,S.mandala.range,.16);if(t.hp>0&&Math.hypot(t.x-at.x,t.z-at.z)<=S.mandala.range+t.radius){this.aim(t);damage(t,S.mandala.power);}if(i===4){const dir=direction(this.host.facing()),end={x:at.x+dir.x*S.mandala.discRange,z:at.z+dir.z*S.mandala.discRange};visual('mandala-disc',at,.7,S.mandala.discRange/S.mandala.discSpeed,end);this.discs.push({from:{...at},at:{...at},dir,left:S.mandala.discRange,hit:new Set(),damage});}});
+    }else if(effect==='veil-portal'){
+      // The caster hides inside the pocket dimension; the gate stays at its original position.
+      this.portal={at:{x:p.x+d.x*.6,z:p.z+d.z*.6},facing:angle,until:this.time+S.portal.time};visual('veil-portal',this.portal.at,1.2,S.portal.time);
+    }else if(effect==='crimson-bands'){
+      visual('crimson-bands',p,S.bands.radius,S.bands.time);this.bands.push({at:p,until:this.time+S.bands.time,next:this.time,rooted:new Set(),damage});
+    }else if(effect==='meteor-gate'){
+      const to=birdLanding(p,aim,angle,S.meteor.range);visual('meteor-gate',p,S.meteor.radius,S.meteor.flight+S.meteor.fall,to);this.busyUntil=this.time+.25;
+      this.later(S.meteor.flight+S.meteor.fall,()=>{visual('meteor-impact',to,S.meteor.radius,.6);for(const t of this.within(to,S.meteor.radius)){damage(t,S.meteor.power);if(t.hp>0)this.host.status?.(t,'stun',S.meteor.stun);}});
+    }else return false;return true;
+  }
   private birdCast(effect:string){
     const p={...this.host.position()},target=this.chosen(15),aim=this.host.aimPoint?.()??target,angle=effect==='penguin-slide'?this.host.facing():aim?Math.atan2(aim.x-p.x,aim.z-p.z):this.host.facing();this.host.face(angle);
     const visual=(look:EffectLook,at:CombatPoint,radius:number,duration:number,to?:CombatPoint)=>this.host.effect({...at,kind:'cast',look,radius,duration,facing:angle,color:look.startsWith('duck')||look==='compass-mark'?'#b995ff':'#b8efff',...(to?{toX:to.x,toZ:to.z}:{}),...this.up(at)});
@@ -537,6 +562,7 @@ export class CombatSimulation {
     return true;
   }
   private cast(effect:string,air?:DisguiseAir){
+    if((SORCERER_LOOKS as readonly string[]).includes(effect))return this.sorcererCast(effect);
     if((BIRD_LOOKS as readonly string[]).includes(effect))return this.birdCast(effect);
     if(SPECIAL_SKILLS.has(effect))return this.special(effect);
     const p={...this.host.position()},angle=this.aim(),d=direction(angle),K=DZ;
@@ -700,6 +726,12 @@ export class CombatSimulation {
     if(this.pet2Cooldown<=0&&this.host.pet2){const cd=this.petShot(this.host.pet2(),position);if(cd)this.pet2Cooldown=cd;}
     this.dogToss(dt);
     for(const key of Object.keys(this.statuses))this.statuses[key]=Math.max(0,this.statuses[key]-dt);
+    if(this.portal&&this.time>=this.portal.until)this.leavePortal();
+    for(const zone of this.bands){if(this.time>=zone.until)continue;const targets=this.within(zone.at,S.bands.radius);for(const t of targets)if(!zone.rooted.has(t.id)){zone.rooted.add(t.id);this.host.status?.(t,'root',S.bands.root);}if(zone.next<zone.until-1e-7&&this.time+1e-8>=zone.next){zone.next+=S.bands.tick;for(const t of targets)zone.damage(t,S.bands.power);}}
+    this.bands=this.bands.filter(z=>z.until>this.time);
+    for(const disc of this.discs){const length=Math.min(disc.left,S.mandala.discSpeed*dt),from={...disc.at};disc.at.x+=disc.dir.x*length;disc.at.z+=disc.dir.z*length;disc.left-=length;for(const t of this.host.targets())if(t.hp>0&&!disc.hit.has(t.id)&&distanceToSegment(t,from,disc.at)<=.7+t.radius){disc.hit.add(t.id);disc.damage(t,S.mandala.discPower);}}
+    this.discs=this.discs.filter(d=>d.left>1e-7);
+
     for(const[id,time]of this.marked){if(time<=dt)this.marked.delete(id);else this.marked.set(id,time-dt);}
     const due=this.jobs.filter(job=>job.at<=this.time);this.jobs=this.jobs.filter(job=>job.at>this.time);for(const job of due)job.run();
     for(const zone of this.birdZones){

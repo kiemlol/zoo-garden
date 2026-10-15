@@ -17,7 +17,7 @@ for(const kit of [heroKit,disguiseKit]){(kit as any).loadScene=disk;await kit.lo
 const world=()=>Object.assign(Object.create(World.prototype),{state:M.newGame(),position:new T.Vector3(),facing:0,walkClock:0,playerMaterials:[],weaponKind:'fist',time:0});
 const meshes=(root:T.Object3D)=>{const a:T.Mesh[]=[];root.traverse(o=>{if(o instanceof T.Mesh&&!o.userData.outline)a.push(o);});return a;};
 const visibleTriangles=(root:T.Object3D)=>meshes(root).filter(m=>m.visible).reduce((n,m)=>n+(m.geometry.index?.count??m.geometry.getAttribute('position').count)/3,0);
-const ids=['dz_penguin','dz_explorer_duck'];
+const ids=['dz_penguin','dz_explorer_duck','dz_sorcerer'];
 function checkCostume(root:T.Group,id:string){
  const all=meshes(root),base=all.filter(m=>!m.name.startsWith(id));assert.ok(base.length>0,'the original render meshes remain on their rig');
  assert.ok(base.every(m=>!m.visible),'no original skin, hair, shirt, shorts, shoes or backpack can draw');
@@ -59,4 +59,12 @@ test('costumes change height and build without exposing the base or mutating sha
 
 test('portrait framing follows the visible costume head at every selected height',()=>{
  const w=world();for(const id of ids)for(const h of ROWS.height){const c=w.lookAvatar('#fff',{disguise:id},`girl-${h}-none-bare`),holder=new T.Group().add(c),camera=new T.PerspectiveCamera(30,1,.01,100);aimPortrait(camera,holder);camera.updateMatrixWorld(true);holder.updateMatrixWorld(true);const bounds=new T.Box3(),box=new T.Box3();c.getObjectByName('head')!.traverseVisible((o:T.Object3D)=>{if(o instanceof T.Mesh&&!o.userData.outline){o.geometry.computeBoundingBox();bounds.union(box.copy(o.geometry.boundingBox!).applyMatrix4(o.matrixWorld));}});const centre=bounds.getCenter(new T.Vector3()).project(camera);assert.ok(Math.abs(centre.x)<.7&&Math.abs(centre.y)<.7&&centre.z<1,`${id} ${h}: ${centre.toArray()}`);}
+});
+
+test('tall costumes keep compact coats and separate shoes with their own visible animated shins',()=>{
+ const w=world();const bounds=(root:T.Object3D,predicate:(o:T.Mesh)=>boolean)=>{root.updateMatrixWorld(true);const b=new T.Box3(),part=new T.Box3();root.traverseVisible(o=>{if(o instanceof T.Mesh&&!o.userData.outline&&predicate(o)){o.geometry.computeBoundingBox();b.union(part.copy(o.geometry.boundingBox!).applyMatrix4(o.matrixWorld));}});return b;};
+ for(const id of ids){const normal=w.lookAvatar('#fff',{disguise:id},DEFAULT_LOOK),tall=w.lookAvatar('#fff',{disguise:id},'girl-tall-none-bare');
+ const isBody=(m:T.Mesh)=>m.userData.tag==='body',a=bounds(normal,isBody),b=bounds(tall,isBody),feet=bounds(tall,m=>m.userData.tag?.startsWith('leg-')),shin=tall.getObjectByName(id+'@shin') as T.Mesh;
+ assert.ok(b.getSize(new T.Vector3()).y<=a.getSize(new T.Vector3()).y*1.09,'height is added to legs instead of stretching the whole coat');assert.ok(b.min.y>feet.min.y+.45,'raised hem and grounded footwear are separate');assert.ok(shin&&shin.parent?.name.startsWith('leg-'),'the visible leg belongs to its animated leg bone');assert.ok(bounds(tall,m=>m.name===id+'@shin').min.y<b.min.y,'costume legs fill the exposed gap');checkCostume(tall,id);
+ }
 });

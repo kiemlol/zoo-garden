@@ -409,7 +409,7 @@ export async function createGameServer(options = {}) {
           const combat=combatAuthority.engineFor(peer).sim;
           peer.poseAt = now; if (peer.planet !== 'home' || peer.visit) peer.tripAt = now; const y = number(message.y, 0, -30, 50), dog = !peer.visit && dogWorn(account.profile.gear) && account.profile.farm?.animals?.find(a => a.kind === 'dog'); // only a dog worn as a pet comes along (pet-slots.ts)
           // A guard dog follows its explorer only away from the safe village (guard-dog.ts); its breed is all others need.
-          peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0},block:combat.statuses.block>0,decoys:combatAuthority.decoys(peer) };
+          peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,hidden:combat.portalHidden,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0},block:combat.statuses.block>0,decoys:combatAuthority.decoys(peer) };
           broadcastPose(room, peer);
         } else if (message.type === 'dm') {
           // A private message to a friend, online or not: it lands in their guest diary (and pops up if they are playing).
@@ -464,7 +464,7 @@ export async function createGameServer(options = {}) {
           dungeonLobby.message(peer, message);
         } else if (message.type === 'effect' && room) {
           // Storm centres also drive client collision: only the combat authority may publish them.
-          if(message.visual?.look==='penguin-blizzard')return;
+          if((message.visual?.look==='penguin-blizzard'||['mandala','mandala-disc','veil-portal','veil-exit','crimson-bands','meteor-gate','meteor-impact'].includes(message.visual?.look)))return;
           const visual=message.visual,cleanVisual=visual&&['arc','ring','impact','trail','beam','cast'].includes(visual.kind)?{kind:visual.kind,x:number(visual.x),z:number(visual.z),radius:number(visual.radius,1,0,40),facing:number(visual.facing,0,-100,100),duration:number(visual.duration,.4,0,12),...(Number.isFinite(visual.arc)?{arc:number(visual.arc,2.2,0,6.3)}:{}),...(Number.isFinite(visual.width)?{width:number(visual.width,.65,.05,4)}:{}),...(EFFECT_LOOKS.includes(visual.look)?{look:visual.look}:{}),...(Number.isFinite(visual.toX)&&Number.isFinite(visual.toZ)?{toX:number(visual.toX),toZ:number(visual.toZ)}:{}),...(visual.quiet===true?{quiet:true}:{}),color:/^#[a-f0-9]{6}$/i.test(visual.color)?visual.color:'#fff2a0'}:null;
           broadcast(room, { type: 'effect', visual:cleanVisual, by: account.id, effect: text(message.effect, 30), x: number(message.x), z: number(message.z), color: /^#[a-f0-9]{6}$/i.test(message.color) ? message.color : '#fff2a0' }, account.id);
         }
