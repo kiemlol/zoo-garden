@@ -7,6 +7,7 @@ const SPECIAL: Record<string, Sound> = {
   volley: 'pop', anchor: 'swing', lotus: 'magic', dragon: 'swing', eagle: 'swing', goldstar: 'magic',
 };
 const DISGUISE: Record<string, readonly Sound[]> = {
+  dz_ink_painter:['cast','poof','magic','magic'],
   dz_sorcerer:['swing','magic','cast','boom'],
   dz_penguin:['punch','freeze','freeze','splash'],dz_explorer_duck:['swing','snap','snap','cast'],
   dz_superhero: ['magic', 'boom', 'zap', 'boom'], dz_ninja: ['poof', 'poof', 'swing', 'poof'], dz_mage: ['cast', 'magic', 'magic', 'magic'],

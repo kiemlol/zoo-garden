@@ -49,6 +49,7 @@ export const KIT_FILES = {
   wildCreatures: modelUrl('wild-creatures.glb'),
   birdDisguises:modelUrl('bird-disguises.glb'),
   sorcerer:modelUrl('sorcerer.glb'),
+  inkPainter:modelUrl('ink-painter.glb'),
   festival: modelUrl('festival-gear.glb'),
   creatures: modelUrl('creatures.glb'),
   forestBirds: modelUrl('forest-birds.glb'),
@@ -544,7 +545,7 @@ export const festivalKit = new KitLibrary([KIT_FILES.festival]);
 export const weaponKit = new KitLibrary([KIT_FILES.weapons,KIT_FILES.swampGear,KIT_FILES.wildCreatures]);
 /** New gameplay item, existing Blender trident geometry; no duplicate weapon download. */
 export const weaponModelName = (id: string) => id === 'harpoon' ? 'trident' : id;
-export const disguiseKit = new KitLibrary([KIT_FILES.disguises,KIT_FILES.birdDisguises,KIT_FILES.sorcerer]);
+export const disguiseKit = new KitLibrary([KIT_FILES.disguises,KIT_FILES.birdDisguises,KIT_FILES.sorcerer,KIT_FILES.inkPainter]);
 export const petKit = new KitLibrary([KIT_FILES.pets]);
 /** Little boss companions (pet_b_<boss>), loaded the first time one is worn. */
 export const bossPetKit = new KitLibrary([KIT_FILES.bossPets]);
@@ -565,3 +566,6 @@ export const cageKit = new KitLibrary([KIT_FILES.cage]);
 
 /** Skill props intentionally have no inventory entry. */
 export const birdSkillKit=new KitLibrary([KIT_FILES.birdDisguises]);
+
+/** The calligraphy brush and ink dragon are skill-only models. */
+export const inkSkillKit=new KitLibrary([KIT_FILES.inkPainter]);

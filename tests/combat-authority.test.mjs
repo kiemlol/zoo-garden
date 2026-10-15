@@ -358,3 +358,15 @@ test('sorcerer portal authority validates early exit during cooldown and rejects
  f.authority.skill(f.peer,1);const next=e.nextSkill[1];assert.equal(next,Date.now()+12000);assert.equal(e.sim.portalHidden,true);assert.equal(e.sim.invulnerable,true);const hp=f.account.profile.hp;f.authority.damage(f.peer,enemy.id,'melee');assert.equal(e.healthEvents.length,0);assert.equal(f.account.profile.hp,hp);
  f.authority.skill(f.peer,0);assert.equal(e.sim.portalHidden,true);assert.equal(e.nextSkill[0],0);f.authority.skill(f.peer,1);assert.equal(e.sim.portalHidden,false);assert.equal(e.nextSkill[1],next);assert.equal(e.sim.statuses.ambush,1);f.authority.skill(f.peer,1);assert.equal(e.sim.portalHidden,false,'cannot reopen until the original 12 s cooldown finishes');
 });
+
+test('ink domain authority clamps host snapshots on both sides and cancels when the disguise changes',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});const f=await fixture(t,{profile:p=>{p.gear.disguise='dz_ink_painter';p.bag.dz_ink_painter=1;}}),inside=f.spawn('mushroom',-30,0),outside=f.spawn('boar',-42,0),e=f.authority.engineFor(f.peer);f.peer.pose.x=-30;f.peer.pose.z=0;f.authority.skill(f.peer,3);assert.equal(e.sim.inkDomain.radius,8);assert.equal(e.nextSkill[3],Date.now()+20000);
+ t.mock.timers.tick(100);f.authority.acceptSnapshots(f.room,[{id:inside.id,type:inside.type,x:-39,z:0},{id:outside.id,type:outside.type,x:-35,z:0}]);assert.ok(inside.x>-38,'a trapped mob cannot leave');assert.ok(outside.x<-38,'an outside mob cannot enter');f.account.profile.gear.disguise=undefined;f.authority.engineFor(f.peer);assert.equal(e.sim.inkDomain,null);assert.ok(f.messages.some(m=>m.type==='effect'&&m.visual?.look==='ink-domain-end'));
+});
+
+test('ink domain canonically reduces enemy damage by 40% and increases its caster damage by 50%',async t=>{
+ t.mock.timers.enable({apis:['Date','setInterval'],now:1800000000000});t.mock.method(Math,'random',()=>.5);
+ const create=()=>fixture(t,{profile:p=>{p.gear.disguise='dz_ink_painter';p.bag.dz_ink_painter=1;}}),a=await create(),b=await create(),ea=a.spawn('mushroom'),eb=b.spawn('mushroom'),sa=a.authority.engineFor(a.peer),sb=b.authority.engineFor(b.peer);ea.damage=eb.damage=100;ea.hp=eb.hp=ea.maxHp=eb.maxHp=10000;
+ a.authority.skill(a.peer,3);a.authority.damage(a.peer,ea.id,'melee');b.authority.damage(b.peer,eb.id,'melee');assert.ok(Math.abs(sa.healthEvents[0].amount/sb.healthEvents[0].amount-.6)<.02);
+ const ha=ea.hp,hb=eb.hp;a.authority.basic(a.peer,ea.id);b.authority.basic(b.peer,eb.id);assert.ok(Math.abs((ha-ea.hp)/(hb-eb.hp)-1.5)<.12);
+});

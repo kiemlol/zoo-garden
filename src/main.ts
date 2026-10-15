@@ -1,3 +1,6 @@
+import type {InkDomain} from './ink-skills.ts';
+import {InkSkillView} from './ink-skill-view.ts';
+import {InkDomainView} from './ink-domain-view.ts';
 import {SorcererView} from './sorcerer-view.ts';
 import {BirdSkillView} from './bird-skill-view.ts';
 import {lockBrowserGestures} from './browser-gestures.ts';
@@ -218,7 +221,7 @@ let modes:typeof import('./modes.ts')|null=null,modesLoading:Promise<void>|null=
 async function perform<T=any>(type:string,payload:Record<string,unknown>={},{quiet=false}:{quiet?:boolean}={}):Promise<T|undefined>{
   const before=state.level,original=state,online=!!actionHandler,previousDisguise=state.gear.disguise;
   try{const result=actionHandler?(await actionHandler({type,payload})).result:applyGameAction(state,{type,payload},{now:Date.now(),random:Math.random});
-    if(state!==original)return undefined;if(!online)levelCheck(before);if(previousDisguise!==state.gear.disguise){combat.reset();birdFx.clear();sorcererFx.clear();world.playerHidden=false;world.spinT=0;}save();updateHud();return result as T;
+    if(state!==original)return undefined;if(!online)levelCheck(before);if(previousDisguise!==state.gear.disguise){combat.reset();birdFx.clear();sorcererFx.clear();inkFx.clear();inkWash.clear();world.playerHidden=false;world.spinT=0;}save();updateHud();return result as T;
   }catch(error){if(state===original)reportRefusal(type,payload,error,quiet);return undefined;}
 }
 function reportRefusal(type:string,payload:Record<string,unknown>,error:unknown,quiet:boolean){
@@ -313,6 +316,8 @@ const movement = new MovementControls(world.keys);
 const joystick=mountJoystick($('#hud'),()=>started&&!uiBlocked()&&!placement&&!flight,direction=>{world.joystickInput=direction;});
 const combatView=new CombatView(world.scene);
 const remoteBlizzards=new Map<string,{x:number;z:number;radius:number;until:number}>();
+const inkFx=new InkSkillView(world.scene,(x,z)=>world.interior?0:Math.max(0,terrainHeight(world.environment.layout,{x,z})),owner=>owner==='self'?world.player:world.remotePlayers?.get(owner)?.mesh??null,true,()=>world.enemies);
+const inkWash=new InkDomainView(),remoteInkDomains=new Map<string,InkDomain&{until:number}>();
 const sorcererFx=new SorcererView(world.scene,(x,z)=>world.interior?0:Math.max(0,terrainHeight(world.environment.layout,{x,z})));
 const birdFx=new BirdSkillView(world.scene,(x,z)=>world.interior?0:Math.max(0,terrainHeight(world.environment.layout,{x,z})),(x,z)=>Math.hypot(world.position.x-x,world.position.z-z)<1.5?world.player:null,()=>world.enemies);
 // Laser gaze beams, electric bolts and bursts, scorch marks and the ⚡ mark (skill-fx.ts), for the explorer and remote players alike.
@@ -343,14 +348,18 @@ const combat=new CombatSimulation({
   status:(target,kind,duration)=>{if(dungeonApi?.owns(target)||ctfApi?.owns(target)||rescueApi?.owns(target)){world.statusEnemy(target as Enemy,kind,duration);return;}if(actionHandler)return;if(!network.status?.(target.id,kind,duration))world.statusEnemy(target as Enemy,kind,duration);},
   moveTarget:(target,x,z)=>{if(dungeonApi?.owns(target)||ctfApi?.owns(target)||rescueApi?.owns(target)){moveEnemy(target as Enemy,x,z);return;}if(actionHandler)return;if(!network.moveTarget?.(target.id,x,z))moveEnemy(target as Enemy,x,z);},
 });
+world.inkDomains=()=>{const own=combat.inkDomain,fields:InkDomain[]=own?[own]:[];for(const [owner,f]of remoteInkDomains){if(f.until<=world.time)remoteInkDomains.delete(owner);else fields.push(f);}return fields;};
 world.blizzardFields=()=>{const own=combat.blizzardField,fields:{x:number;z:number;radius:number}[]=own?[own]:[];for(const [owner,f]of remoteBlizzards){if(f.until<=world.time)remoteBlizzards.delete(owner);else fields.push(f);}return fields;};
 combatHud.isMarked=id=>combat.marked.has(id);
 const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 // Swings become additive slash trails and area skills become expanding rings with sparks.
 function showEffect(effect:CombatEffect,owner='self'){
+  if(owner!=='self'&&effect.look==='ink-domain')remoteInkDomains.set(owner,{x:effect.x,z:effect.z,radius:effect.radius,until:world.time+(effect.duration??10)});
+  if(effect.look==='ink-domain-end')remoteInkDomains.delete(owner);
   if(effect.look==='penguin-blizzard'&&owner!=='self')remoteBlizzards.set(owner,{x:effect.x,z:effect.z,radius:effect.radius,until:world.time+(effect.duration??.2)});
   const fx=world.fx,at={x:effect.x,z:effect.z},up=Math.max(0,Math.min(8,effect.y??0)); // `up`: the height a cast from the air began at (air-cast.ts)
   if(effect.quiet)return; // a repeat tick of a cast already drawn (the whirlwind's hits)
+  if(inkFx.play(effect,owner)){if(effect.look==='ink-brush'&&owner==='self')world.playerAttack('sword');return;}
   if(sorcererFx.play(effect,owner)){if(effect.look==='mandala'&&owner==='self')world.playerAttack('fist');return;}
   if(birdFx.play(effect)){if((effect.look==='penguin-peck'||effect.look==='duck-dagger')&&Math.hypot(effect.x-world.position.x,effect.z-world.position.z)<.5)world.playerAttack(effect.look==='duck-dagger'?'sword':'fist');return;}
   if(skillFx.disguises.play(effect))return;
@@ -369,7 +378,7 @@ function showEffect(effect:CombatEffect,owner='self'){
   combatView.effect(effect);
 }
 function emitAction(action:Omit<GameAction,'x'|'z'|'facing'>){const value={...action,x:world.position.x,z:world.position.z,facing:world.facing};for(const listener of actionListeners)listener(value);}
-function moveEnemy(target:Enemy,x:number,z:number){if(!Number.isFinite(x)||!Number.isFinite(z)||Math.hypot(target.x-x,target.z-z)>12||world.blocked(x,z))return;target.x=x;target.z=z;target.mesh.position.x=x;target.mesh.position.z=z;}
+function moveEnemy(target:Enemy,x:number,z:number){if(!Number.isFinite(x)||!Number.isFinite(z)||Math.hypot(target.x-x,target.z-z)>12||world.blocked(x,z))return;const safe=world.constrainInkTarget(target,{x,z});target.x=safe.x;target.z=safe.z;target.mesh.position.x=safe.x;target.mesh.position.z=safe.z;}
 // Upgrade visuals in place when ready; playing and saved progress never wait on assets.
 void refinedAssets.loadAll().then(() => world.applyRefinedAssets());
 void spaceKit.load().then(() => world.applyRefinedAssets());
@@ -1686,7 +1695,7 @@ combatView.extraAllies=()=>{
   if(remoteSummonIds.size>256)remoteSummonIds.clear();
   return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
 };
-function resetCombat(){remoteBlizzards.clear();venom.clear();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();birdFx.clear();sorcererFx.clear();world.playerHidden=false;world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){remoteInkDomains.clear();remoteBlizzards.clear();venom.clear();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();birdFx.clear();sorcererFx.clear();inkFx.clear();inkWash.clear();world.playerHidden=false;world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
@@ -1703,7 +1712,7 @@ export const gameBridge:GameBridge={
   setActionHandler(handler){actionHandler=handler;world.authoritativeAction=handler?intent=>handler(intent).then(reply=>reply.result):undefined;},
   applyAuthoritativeState(next){
     const planetChanged=next.planet!==state.planet,wasDead=state.hp<=0;const heldRod=M.ITEMS[state.gear.weapon??'']?.weapon?.kind==='rod'?state.gear.weapon:undefined;const previousDisguise=state.gear.disguise,previousGear=JSON.stringify(state.gear),wasFishing=!!world.fishing&&world.fishing!=='idle',plotsChanged=next.plots.length!==state.plots.length,decorChanged=JSON.stringify(next.decorations)!==JSON.stringify(state.decorations);
-    const beforeLevel=state.level;const current=state as unknown as Record<string,unknown>;for(const key of Object.keys(current))if(!Object.hasOwn(next,key))delete current[key];Object.assign(state,next);if(wasFishing&&!planetChanged){const rod=contextGear.forFishing(state);if(rod)state.gear.weapon=rod;}else if(!planetChanged&&gearWater&&heldRod&&(state.bag[heldRod]??0)>0)state.gear.weapon=heldRod;const gearChanged=JSON.stringify(state.gear)!==previousGear;levelCheck(beforeLevel);if(planetChanged){visiting=null;visitHome=null;world.state=state;endFishing();resetCombat();world.build(state.planet);world.refreshPlayer();if(wasDead)toast('You are safe at home.','🏡');}if(!visiting){world.state=state;if(plotsChanged){const position=world.position.clone();rebuildHomePresentation(state.planet);world.position.copy(position);}else{world.syncCrops();if(decorChanged)world.syncDecorations();}if(gearChanged){if(previousDisguise!==state.gear.disguise){combat.reset();birdFx.clear();sorcererFx.clear();world.playerHidden=false;world.spinT=0;}world.refreshPlayer();}world.syncDropped();}
+    const beforeLevel=state.level;const current=state as unknown as Record<string,unknown>;for(const key of Object.keys(current))if(!Object.hasOwn(next,key))delete current[key];Object.assign(state,next);if(wasFishing&&!planetChanged){const rod=contextGear.forFishing(state);if(rod)state.gear.weapon=rod;}else if(!planetChanged&&gearWater&&heldRod&&(state.bag[heldRod]??0)>0)state.gear.weapon=heldRod;const gearChanged=JSON.stringify(state.gear)!==previousGear;levelCheck(beforeLevel);if(planetChanged){visiting=null;visitHome=null;world.state=state;endFishing();resetCombat();world.build(state.planet);world.refreshPlayer();if(wasDead)toast('You are safe at home.','🏡');}if(!visiting){world.state=state;if(plotsChanged){const position=world.position.clone();rebuildHomePresentation(state.planet);world.position.copy(position);}else{world.syncCrops();if(decorChanged)world.syncDecorations();}if(gearChanged){if(previousDisguise!==state.gear.disguise){combat.reset();birdFx.clear();sorcererFx.clear();inkFx.clear();inkWash.clear();world.playerHidden=false;world.spinT=0;}world.refreshPlayer();}world.syncDropped();}
     updateHud();updateLabels();
   },
   spawnNetworkDrop,removeNetworkDrop,releaseNetworkDrop(id){for(const meta of networkDrops.values())if(meta.drop.id===id)meta.drop.releaseAt=0;},clearNetworkDrops(){networkDrops.clear();drops.clear();},
@@ -2057,7 +2066,7 @@ function frame(now:number){
   // browser throttles rendering, and collisions do not tunnel at a low frame rate. At most four steps
   // run per frame; a longer stall turns into slow motion rather than a spiral of ever longer frames.
   updateContextWeapon();joystick.update();
-  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);stepFight(step,active,combatActive);combat.update(step,combatActive);combat.statuses.stun=Math.max(combat.statuses.stun??0,world.playerStun??0);combat.statuses.slip=Math.max(combat.statuses.slip??0,world.playerSlip??0);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerSpeedBonus=combat.speedBonus;world.playerHidden=combat.portalHidden;world.playerStealth=combat.portalHidden||(combat.statuses.stealth??0)>0;world.playerSizeScale=combat.visualScale;world.playerShield=combat.invulnerable;world.playerBat=(combat.statuses.bats??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);skillFx.boulders.update(combatActive?step:0);skillFx.disguises.update(combatActive?step:0);birdFx.update(combatActive?step:0);sorcererFx.update(combatActive?step:0);if(started&&!document.hidden&&!actionHandler)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
+  for(const step of frameSteps(dt)){const active=started&&!uiBlocked()&&!document.hidden,combatActive=started&&!document.hidden&&(!uiBlocked()||!!network.role);combatTimers.advance(step,combatActive);stepFight(step,active,combatActive);combat.update(step,combatActive);combat.statuses.stun=Math.max(combat.statuses.stun??0,world.playerStun??0);combat.statuses.slip=Math.max(combat.statuses.slip??0,world.playerSlip??0);world.movementLocked=combat.locksMovement;world.playerFlying=(combat.statuses.flight??0)>0;world.playerSpeedBonus=combat.speedBonus;world.playerHidden=combat.portalHidden||combat.inkDashing;world.playerStealth=combat.portalHidden||(combat.statuses.stealth??0)>0;world.playerSizeScale=combat.visualScale;world.playerShield=combat.invulnerable;world.playerBat=(combat.statuses.bats??0)>0;gestures.update(step,active);world.update(step,active,false,started&&!document.hidden&&(active||!!network.role));if(active)world.player.position.y+=combat.airborne;combatView.update(step,combat.projectiles,combatActive,combat.allies);skillFx.boulders.update(combatActive?step:0);skillFx.disguises.update(combatActive?step:0);birdFx.update(combatActive?step:0);sorcererFx.update(combatActive?step:0);inkFx.update(combatActive?step:0);inkWash.update(step,world.inkDomains?.()??[],world.interior?.scene??world.scene,[world.player,...[...world.remotePlayers?.values()??[]].map(p=>p.mesh)]);if(started&&!document.hidden&&!actionHandler)M.tickEffects(state,step);if(fishGame&&!document.hidden)updateFishing(step);}
   // Landing from the ground slam squashes the explorer and jolts the camera.
   const airborne=combat.airborne>0;if(wasAirborne&&!airborne){world.landT=.25;slamImpact();}wasAirborne=airborne;
   // The explorer's pose follows the weapon, skills, fishing line and hit invulnerability.

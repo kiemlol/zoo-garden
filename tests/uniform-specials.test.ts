@@ -1,3 +1,4 @@
+import {INK_SKILLS} from '../src/ink-skills.ts';
 import {SORCERER_SKILLS} from '../src/sorcerer-skills.ts';
 import {BIRD_SKILLS} from '../src/bird-skills.ts';
 // The outfit (clothes) specials of the six uniforms read, look and sound like the uniform disguise kits: toy and cute,
@@ -46,5 +47,5 @@ test("content.ts keeps no reference source strings as the disguises' internal na
   const names = [...block.matchAll(/"name": "([^"]*)"/g)].map(m => m[1]);
   assert.equal(names.length, 16 * 5);
   for (const name of names) assert.doesNotMatch(name, /[À-ỹ]/u, name);
-  for (const d of Object.values(DISGUISES)) for (const s of d.skills) assert.ok([...names,...SORCERER_SKILLS.map(s=>s.name),...Object.values(BIRD_SKILLS).flat().map(s=>s.name)].includes(s.name), s.name);
+  for (const d of Object.values(DISGUISES)) for (const s of d.skills) assert.ok([...names,...INK_SKILLS.map(s=>s.name),...SORCERER_SKILLS.map(s=>s.name),...Object.values(BIRD_SKILLS).flat().map(s=>s.name)].includes(s.name), s.name);
 });

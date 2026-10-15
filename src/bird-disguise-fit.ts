@@ -52,7 +52,7 @@ export function fitBirdDisguise(root:T.Object3D,id:string,look:LookId){
  for(const side of [-1,1]){const part=root.getObjectByName(side<0?'leg-left':'leg-right');if(!part)continue;
   const size=penguin?.size??1,bottom=(penguin ? .32 : .36)*size,top=Math.max(bottom+.12,hem+.26),height=top-bottom;
   const leg=new T.Mesh(new T.CylinderGeometry(.115*size,.11*size,height,12),new T.MeshStandardMaterial({color:id==='dz_penguin'?'#ffe2cb':'#242936',roughness:.85}));leg.name=id+'@shin';
-  const at=new T.Vector3(side*.2*size*(penguin?(BUILD[splitLook(look).body]?.limb??1):1), bottom+height/2,0).applyMatrix4(root.matrixWorld);part.updateWorldMatrix(true,false);part.worldToLocal(at);leg.position.copy(at);part.add(leg);if(penguin)part.userData.gaitScale=.5;
+  const at=new T.Vector3(side*.2*size*(penguin?(BUILD[splitLook(look).body]?.limb??1):1), bottom+height/2,0).applyMatrix4(root.matrixWorld);part.updateWorldMatrix(true,false);part.worldToLocal(at);leg.position.copy(at);part.add(leg);
  }
  // Held gear is attached after this deformation: use the retargeted hand anchor, keeping the weapon's own size.
  root.userData.fit={'hand-left':{scale:[1,1,1],offset:[0,0,0]},'hand-right':{scale:[1,1,1],offset:[0,0,0]}};

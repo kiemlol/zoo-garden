@@ -1,3 +1,5 @@
+import {INK_LOOKS} from '../src/ink-skills.ts';
+import {InkSkillView} from '../src/ink-skill-view.ts';
 import {SorcererView} from '../src/sorcerer-view.ts';
 import {SORCERER_LOOKS} from '../src/sorcerer-skills.ts';
 import * as T from 'three';
@@ -42,8 +44,8 @@ function arena(extra: Partial<CombatTarget>[] = []) {
   return { sim, p, effects, hits, statuses, targets, run, healed: () => healed };
 }
 
-test('all 19 disguises have exactly four skills, a kit entry, a description, a sound and an icon each', () => {
-  assert.equal(Object.keys(DISGUISES).length, 19);
+test('all 20 disguises have exactly four skills, a kit entry, a description, a sound and an icon each', () => {
+  assert.equal(Object.keys(DISGUISES).length, 20);
   for (const [id, d] of Object.entries(DISGUISES)) {
     assert.equal(d.skills.length, 4, id); assert.equal(DISGUISE_KITS[id]?.length, 4, id); assert.equal(DISGUISE_INFO[id]?.length, 4, id);
     d.skills.forEach((s, i) => { assert.ok(s.name && s.icon && s.cd > 0, `${id} ${i}`); assert.ok(skillDescription(i, { disguise: id }).length > 10); assert.ok(skillSound(i, id)); });
@@ -112,7 +114,8 @@ test('every kit skill runs, resets cleanly, and each look it emits is drawn', ()
   });
   const birdFx=new BirdSkillView(new T.Scene(),()=>0,()=>null,()=>[],false);
   const sorcerer=new SorcererView(new T.Scene(),()=>0);
-  for (const look of seen) if((SORCERER_LOOKS as readonly string[]).includes(look)){assert.ok(sorcerer.play({look:look as CombatEffect['look'],kind:'cast',x:0,z:0,radius:3,color:'#ffffff'}));}else if((BIRD_LOOKS as readonly string[]).includes(look)){assert.ok(birdFx.play({look:look as CombatEffect['look'],kind:'cast',x:0,z:0,radius:3,color:'#ffffff'}));}else if (!['eyes', 'burn', 'shock', 'boulder'].includes(look)) { assert.ok(LOOKS[look], look); assert.equal(fx.play({ look: look as CombatEffect['look'], kind: 'cast', x: 0, z: 0, radius: 3, color: '#ffffff' }), true, look); }
+  const ink=new InkSkillView(new T.Scene(),()=>0,()=>null,false);
+  for (const look of seen) if((INK_LOOKS as readonly string[]).includes(look)){assert.ok(ink.play({look:look as CombatEffect['look'],kind:'cast',x:0,z:0,radius:3,color:'#ffffff'}));}else if((SORCERER_LOOKS as readonly string[]).includes(look)){assert.ok(sorcerer.play({look:look as CombatEffect['look'],kind:'cast',x:0,z:0,radius:3,color:'#ffffff'}));}else if((BIRD_LOOKS as readonly string[]).includes(look)){assert.ok(birdFx.play({look:look as CombatEffect['look'],kind:'cast',x:0,z:0,radius:3,color:'#ffffff'}));}else if (!['eyes', 'burn', 'shock', 'boulder'].includes(look)) { assert.ok(LOOKS[look], look); assert.equal(fx.play({ look: look as CombatEffect['look'], kind: 'cast', x: 0, z: 0, radius: 3, color: '#ffffff' }), true, look); }
   for (const look of ['flare', 'parachute', 'whistle', 'ribbon', 'fan', 'lantern', 'kite', 'ink', 'dragondance', 'starshield', 'torch', 'firework', 'bamboo', 'drum', 'bigstar']) {
     assert.ok((DISGUISE_LOOKS as readonly string[]).includes(look)); assert.ok(seen.has(look), `${look} is emitted by its skill`);
   }

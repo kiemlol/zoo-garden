@@ -1,0 +1,32 @@
+{
+  "file": "public/assets/models/ink-painter.glb",
+  "bytes": 475320,
+  "models": {
+    "dz_ink_painter": {
+      "triangles": 10300,
+      "parts": [
+        "head",
+        "body",
+        "arm-left",
+        "arm-right",
+        "leg-left",
+        "leg-right"
+      ],
+      "skillOnly": false
+    },
+    "ink_brush": {
+      "triangles": 1700,
+      "parts": [
+        "body"
+      ],
+      "skillOnly": true
+    },
+    "ink_dragon": {
+      "triangles": 10726,
+      "parts": [
+        "body"
+      ],
+      "skillOnly": true
+    }
+  }
+}

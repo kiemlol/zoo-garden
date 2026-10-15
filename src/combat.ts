@@ -1,3 +1,4 @@
+import {INK as I,INK_LOOKS,inInkDomain,type InkDomain} from './ink-skills.ts';
 import {SORCERER as S,SORCERER_LOOKS} from './sorcerer-skills.ts';
 import {BIRD, BIRD_LOOKS, birdLanding} from './bird-skills.ts';
 export interface CombatPoint { x: number; z: number }
@@ -17,8 +18,8 @@ export const DISGUISE_LOOKS=['charge','smoke','heal','icefield','blackhole','moo
   'tank','sandbag','flare','parachute','whistle','ribbon','fan','lantern','kite','ink','dragondance','starshield','torch','firework','bamboo','drum','bigstar',
   // The four moves (moves.ts): the Lob's arc and landing mark, the Rain's falling shots, and the petal burst where either lands.
   'lob','lobmark','petalfall','petalburst'] as const;
-export type EffectLook='eyes'|'burn'|'shock'|'boulder'|typeof DISGUISE_LOOKS[number]|typeof BIRD_LOOKS[number]|typeof SORCERER_LOOKS[number];
-export const EFFECT_LOOKS:readonly EffectLook[]=['eyes','burn','shock','boulder',...DISGUISE_LOOKS,...BIRD_LOOKS,...SORCERER_LOOKS];
+export type EffectLook='eyes'|'burn'|'shock'|'boulder'|typeof DISGUISE_LOOKS[number]|typeof BIRD_LOOKS[number]|typeof SORCERER_LOOKS[number]|typeof INK_LOOKS[number];
+export const EFFECT_LOOKS:readonly EffectLook[]=['eyes','burn','shock','boulder',...DISGUISE_LOOKS,...BIRD_LOOKS,...SORCERER_LOOKS,...INK_LOOKS];
 /** Superhero throw: lock a landing point, then lob over intervening ground obstacles. */
 export const BOULDER={range:14,fallback:8,time:.6,arc:4,height:3,radius:4.5,power:3.2,lift:7} as const;
 /** The laser gaze (dz_superhero slot 2): one sweep of `arc` rad in `time` s, a `length` m line `width` m wide; a creature is hit again after `rehit` s. */
@@ -34,6 +35,7 @@ export const ELECTRIC_COLOR='#8fdcff';
  * slot 3 control or support, slot 4 the big one.
  */
 export const DISGUISE_KITS:Readonly<Record<string,readonly string[]>>={
+  dz_ink_painter:['ink-brush','ink-rush','ink-dragon','ink-domain'],
   dz_sorcerer:['mandala','veil-portal','crimson-bands','meteor-gate'],
   dz_penguin:['penguin-peck','penguin-slide','penguin-blizzard','frozen-fish'],dz_explorer_duck:['duck-dagger','duck-grapple','duck-net','duck-lantern'],
   dz_superhero:['flight','dive','sweep','boulder'],dz_ninja:['clones','stealth','backstab','smoke'],dz_mage:['fireball','teleport','sheep','blackhole'],
@@ -122,7 +124,7 @@ export interface CombatHost {
   /** The guard dog when it may fight (following you away from home, guard-dog.ts): where it is, its toss factor and rate, and your target. */
   dog?():{x:number;z:number;dmg:number;cd:number;target?:string|null}|null;
   /** 'stun' freezes or roots a creature in place (no damage). */
-  status?(target:CombatTarget,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt'|'stun'|'iceSlow'|'attackSlow'|'root'|'compassMark',duration:number):void;
+  status?(target:CombatTarget,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt'|'stun'|'iceSlow'|'attackSlow'|'root'|'compassMark'|'inkSlow',duration:number):void;
   moveTarget?(target:CombatTarget,x:number,z:number):void;
   /** Upgrade level of base skill slot 0-3 (skill-upgrades.ts); missing = 0. */
   skillLevel?(index:number):number;
@@ -181,13 +183,18 @@ export class CombatSimulation {
   leavePortal(){if(!this.portal)return false;const portal=this.portal;this.portal=null;this.statuses.ambush=S.portal.ambush;this.host.effect({...portal.at,kind:'cast',look:'veil-exit',radius:1.2,duration:.35,facing:portal.facing,color:'#ff963a'});return true;}
   private bands:{at:CombatPoint;until:number;next:number;rooted:Set<string>;damage:(t:CombatTarget,p:number)=>number}[]=[];
   private discs:{from:CombatPoint;at:CombatPoint;dir:CombatPoint;left:number;hit:Set<string>;damage:(t:CombatTarget,p:number)=>number}[]=[];
+  private domain:({until:number}&InkDomain)|null=null;
+  get inkDomain():InkDomain|null{return this.domain&&this.time<this.domain.until?{x:this.domain.x,z:this.domain.z,radius:this.domain.radius}:null;}
+  endInkDomain(){if(!this.domain)return false;this.visual('ink-domain-end',this.domain,I.domain.radius,.1,'#111419');this.domain=null;return true;}
+  get inkDashing(){return this.action?.ink===true;}
+  private inkZones:{at:CombatPoint;to?:CombatPoint;until:number;radius:number}[]=[];
   private blizzardUntil=0;
   /** A live, moving field shared with navigation and authoritative damage settlement. */
   get blizzardField(){return this.time<this.blizzardUntil?{...this.host.position(),radius:BIRD.blizzard.radius}:null;}
   private birdZones:{at:CombatPoint;to?:CombatPoint;until:number;kind:'ice'|'net'|'fire';hit:Set<string>;next:number;damage:(t:CombatTarget,p:number,s?:number,l?:number,k?:number)=>number}[]=[];
   private jobs:Scheduled[]=[]; private action:{kind:'dash'|'slam'|'ready'|'rest';until:number;started:number;direction:CombatPoint;speed:number;multiplier:number;hit:Set<string>;
     /** A Quake of the moves: when its ring lands (the leap's top is timed to it). An air dash: it may still turn once. */ peak?:number; air?:boolean; turned?:boolean;
-    /** Knight's charge: carry creatures along instead of hitting them on the way. */ push?:boolean; bird?:'slide'|'grapple'; birdHit?:(t:CombatTarget,p:number,s?:number,l?:number,k?:number)=>number;trailAt?:number;trailFrom?:CombatPoint; then?:()=>void}|null=null;
+    /** Knight's charge: carry creatures along instead of hitting them on the way. */ ink?:boolean;push?:boolean; bird?:'slide'|'grapple'; birdHit?:(t:CombatTarget,p:number,s?:number,l?:number,k?:number)=>number;trailAt?:number;trailFrom?:CombatPoint; then?:()=>void}|null=null;
   /** Speed bonus (fraction) while statuses.swift runs; where the sandbag wall stands; next time each creature may be rammed or swept again. */
   private swift=0;private coverAt:CombatPoint|null=null;private rehits=new Map<string,number>();
   /**
@@ -275,7 +282,7 @@ export class CombatSimulation {
   /** Seconds the dash in progress still runs (0 when there is none). */
   get dashLeft(){return this.action?.kind==='dash'?Math.max(0,this.action.until-this.time):0;}
   get invulnerable(){return this.portalHidden||this.action?.kind==='dash'||(this.statuses.shield??0)>0||(this.statuses.invuln??0)>0;}
-  reset(){this.portal=null;this.bands=[];this.discs=[];this.blizzardUntil=0;this.birdZones=[];this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
+  reset(){this.endInkDomain();this.inkZones=[];this.portal=null;this.bands=[];this.discs=[];this.blizzardUntil=0;this.birdZones=[];this.grounded=false;this.castCap=null;this.plunge=null;this.busyUntil=0;this.forced=false;this.hitCap=Infinity;this.swings=0;this.edge.bonus=1;this.edge.sure=false;this.leechAt=-Infinity;this.leechGot=0;this.summonHit=false;this.allySerial=0;this.swift=0;this.coverAt=null;this.rehits.clear();this.giantStep=0;this.lastStep=null;this.petCooldown=0;this.pet2Cooldown=0;this.dogCooldown=0;this.jobs=[];this.projectiles.length=0;this.allies.length=0;this.marked.clear();this.action=null;for(const key of Object.keys(this.statuses))delete this.statuses[key];}
   nearest(range=12){const p=this.host.position();return this.host.targets().filter(t=>t.hp>0&&Math.hypot(t.x-p.x,t.z-p.z)<=range+t.radius).sort((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(b.x-p.x,b.z-p.z))[0];}
   aim(target?:CombatTarget){const p=this.host.position(),t=target??this.nearest();if(t)this.host.face(Math.atan2(t.x-p.x,t.z-p.z));return this.host.facing();}
   private emit(kind:CombatEffect['kind'],point:CombatPoint,radius:number,color='#e5f6ff',facing=this.host.facing(),look?:EffectLook,quiet=false){this.host.effect({x:point.x,z:point.z,kind,radius,color,facing,...(look?{look}:{}),...(quiet?{quiet:true}:{}),...this.up(point)});}
@@ -296,7 +303,7 @@ export class CombatSimulation {
     if(target.hp<=0)return 0;const stats=this.host.stats(),p=this.host.position();
     const own=!this.helperShot&&!this.summonHit,sure=own&&(this.forced||this.edge.sure);
     const critical=this.random()<stats.critChance||sure,angle=Math.atan2(target.x-p.x,target.z-p.z);
-    const bonus=((this.statuses.ambush??0)>0?1+S.portal.bonus:1)*(this.statuses.giant>0?1.6:1)*(this.statuses.stealth>0?DZ.stealth.bonus:1)*(this.marked.has(target.id)?1.5:1)*((this.statuses.rally??0)>0?1+DZ.torch.bonus:1);
+    const bonus=(own&&this.inkDomain&&inInkDomain(p,[this.inkDomain])?1+I.domain.bonus:1)*((this.statuses.ambush??0)>0?1+S.portal.bonus:1)*(this.statuses.giant>0?1.6:1)*(this.statuses.stealth>0?DZ.stealth.bonus:1)*(this.marked.has(target.id)?1.5:1)*((this.statuses.rally??0)>0?1+DZ.torch.bonus:1);
     this.statuses.stealth=0;
     const share=this.edge.scale?.(target)??1;
     const amount=Math.max(1,Math.min(this.hitCap,own&&this.castCap?this.castCap(target):Infinity,Math.round(stats.attack*multiplier*this.power*bonus*(own?this.edge.bonus:1)*share*(critical?((own?this.edge.crit?.():undefined)??stats.critDamage??2):1)*(.9+this.random()*.2))));
@@ -517,6 +524,31 @@ export class CombatSimulation {
   }
   /** Capture air-cast scaling for persistent zones as well as scheduled hits. */
   private birdDamage(){const ambush=(this.statuses.ambush??0)>0?1+S.portal.bonus:1,power=this.power,cap=this.castCap,grounded=this.grounded;return(t:CombatTarget,p:number,s=0,l=0,k=0)=>{const prev=[this.power,this.castCap,this.grounded] as const;this.power=power;this.castCap=cap;this.grounded=grounded;try{return this.damage(t,p*ambush/((this.statuses.ambush??0)>0?1+S.portal.bonus:1),s,l,k);}finally{[this.power,this.castCap,this.grounded]=prev;}};}
+  private inkCast(effect:string){
+    const p={...this.host.position()},angle=this.host.facing(),d=direction(angle),damage=this.birdDamage();
+    const visual=(look:EffectLook,at:CombatPoint,radius:number,duration:number,to?:CombatPoint)=>this.host.effect({...at,kind:'cast',look,radius,duration,facing:this.host.facing(),color:'#17191e',...(to?{toX:to.x,toZ:to.z}:{}),...this.up(at)});
+    if(effect==='ink-domain'){
+      this.endInkDomain();
+      this.domain={...p,radius:I.domain.radius,until:this.time+I.domain.time};visual('ink-domain',p,I.domain.radius,I.domain.time);
+    }else if(effect==='ink-brush'){
+      let target=this.chosen(I.brush.range);if(!target)return false;
+      const launch=(index:number)=>{if(!target||target.hp<=0)target=this.chosen(I.brush.range);if(!target){this.busyUntil=this.time;return;}const victim=target;const from={...this.host.position()};if(Math.hypot(victim.x-from.x,victim.z-from.z)>I.brush.range+victim.radius)return;
+        const landing={x:victim.x,z:victim.z},flight=Math.max(.12,Math.hypot(landing.x-from.x,landing.z-from.z)/I.brush.speed);this.aim(victim);visual('ink-brush',from,.35,flight,landing);
+        this.busyUntil=this.time+flight+I.brush.gap+.05;
+        this.later(flight,()=>{if(victim.hp>0&&Math.hypot(victim.x-from.x,victim.z-from.z)<=I.brush.range+victim.radius){landing.x=victim.x;landing.z=victim.z;if(index<I.brush.count-1)damage(victim,I.brush.power);}
+          if(index===I.brush.count-1){visual('ink-burst',landing,I.brush.burst,.45);for(const t of this.within(landing,I.brush.burst))damage(t,I.brush.burstPower+(t.id===victim.id?I.brush.power:0));}
+          else this.later(I.brush.gap,()=>launch(index+1));
+        });};launch(0);
+    }else if(effect==='ink-rush'){
+      this.action={kind:'dash',ink:true,started:this.time,until:this.time+I.rush.range/I.rush.speed,direction:d,speed:I.rush.speed,multiplier:0,hit:new Set(),trailAt:this.time,trailFrom:p};visual('ink-rush',p,.65,I.rush.range/I.rush.speed,{x:p.x+d.x*I.rush.range,z:p.z+d.z*I.rush.range});
+    }else if(effect==='ink-dragon'){
+      this.busyUntil=this.time+I.dragon.draw;visual('ink-dragon-draw',p,I.dragon.radius,I.dragon.draw);
+      this.later(I.dragon.draw,()=>{visual('ink-dragon',this.host.position(),I.dragon.radius,I.dragon.time);
+        for(let i=0;i<I.dragon.time/I.dragon.tick;i++)this.later(i*I.dragon.tick,()=>{const at=this.host.position();for(const t of this.within(at,I.dragon.radius)){damage(t,I.dragon.power,0,i%2===0?1.5:0,i%2===0?I.dragon.knock:0);if(i%2===1&&t.hp>0)this.host.status?.(t,'blind',I.dragon.blind);}});
+        this.later(I.dragon.time,()=>{const at={...this.host.position()};visual('ink-rain',at,I.dragon.radius,.65);visual('ink-pool',at,I.dragon.radius,I.dragon.pool);this.inkZones.push({at,radius:I.dragon.radius,until:this.time+I.dragon.pool});});
+      });
+    }else return false;return true;
+  }
   private sorcererCast(effect:string){
     const p={...this.host.position()},target=this.chosen(S.meteor.range),aim=this.host.aimPoint?.()??target,angle=aim?Math.atan2(aim.x-p.x,aim.z-p.z):this.host.facing(),d=direction(angle),damage=this.birdDamage();this.host.face(angle);
     const visual=(look:EffectLook,at:CombatPoint,radius:number,duration:number,to?:CombatPoint)=>this.host.effect({...at,kind:'cast',look,radius,duration,facing:angle,color:'#ff963a',...(to?{toX:to.x,toZ:to.z}:{}),...this.up(at)});
@@ -562,6 +594,7 @@ export class CombatSimulation {
     return true;
   }
   private cast(effect:string,air?:DisguiseAir){
+    if((INK_LOOKS as readonly string[]).includes(effect))return this.inkCast(effect);
     if((SORCERER_LOOKS as readonly string[]).includes(effect))return this.sorcererCast(effect);
     if((BIRD_LOOKS as readonly string[]).includes(effect))return this.birdCast(effect);
     if(SPECIAL_SKILLS.has(effect))return this.special(effect);
@@ -727,6 +760,10 @@ export class CombatSimulation {
     this.dogToss(dt);
     for(const key of Object.keys(this.statuses))this.statuses[key]=Math.max(0,this.statuses[key]-dt);
     if(this.portal&&this.time>=this.portal.until)this.leavePortal();
+    if(this.domain&&this.time>=this.domain.until)this.endInkDomain();
+    for(const zone of this.inkZones)if(this.time<zone.until)for(const t of this.host.targets())if(t.hp>0&&distanceToSegment(t,zone.at,zone.to??zone.at)<=zone.radius+t.radius&&(t.statuses?.inkSlow??0)<.15)this.host.status?.(t,'inkSlow',.35);
+    this.inkZones=this.inkZones.filter(z=>z.until>this.time);
+
     for(const zone of this.bands){if(this.time>=zone.until)continue;const targets=this.within(zone.at,S.bands.radius);for(const t of targets)if(!zone.rooted.has(t.id)){zone.rooted.add(t.id);this.host.status?.(t,'root',S.bands.root);}if(zone.next<zone.until-1e-7&&this.time+1e-8>=zone.next){zone.next+=S.bands.tick;for(const t of targets)zone.damage(t,S.bands.power);}}
     this.bands=this.bands.filter(z=>z.until>this.time);
     for(const disc of this.discs){const length=Math.min(disc.left,S.mandala.discSpeed*dt),from={...disc.at};disc.at.x+=disc.dir.x*length;disc.at.z+=disc.dir.z*length;disc.left-=length;for(const t of this.host.targets())if(t.hp>0&&!disc.hit.has(t.id)&&distanceToSegment(t,from,disc.at)<=.7+t.radius){disc.hit.add(t.id);disc.damage(t,S.mandala.discPower);}}
@@ -746,9 +783,10 @@ export class CombatSimulation {
       if(a.air&&!a.turned){const turn=airDashTurn((this.time-dt-a.started)/Math.max(.01,a.until-a.started),Math.atan2(a.direction.x,a.direction.z),this.edge.stick?.()??null,false);if(turn!==null){a.direction=direction(turn);a.turned=true;this.host.face(turn);}}
       // A dash that a wind-up started on this very step (the Rush) begins moving on the next one, so it covers its length exactly.
       const from={...this.host.position()},remaining=a.started>=this.time?0:Math.max(0,Math.min(dt,a.until-(this.time-dt)));this.host.move(a.direction.x*a.speed*remaining,a.direction.z*a.speed*remaining);
-      const to=this.host.position();this.emit('trail',to,.7,'#e9fbff');
+      const to=this.host.position();if(!a.ink)this.emit('trail',to,.7,'#e9fbff');
       if(a.bird){const K=a.bird==='slide'?BIRD.slide:BIRD.grapple;for(const t of this.host.targets())if(t.hp>0&&!a.hit.has(t.id)&&distanceToSegment(t,from,to)<1.2+t.radius){a.hit.add(t.id);a.birdHit?.(t,K.power,0,2,K.knock);}if(a.bird==='slide'&&(this.time-(a.trailAt??0)>=.1||this.time>=a.until)){const start=a.trailFrom??from;if(Math.hypot(to.x-start.x,to.z-start.z)>.001){this.birdZones.push({at:start,to:{...to},until:this.time+BIRD.slide.trail,kind:'ice',hit:new Set(),next:0,damage:a.birdHit!});this.host.effect({...start,toX:to.x,toZ:to.z,kind:'cast',look:'penguin-slide',radius:BIRD.slide.width,duration:BIRD.slide.trail,color:'#b8efff'});}a.trailAt=this.time;a.trailFrom={...to};}}
 
+      if(a.ink&&(this.time-(a.trailAt??0)>=.08||this.time>=a.until)){const start=a.trailFrom??from;if(Math.hypot(to.x-start.x,to.z-start.z)>.01){this.inkZones.push({at:start,to:{...to},radius:I.rush.width,until:this.time+I.rush.trail});this.host.effect({...start,toX:to.x,toZ:to.z,kind:'cast',look:'ink-trail',radius:I.rush.width,duration:I.rush.trail,color:'#17191e'});}a.trailFrom={...to};a.trailAt=this.time;}
       if(a.push){for(const t of this.within(to,DZ.knightcharge.grab)){a.hit.add(t.id);if(!t.boss)this.host.moveTarget?.(t,to.x+a.direction.x*1.6,to.z+a.direction.z*1.6);}}
       else if(a.multiplier>0)for(const t of this.host.targets())if(t.hp>0&&!a.hit.has(t.id)&&distanceToSegment(t,from,to)<1.2+t.radius){a.hit.add(t.id);this.damage(t,a.multiplier,.3,0,3);}
     }if(this.time>=a.until){a.then?.();if(this.action===a)this.action=null;}}

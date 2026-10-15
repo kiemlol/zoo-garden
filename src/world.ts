@@ -1,3 +1,4 @@
+import {INK,inInkDomain,inkDamageFactor,inkBoundary,type InkDomain} from './ink-skills.ts';
 import {inBlizzard,blizzardDamageFactor,blizzardDashContact,isCreatureDash,interruptBlizzardDash,type BlizzardField} from './blizzard.ts';
 import {fitBirdDisguise} from './bird-disguise-fit.ts';
 import {BIRD_SKILLS} from './bird-skills.ts';
@@ -738,7 +739,7 @@ export class World {
    */
   private avatar(color:string,gear:SaveState['gear']={},look:LookId|string=DEFAULT_LOOK){
     const disguise=gear.disguise?M.DISGUISES[gear.disguise]:undefined,id=gear.disguise??'';
-    const kitDisguise=!!id&&!!this.kitFor(id)&&heroKit.ready,fullBodyDisguise=kitDisguise&&(Object.hasOwn(BIRD_SKILLS,id)||id==='dz_sorcerer');
+    const kitDisguise=!!id&&!!this.kitFor(id)&&heroKit.ready,fullBodyDisguise=kitDisguise&&(Object.hasOwn(BIRD_SKILLS,id)||id==='dz_sorcerer'||id==='dz_ink_painter');
     // A body style downloads on first use; the default explorer stands in until it arrives.
     // Complete costumes keep a hidden base rig; their own geometry is fitted continuously to the selected look.
     const combo=toLook(look)??DEFAULT_LOOK,styled=heroKitFor(fullBodyDisguise?DEFAULT_LOOK:combo);if(styled!==heroKit&&!styled.requested)void styled.load().then(()=>{if(styled.ready)this.refreshAvatars();});
@@ -1002,7 +1003,7 @@ export class World {
   }
   groundPoint(clientX:number,clientY:number){this.raycaster.setFromCamera(new T.Vector2(clientX/innerWidth*2-1,1-clientY/innerHeight*2),this.camera);const p=this.raycaster.ray.intersectPlane(new T.Plane(UP,0),new T.Vector3());return p?{x:p.x,z:p.z}:null;}
   knockUpEnemy(e:Enemy,height=2,duration=.8){e.liftVelocity=Math.max(e.liftVelocity??0,Math.sqrt(Math.max(0,liftHeight(e.boss,height))*24));e.stun=Math.max(e.stun,duration);}
-  statusEnemy(e:Enemy,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt'|'stun'|'iceSlow'|'attackSlow'|'root'|'compassMark',duration:number){e.statuses??={};
+  statusEnemy(e:Enemy,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt'|'stun'|'iceSlow'|'attackSlow'|'root'|'compassMark'|'inkSlow',duration:number){e.statuses??={};
     // A freeze or a root (ice age, binding tree, ink circle, whistle): held in place, bosses too, as the reference does.
     if(kind==='stun'){e.stun=Math.max(e.stun,duration);return;}
     // Bosses shrug off sheep, charm and fear (the reference's 'Kháng!'): they are only slowed for 60% of it.
@@ -1369,9 +1370,16 @@ export class World {
   }
   /** Local live storm plus other players' latest shared storm centres. */
   blizzardFields?:()=>readonly BlizzardField[];
-  enemyDamageFactor(id:string|undefined){const e=id?this.enemies.find(e=>e.id===id):undefined;return e?blizzardDamageFactor(e,this.blizzardFields?.()??[]):1;}
+  inkDomains?:()=>readonly InkDomain[];
+  constrainInkTarget(from:Point&{radius?:number},to:Point){return inkBoundary(from,to,this.inkDomains?.()??[]);}
+  enemyDamageFactor(id:string|undefined){const e=id?this.enemies.find(e=>e.id===id):undefined;return e?blizzardDamageFactor(e,this.blizzardFields?.()??[])*inkDamageFactor(e,this.inkDomains?.()??[]):1;}
   private blockBlizzardDash(e:Enemy,to:Point){if(!isCreatureDash(e))return false;const at=blizzardDashContact(e,to,this.blizzardFields?.()??[]);if(!at)return false;interruptBlizzardDash(e,at);return true;}
   private moveCreature(e:Enemy,dx:number,dz:number,allowVoid=false){
+    const fields=this.inkDomains?.()??[];if(!fields.length&&!((e.statuses?.inkSlow??0)>0)){this.moveCreatureStep(e,dx,dz,allowVoid);return;}
+    const from={x:e.x,z:e.z,radius:e.radius},slow=(inInkDomain(e,fields)?1-INK.domain.slow:1)*((e.statuses?.inkSlow??0)>0?1-INK.rush.slow:1);
+    this.moveCreatureStep(e,dx*slow,dz*slow,allowVoid);const safe=inkBoundary(from,e,fields);e.x=safe.x;e.z=safe.z;
+  }
+  private moveCreatureStep(e:Enemy,dx:number,dz:number,allowVoid=false){
     if(this.blockBlizzardDash(e,{x:e.x+dx,z:e.z+dz}))return;
     if((e.statuses?.root??0)>0)return;
     if((e.statuses?.iceSlow??0)>0||inBlizzard(e,this.blizzardFields?.()??[])){dx*=.5;dz*=.5;}
@@ -1479,9 +1487,9 @@ export class World {
       if(authoritative)for(const hit of result.hits){const cls=attackClass(a.skill);if(hit.id===(this.localPlayerId??'local'))this.onDamage(e.damage*hit.multiplier,hit.source,e.id,cls);else if(!this.remoteDodges(hit.id,cls))this.onRemoteDamage?.(hit.id,e.damage*hit.multiplier,hit.source,e.id);if(this.environment!==environment)return;}
       // Each client applies its own pull from shared state; damage still belongs to the host.
       for(const p of result.pulls)if(p.id===(this.localPlayerId??'local'))this.move(p.x,p.z,true);
-      if(result.move){e.x=result.move.x;e.z=result.move.z;e.titanLift=result.move.y;if(result.done){e.titanLift=0;e.phase='recover';e.phaseTime=.5;}}
+      if(result.move){const safe=this.constrainInkTarget(e,result.move);e.x=safe.x;e.z=safe.z;e.titanLift=result.move.y;if(result.done){e.titanLift=0;e.phase='recover';e.phaseTime=.5;}}
       for(const p of result.bursts){this.fx?.ring(p,{color:e.definition?.accent??'#ffb13d',from:.2,to:p.r,life:.4,thick:.25});this.burst(p.x,p.z,e.definition?.color??'#ff9b4a',12);}
-      if(authoritative&&!this.authoritativeAction&&result.summon)this.enemies.filter(m=>m!==e&&m.hp>0&&!m.boss&&m.type!=='minislime'&&(m.definition?.speed??0)>0&&Math.hypot(m.x-e.x,m.z-e.z)<60&&(this.planet!=='home'||inHabitat({x:m.homeX,z:m.homeZ},e,m.radius))).slice(0,4).forEach((m,i)=>{const angle=e.mesh.rotation.y+(i+.5)*Math.PI/2,next={x:e.x+Math.sin(angle)*(e.radius+2),z:e.z+Math.cos(angle)*(e.radius+2)};if(this.planet==='home'&&!inHabitat({x:m.homeX,z:m.homeZ},next,m.radius))return;m.x=next.x;m.z=next.z;m.hp=m.maxHp;m.damage*=1.3;m.phase='chase';m.lastHitAt=this.time;});
+      if(authoritative&&!this.authoritativeAction&&result.summon)this.enemies.filter(m=>m!==e&&m.hp>0&&!m.boss&&m.type!=='minislime'&&(m.definition?.speed??0)>0&&Math.hypot(m.x-e.x,m.z-e.z)<60&&(this.planet!=='home'||inHabitat({x:m.homeX,z:m.homeZ},e,m.radius))).slice(0,4).forEach((m,i)=>{const angle=e.mesh.rotation.y+(i+.5)*Math.PI/2,next={x:e.x+Math.sin(angle)*(e.radius+2),z:e.z+Math.cos(angle)*(e.radius+2)};if(this.planet==='home'&&!inHabitat({x:m.homeX,z:m.homeZ},next,m.radius))return;const safe=this.constrainInkTarget(m,next);m.x=safe.x;m.z=safe.z;m.hp=m.maxHp;m.damage*=1.3;m.phase='chase';m.lastHitAt=this.time;});
     }e.titanAttacks=e.titanAttacks.filter(a=>a.age<a.life);
   }
   private drawTitanAttacks(){

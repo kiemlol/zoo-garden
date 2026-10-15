@@ -1,3 +1,4 @@
+import {INK_SKILLS} from './ink-skills.ts';
 import {SORCERER_SKILLS} from './sorcerer-skills.ts';
 import {BIRD_SKILLS} from './bird-skills.ts';
 /**
@@ -54,6 +55,7 @@ const snowMax = Math.min(2.6, .5 + DZ.snowball.grow * DZ.snowball.time);
 /** A summon's hit points as a share of yours (combat.ts SUMMON_HP). */
 const hp = (kind: string) => pct(SUMMON_HP[kind].hp);
 export const DISGUISE_INFO: Record<string, readonly string[]> = {
+  dz_ink_painter:INK_SKILLS.map(s=>s.description),
   dz_sorcerer:SORCERER_SKILLS.map(s=>s.description),
   ...Object.fromEntries(Object.entries(BIRD_SKILLS).map(([id,skills])=>[id,skills.map(skill=>skill.description)])),
   dz_superhero: [`Fly for ${DZ.flight.time} s, ${pct(DZ.flight.speed)}% faster (press again to land): melee attacks miss you, only shots can reach you.`,
