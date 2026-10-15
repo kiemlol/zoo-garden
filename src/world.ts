@@ -2024,7 +2024,7 @@ export class World {
     const kind=this.weaponKind??'fist',pose=this.pose;
     let twist=0,lean=0,lift=0,sx=1,sy=1,sz=1;
     // Base: walk cycle or idle breathing.
-    if(this.moving){armL?.rotation.set(-c*.8,0,-.3);armR?.rotation.set(c*.8,0,.3);legL?.rotation.set(c*.7,0,0);legR?.rotation.set(-c*.7,0,0);lift=Math.abs(Math.cos(o))*.06;lean=.1;if(head)head.rotation.set(0,0,Math.sin(o)*.05);}
+    if(this.moving){armL?.rotation.set(-c*.8,0,-.3);armR?.rotation.set(c*.8,0,.3);legL?.rotation.set(c*.7*(legL.userData.gaitScale??1),0,0);legR?.rotation.set(-c*.7*(legR.userData.gaitScale??1),0,0);lift=Math.abs(Math.cos(o))*.06;lean=.1;if(head)head.rotation.set(0,0,Math.sin(o)*.05);}
     else{armL?.rotation.set(0,0,-.3-Math.sin(o)*.05);armR?.rotation.set(0,0,.3+Math.sin(o)*.05);legL?.rotation.set(0,0,0);legR?.rotation.set(0,0,0);sy=1+Math.sin(o*1.2)*.025;if(head)head.rotation.set(0,Math.sin(o*.4)*.15,0);}
     // In the air (jump-rules.ts): a squash as the feet leave, a stretch going up, a tuck at the top, a head-first dive.
     const jump=this.jump,air=jump?.airborne?jump:null;

@@ -15,26 +15,44 @@ function birdLookTransform(look:LookId,part?:string){
  const wx=y<.52?smooth(limb,tw,(y-.3)/.22):smooth(tw,head,(y-1.12)/.3),wz=y<.52?smooth(limb,td,(y-.3)/.22):smooth(td,head,(y-1.12)/.3);
  return p.set(p.x*wx,newY,p.z*wz);};
 }
+
+/** The rounded penguin is a short-legged suit. Height scales the whole silhouette,
+ * rather than turning its exposed shins into the standard explorer's long legs. */
+function penguinFit(look:LookId){
+ const l=splitLook(look),build=BUILD[l.body],girl=l.body==='girl';
+ const size={tiny:.8,chibi:.9,teen:.95,tall:1,grown:1.08}[l.height];
+ const rise={tiny:.2,chibi:.26,teen:.3,tall:.34,grown:.36}[l.height];
+ const head={tiny:1.04,chibi:1,teen:.98,tall:.95,grown:.91}[l.height];
+ const width=build?.torso[0]??(girl?.95:1),depth=build?.torso[1]??(girl?.96:1),limb=build?.limb??1;
+ return {size,transform:(part:string|undefined,rig=false)=>(p:T.Vector3)=>{
+  const leg=part?.startsWith('leg-'),isHead=part==='head',w=isHead?head:part==='body'?width:limb,d=isHead?head:part==='body'?depth:limb;
+  const y=leg?(rig ? .64 : p.y):isHead?1.12+rise+(p.y-1.12)*head:p.y+rise;
+  return p.set(p.x*w*size,y*size,p.z*d*size);
+ }};
+}
+
 export const birdLookPoint=(p:T.Vector3,look:LookId)=>birdLookTransform(look)(p);
 
 /** Retarget the rig and costume geometry together, preserving hidden base meshes and shared kit resources. */
 export function fitBirdDisguise(root:T.Object3D,id:string,look:LookId){
+ const penguin=id==='dz_penguin'?penguinFit(look):null;
+ const transform=(part?:string,rig=false)=>penguin?penguin.transform(part,rig):birdLookTransform(look,rig&&(part==='body'||part==='head'||part?.startsWith('leg-'))?undefined:part);
  root.updateMatrixWorld(true);const toRoot=root.matrixWorld.clone().invert(),posed=new Set(Object.keys(DEFAULT_PIVOTS));
  const bones:{node:T.Object3D;at:T.Vector3}[]=[],pieces:{mesh:T.Mesh;old:T.Matrix4}[]=[];
- root.traverse(o=>{if(posed.has(o.name))bones.push({node:o,at:birdLookTransform(look,o.name==='body'||o.name==='head'?undefined:o.name.startsWith('leg-')?undefined:o.name)(new T.Vector3().setFromMatrixPosition(toRoot.clone().multiply(o.matrixWorld)))});if(o instanceof T.Mesh&&o.visible&&o.name.startsWith(id))pieces.push({mesh:o,old:toRoot.clone().multiply(o.matrixWorld)});});
+ root.traverse(o=>{if(posed.has(o.name))bones.push({node:o,at:transform(o.name,true)(new T.Vector3().setFromMatrixPosition(toRoot.clone().multiply(o.matrixWorld)))});if(o instanceof T.Mesh&&o.visible&&o.name.startsWith(id))pieces.push({mesh:o,old:toRoot.clone().multiply(o.matrixWorld)});});
  // Parents precede their hand anchors in traversal order.
  for(const {node,at}of bones){node.parent!.updateWorldMatrix(true,false);const parentToRoot=toRoot.clone().multiply(node.parent!.matrixWorld);node.position.copy(at).applyMatrix4(parentToRoot.invert());node.updateMatrix();node.updateWorldMatrix(false,true);}
  root.updateMatrixWorld(true);
- for(const {mesh,old}of pieces){const g=mesh.geometry.clone(),positions=g.getAttribute('position'),back=toRoot.clone().multiply(mesh.matrixWorld).invert(),v=new T.Vector3(),deform=birdLookTransform(look,mesh.userData.tag??mesh.name.split('@')[1]);g.userData.sharedKit=false;
+ for(const {mesh,old}of pieces){const g=mesh.geometry.clone(),positions=g.getAttribute('position'),back=toRoot.clone().multiply(mesh.matrixWorld).invert(),v=new T.Vector3(),deform=transform(mesh.userData.tag??mesh.name.split('@')[1]);g.userData.sharedKit=false;
   for(let i=0;i<positions.count;i++){v.fromBufferAttribute(positions,i).applyMatrix4(old);deform(v).applyMatrix4(back);positions.setXYZ(i,v.x,v.y,v.z);}positions.needsUpdate=true;g.computeVertexNormals();g.computeBoundingBox();g.computeBoundingSphere();mesh.geometry=g;
  }
  // Separate costume legs bridge the raised hem and the unchanged shoes. They belong to the
  // animated leg rig; none of the concealed explorer clothing or backpack is made visible.
- const hem=birdLookTransform(look,'body')(new T.Vector3(0,.2,0)).y;
+ const hem=transform('body')(new T.Vector3(0,.2,0)).y;
  for(const side of [-1,1]){const part=root.getObjectByName(side<0?'leg-left':'leg-right');if(!part)continue;
-  const bottom=id==='dz_penguin'?.32:.36,top=Math.max(bottom+.12,hem+.26),height=top-bottom;
-  const leg=new T.Mesh(new T.CylinderGeometry(.115,.11,height,12),new T.MeshStandardMaterial({color:id==='dz_penguin'?'#ffe2cb':'#242936',roughness:.85}));leg.name=id+'@shin';
-  const at=new T.Vector3(side*.2, bottom+height/2,0).applyMatrix4(root.matrixWorld);part.updateWorldMatrix(true,false);part.worldToLocal(at);leg.position.copy(at);part.add(leg);
+  const size=penguin?.size??1,bottom=(penguin ? .32 : .36)*size,top=Math.max(bottom+.12,hem+.26),height=top-bottom;
+  const leg=new T.Mesh(new T.CylinderGeometry(.115*size,.11*size,height,12),new T.MeshStandardMaterial({color:id==='dz_penguin'?'#ffe2cb':'#242936',roughness:.85}));leg.name=id+'@shin';
+  const at=new T.Vector3(side*.2*size*(penguin?(BUILD[splitLook(look).body]?.limb??1):1), bottom+height/2,0).applyMatrix4(root.matrixWorld);part.updateWorldMatrix(true,false);part.worldToLocal(at);leg.position.copy(at);part.add(leg);if(penguin)part.userData.gaitScale=.5;
  }
  // Held gear is attached after this deformation: use the retargeted hand anchor, keeping the weapon's own size.
  root.userData.fit={'hand-left':{scale:[1,1,1],offset:[0,0,0]},'hand-right':{scale:[1,1,1],offset:[0,0,0]}};

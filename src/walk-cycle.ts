@@ -39,8 +39,8 @@ export function limbsOf(model: T.Object3D): Limbs {
 export function applyGait(l: Limbs, g: Gait, swing: number, arms = true) {
   if (g.blend <= 0) return 0;
   const s = Math.sin(g.phase) * swing, b = g.blend, k = 1 - b;
-  if (l.legL) l.legL.rotation.x = l.legL.rotation.x * k + s * b;
-  if (l.legR) l.legR.rotation.x = l.legR.rotation.x * k - s * b;
+  if (l.legL) l.legL.rotation.x = l.legL.rotation.x * k + s * b * (l.legL.userData.gaitScale ?? 1);
+  if (l.legR) l.legR.rotation.x = l.legR.rotation.x * k - s * b * (l.legR.userData.gaitScale ?? 1);
   if (arms && l.armL) l.armL.rotation.x = l.armL.rotation.x * k - s * 1.1 * b;
   if (arms && l.armR) l.armR.rotation.x = l.armR.rotation.x * k + s * 1.1 * b;
   return Math.abs(Math.cos(g.phase)) * .06 * b;

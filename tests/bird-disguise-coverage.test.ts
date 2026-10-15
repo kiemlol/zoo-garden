@@ -1,3 +1,4 @@
+import {applyGait,limbsOf} from '../src/walk-cycle.ts';
 import {aimPortrait} from '../src/hero-portrait.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -65,6 +66,24 @@ test('tall costumes keep compact coats and separate shoes with their own visible
  const w=world();const bounds=(root:T.Object3D,predicate:(o:T.Mesh)=>boolean)=>{root.updateMatrixWorld(true);const b=new T.Box3(),part=new T.Box3();root.traverseVisible(o=>{if(o instanceof T.Mesh&&!o.userData.outline&&predicate(o)){o.geometry.computeBoundingBox();b.union(part.copy(o.geometry.boundingBox!).applyMatrix4(o.matrixWorld));}});return b;};
  for(const id of ids){const normal=w.lookAvatar('#fff',{disguise:id},DEFAULT_LOOK),tall=w.lookAvatar('#fff',{disguise:id},'girl-tall-none-bare');
  const isBody=(m:T.Mesh)=>m.userData.tag==='body',a=bounds(normal,isBody),b=bounds(tall,isBody),feet=bounds(tall,m=>m.userData.tag?.startsWith('leg-')),shin=tall.getObjectByName(id+'@shin') as T.Mesh;
- assert.ok(b.getSize(new T.Vector3()).y<=a.getSize(new T.Vector3()).y*1.09,'height is added to legs instead of stretching the whole coat');assert.ok(b.min.y>feet.min.y+.45,'raised hem and grounded footwear are separate');assert.ok(shin&&shin.parent?.name.startsWith('leg-'),'the visible leg belongs to its animated leg bone');assert.ok(bounds(tall,m=>m.name===id+'@shin').min.y<b.min.y,'costume legs fill the exposed gap');checkCostume(tall,id);
+ assert.ok(b.getSize(new T.Vector3()).y<=a.getSize(new T.Vector3()).y*(id==='dz_penguin'?1.12:1.09),'the upper costume keeps its proportions instead of stretching into a long coat');assert.ok(b.min.y>feet.min.y+.45,'raised hem and grounded footwear are separate');assert.ok(shin&&shin.parent?.name.startsWith('leg-'),'the visible leg belongs to its animated leg bone');assert.ok(bounds(tall,m=>m.name===id+'@shin').min.y<b.min.y,'costume legs fill the exposed gap');checkCostume(tall,id);
  }
+});
+
+
+test('penguin mirror heights preserve the rounded body shape and keep the footwear close to the hem',()=>{
+ const w=world(),bounds=(root:T.Object3D,tag:string)=>{root.updateMatrixWorld(true);const b=new T.Box3(),v=new T.Box3();root.traverseVisible(o=>{if(o instanceof T.Mesh&&!o.userData.outline&&o.userData.tag===tag){o.geometry.computeBoundingBox();b.union(v.copy(o.geometry.boundingBox!).applyMatrix4(o.matrixWorld));}});return b;};
+ for(const body of ROWS.body){let aspect:number|undefined;for(const height of ROWS.height){const c=w.lookAvatar('#fff',{disguise:'dz_penguin'},`${body}-${height}-none-bare`),b=bounds(c,'body'),size=b.getSize(new T.Vector3()),feet=bounds(c,'leg-left');
+  const ratio=size.y/size.x;if(aspect!==undefined)assert.ok(Math.abs(ratio-aspect)<1e-5,'the hem and belly are uniformly scaled, without a pinched or stretched outline');aspect=ratio;
+  assert.ok(b.min.y-feet.max.y<.08,'only a small ankle gap can be visible at rest, even at grown height');assert.ok(c.getObjectByName('leg-left')!.position.y<.72,'the costume uses a low leg joint rather than the explorer hip');
+ }}
+});
+test('penguin walking stays short-stepped throughout the cycle for local, remote and friend avatars',()=>{
+ const w=world();for(const height of ROWS.height){w.state.gear.disguise='dz_penguin';w.player=w.lookAvatar('#fff',{disguise:'dz_penguin'},`girl-${height}-none-bare`);w.jump=new JumpState();w.moving=true;
+  const foot=w.player.getObjectByName('leg-left')!.children.find((o:T.Object3D)=>o.userData.tag==='leg-left')!;
+  const centre=()=>{w.player.updateMatrixWorld(true);const b=new T.Box3().setFromObject(foot);return w.player.worldToLocal(b.getCenter(new T.Vector3()));};const rest=centre();
+  for(let i=0;i<80;i++){w.player.position.set(0,0,0);w.player.scale.setScalar(1);w.animatePlayer(.025);const at=centre();assert.ok(Math.abs(at.z-rest.z)<.24,'walking does not pull the shoe far out from under the rounded hem');assert.ok(Math.abs(w.player.getObjectByName('leg-left')!.rotation.x)<=.351);checkCostume(w.player,'dz_penguin');}
+  const limbs=limbsOf(w.player);for(let i=0;i<24;i++){limbs.legL!.rotation.x=limbs.legR!.rotation.x=0;applyGait(limbs,{phase:i*Math.PI/12,blend:1},.8);assert.ok(Math.abs(limbs.legL!.rotation.x)<=.401,'remote/friend walking shares the short costume stride');}
+ }
+ const plain=w.lookAvatar('#fff',{},DEFAULT_LOOK),limbs=limbsOf(plain);applyGait(limbs,{phase:Math.PI/2,blend:1},.8);assert.equal(limbs.legL!.rotation.x,.8,'ordinary explorers keep their normal gait');
 });
