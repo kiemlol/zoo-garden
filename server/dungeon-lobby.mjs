@@ -2,7 +2,7 @@
  * The Delvers' Vault online (src/dungeon-rules.ts, src/dungeon.ts). The server owns:
  *  - the lobby: who stands in the glowing circle by the south gate (from the poses it accepted), the 10 s countdown
  *    (LobbyCountdown), and the party it sends in (at most 5, first come first served), with `dgLobby` updates;
- *  - the run: an id, its members and its host, a private room (a party code `DG…`) so the party is alone in the arena,
+ *  - the run: an id, its members and its host, an internal dungeon instance so runs remain isolated,
  *    the members' poses moved to the arena, and the stages the host reported cleared;
  *  - the relay inside the run: `dgSync` (host → everyone: creatures, stage, casts), `dgHit` (member → host),
  *    `dgHurt` (host → one member), `dgClear` (host → server), `dgLeave` (member → server).
@@ -15,14 +15,14 @@ import { randomBytes } from 'node:crypto';
 import { LobbyCountdown, DUNGEON, runsLeft, inLobby, STAGE_COUNT } from '../src/dungeon-rules.ts';
 
 const RUN_MS = (DUNGEON.timeLimit + 120) * 1000;
-export function createDungeonLobby({ peers, rooms, parties, join, send, arrived, now = () => Date.now() }) {
+export function createDungeonLobby({ peers, rooms, join, send, arrived, now = () => Date.now() }) {
   const lobbies = new Map(), runs = new Map(), sent = new Map();
-  /** The room's countdown (one lobby per world room, so a private party queues on its own). */
+  /** The room's countdown (one lobby per planet). */
   const lobbyOf = key => { let lobby = lobbies.get(key); if (!lobby) lobbies.set(key, lobby = new LobbyCountdown(DUNGEON.need, DUNGEON.countdown, DUNGEON.maxParty)); return lobby; };
   const eligible = peer => peer && peer.active !== false && !peer.visit && peer.planet === 'home' && !peer.dungeon && peer.account.profile.hp > 0 && runsLeft(peer.account.profile, now()) > 0 && inLobby(peer.pose);
   function tick(dt) {
     const byRoom = new Map();
-    for (const peer of peers.values()) if (peer.room && !peer.room.startsWith('DG') && eligible(peer)) { const list = byRoom.get(peer.room) ?? []; list.push(peer.account.id); byRoom.set(peer.room, list); }
+    for (const peer of peers.values()) if (peer.room && !peer.dungeon && eligible(peer)) { const list = byRoom.get(peer.room) ?? []; list.push(peer.account.id); byRoom.set(peer.room, list); }
     for (const key of new Set([...lobbies.keys(), ...byRoom.keys()])) {
       const lobby = lobbyOf(key), inCircle = byRoom.get(key) ?? [], party = lobby.step(dt, inCircle);
       if (party) start(party.map(id => peers.get(id)).filter(Boolean));
@@ -37,14 +37,13 @@ export function createDungeonLobby({ peers, rooms, parties, join, send, arrived,
   function tell(id, message) { const peer = peers.get(id), key = JSON.stringify(message); if (!peer || sent.get(id) === key) return; sent.set(id, key); send(peer.socket, message); }
   function start(members) {
     if (!members.length) return;
-    const id = 'dg-' + randomBytes(6).toString('hex'), code = 'DG' + randomBytes(3).toString('hex').toUpperCase(), seed = randomBytes(4).readUInt32LE(0);
-    parties.set(code, { owner: members[0].account.id, created: now(), dungeon: id });
-    const run = { id, code, seed, members: members.map(p => p.account.id), host: members[0].account.id, startedAt: now(), cleared: 0 };
+    const id = 'dg-' + randomBytes(6).toString('hex'), seed = randomBytes(4).readUInt32LE(0);
+    const run = { id, seed, members: members.map(p => p.account.id), host: members[0].account.id, startedAt: now(), cleared: 0 };
     runs.set(id, run);
     const roster = members.map(p => ({ id: p.account.id, name: p.account.profile.name, level: p.account.profile.level }));
     members.forEach((peer, index) => {
-      peer.dungeon = run; peer.dungeonReturn = peer.party;
-      try { join(peer, 'home', code); } catch { /* the room is new and private: joining it cannot fail for space */ }
+      peer.dungeon = run;
+      try { join(peer, 'home'); } catch { /* an internal run is not capped by a world-room limit */ }
       const a = index * TAU / Math.max(1, members.length);
       peer.pose = { ...peer.pose, x: DUNGEON.arena.x + Math.sin(a) * 3, z: DUNGEON.arena.z + 10 + Math.cos(a) * 2 }; arrived(peer);
       sent.delete(peer.account.id);
@@ -55,14 +54,13 @@ export function createDungeonLobby({ peers, rooms, parties, join, send, arrived,
   function leave(peer, reason = 'leave') {
     const run = peer?.dungeon; if (!run) return;
     peer.dungeon = null; peer.dungeonPast = { run: { id: run.id, cleared: run.cleared }, until: now() + 120_000 }; run.members = run.members.filter(id => id !== peer.account.id);
-    const back = peer.dungeonReturn && parties.has(peer.dungeonReturn) ? peer.dungeonReturn : null; delete peer.dungeonReturn;
-    try { join(peer, 'home', back); } catch { try { join(peer, 'home', null); } catch { /* the public village is full: the client reconnects */ } }
+    join(peer, 'home');
     peer.pose = { ...peer.pose, x: DUNGEON.lobby.x, z: DUNGEON.lobby.z - 6 }; arrived(peer);
     send(peer.socket, { type: 'dgEnd', runId: run.id, reason });
     if (run.host === peer.account.id && run.members.length) { run.host = run.members[0]; for (const id of run.members) { const p = peers.get(id); if (p) send(p.socket, { type: 'dgHost', runId: run.id, host: run.host }); } }
-    if (!run.members.length) { runs.delete(run.id); parties.delete(run.code); }
+    if (!run.members.length) { runs.delete(run.id);  }
   }
-  function finish(run) { for (const id of [...run.members]) leave(peers.get(id) ?? { dungeon: null }, 'time'); runs.delete(run.id); parties.delete(run.code); }
+  function finish(run) { for (const id of [...run.members]) leave(peers.get(id) ?? { dungeon: null }, 'time'); runs.delete(run.id);  }
   const others = (run, except) => run.members.filter(id => id !== except).map(id => peers.get(id)).filter(Boolean);
   /** A socket message of type dg*; returns true when handled. */
   function message(peer, m) {

@@ -13,6 +13,8 @@ import * as Game from '../src/model.ts';
 import { dogFollows } from '../src/guard-dog.ts';
 import { dogWorn } from '../src/pet-slots.ts';
 import { lookOf } from '../src/looks.ts';
+import {createPlayerSocial,likesOf,blocks,socialState} from './player-social.mjs';
+import {socialText,CHAT_INTERVAL} from '../src/social-rules.ts';
 import { createAccountStore } from './account-store.mjs';
 import { createActionService, commandHash, logGuest, waterNodes } from './action-service.mjs';
 import { createCombatAuthority } from './combat-authority.mjs';
@@ -34,7 +36,7 @@ const sameString = (a, b) => {
   return first.length === second.length && timingSafeEqual(first, second);
 };
 const cookieValue = request => (request.headers.cookie || '').split(';').map(value => value.trim()).find(value => value.startsWith(COOKIE + '='))?.slice(COOKIE.length + 1);
-const publicAccount = account => ({ id: account.id, username: account.username, name: account.profile.name, color: account.profile.color, level: account.profile.level, gear: account.profile.gear, look: lookOf(account.profile) });
+const publicAccount = account => ({ id: account.id, username: account.username, name: account.profile.name, color: account.profile.color, level: account.profile.level, gear: account.profile.gear, look: lookOf(account.profile), likes:likesOf(account), stats:{stars:(account.profile.bosses??[]).length,pets:Object.keys(account.profile.collection??{}).filter(id=>Game.ITEMS[id]?.slot==='pet').length,worlds:(account.profile.discovered??['home']).length} });
 const publicHome = account => {
   const source = account.profile;
   return { ...publicAccount(account), discovered:source.discovered||['home'], plots: source.plots, decorations: source.decorations || [], farm: source.farm || null, helper: source.helper || null, friends: Array.isArray(source.friends) ? source.friends : [], home: source.home || null, placed: source.placed || [],
@@ -74,13 +76,14 @@ export async function createGameServer(options = {}) {
     if (sessionTimer) return;
     sessionTimer = setTimeout(() => { sessionTimer = null; commitSessions(() => {}).catch(() => { console.error('Expired sign-ins could not be removed from storage.'); }); }, 400); sessionTimer.unref?.();
   }
-  const accounts = new Map(), peers = new Map(), rooms = new Map(), parties = new Map();
+  const accounts = new Map(), peers = new Map(), rooms = new Map();
   const limits = new Map(), chatReceipts = new Map();
-  const maxPlayers = Number(options.maxPlayers ?? process.env.MAX_PLAYERS ?? 60);
+  const maxPlayers = Number(options.maxPlayers ?? process.env.MAX_PLAYERS ?? Infinity);
   // Behind a tunnel or proxy every request arrives from 127.0.0.1: with TRUST_PROXY=1 rate limits use the visitor's real address instead (client-address.mjs).
   const trustProxy = options.trustProxy ?? process.env.TRUST_PROXY === '1';
   let closing = false;
   const remember=value=>rememberAccount(accounts,value);
+  const playerSocial=createPlayerSocial({store,accounts,remember});
   const ranking=createRanking({source:()=>accounts.values(),ttl:options.rankingTtl??RANKING_TTL});
   try {
     for (const value of await store.list()) remember(value);
@@ -138,7 +141,8 @@ export async function createGameServer(options = {}) {
       requests: account.requests.map(id => accounts.get(id)).filter(Boolean).map(publicAccount),
       // Requests I sent that are still waiting (so they can be cancelled), and the guest diary (who visited, watered, gifted).
       sent: [...accounts.values()].filter(other => other.requests.includes(account.id)).map(publicAccount),
-      visitLog: (account.visitLog || []).slice(0, 30),
+      visitLog: (account.visitLog || []).filter(e=>e.kind!=='message').slice(0, 30),
+      social:socialState(account),
     };
   }
   async function refreshFriends(account) {
@@ -159,10 +163,10 @@ export async function createGameServer(options = {}) {
   function tellFriends(account) { const peer = peers.get(account.id); if (peer) send(peer.socket, { type: 'friends', ...friendList(account) }); }
   function broadcast(room, payload, except) { payload = JSON.stringify(payload); /* once for everyone in the room */ for (const id of room.members) { if (id !== except) { const peer = peers.get(id); if (peer) send(peer.socket, payload); } } }
   function visibleDrop(peer,drop){const space=drop.space||(drop.planet==='home'&&Math.hypot(drop.x,drop.z)<18?`home:${drop.ownerId}`:'wild');return !peer.visit&&drop.room===peer.room&&drop.planet===peer.planet&&(space==='wild'||space===`home:${peer.account.id}`);}
-  function respawn(peer){if(peer.visit)endVisit(peer);join(peer,'home',peer.party);peer.pose={...peer.pose,x:0,z:-4.8};arrived(peer);}
+  function respawn(peer){if(peer.visit)endVisit(peer);join(peer,'home');peer.pose={...peer.pose,x:0,z:-4.8};arrived(peer);}
   const combatAuthority=createCombatAuthority({store,peers,rooms,remember,send,broadcast,onDeath:respawn});
   // The Delvers' Vault lobby, runs and in-run relay (dungeon-lobby.mjs).
-  const dungeonLobby=createDungeonLobby({peers,rooms,parties,join:(...args)=>join(...args),send,arrived});
+  const dungeonLobby=createDungeonLobby({peers,rooms,join:(...args)=>join(...args),send,arrived});
   const dungeonTimer=setInterval(()=>{try{dungeonLobby.tick(.25);}catch(error){console.error('Vault lobby tick failed.',error);}},250);dungeonTimer.unref?.();
   const executeAction = createActionService({store,getPeer:id=>peers.get(id),getWorld:id=>rooms.has(id)?combatAuthority.state(rooms.get(id)):null,dungeonCheck:(id,type,p)=>dungeonLobby.check(id,type,p),afterCommit:async(committed,intent)=>{
     committed.accounts.forEach(remember);
@@ -183,8 +187,7 @@ export async function createGameServer(options = {}) {
   }});
   function endVisit(peer) {
     peer.visit = null; send(peer.socket, { type: 'visit', home: null });
-    const party=peer.visitReturnParty&&parties.has(peer.visitReturnParty)?peer.visitReturnParty:null;delete peer.visitReturnParty;
-    join(peer,peer.account.profile.planet,party,null,true);
+    join(peer,peer.account.profile.planet,null,true);
     const room = rooms.get(peer.room); if (room) { peer.lastSent = null; broadcastPose(room, peer); }
   }
   function presence(peer) {
@@ -226,26 +229,25 @@ export async function createGameServer(options = {}) {
     if (!room.members.size) rooms.delete(room.id); else elect(room);
     peer.room = null;
   }
-  function join(peer, planet = 'home', party = null, visitId = null, refresh = false) {
+  function join(peer, planet = 'home', visitId = null, refresh = false) {
     if (!Object.hasOwn(Game.PLANETS, planet)) throw failure(400, 'Unknown world.');
-    if (party && !parties.has(party)) throw failure(404, 'That party code was not found.');
-    const key = `${party || 'public'}:${planet}`;
+    // World rooms are planets. Dungeon runs use an internal instance id, never a joinable party code.
+    const key = peer.dungeon ? `dungeon:${peer.dungeon.id}` : planet;
     if (peer.room === key) {
       if(peer.visit===visitId&&!refresh)return;
       peer.visit=visitId;
       const room=rooms.get(key);
-      send(peer.socket,{type:'joined',id:peer.account.id,room:key,party,host:room.host,planet,visiting:visitId,players:roster(room),enemies:room.enemies,environment:room.environment,epoch:room.epoch});
+      send(peer.socket,{type:'joined',id:peer.account.id,room:key,host:room.host,planet,visiting:visitId,players:roster(room),enemies:room.enemies,environment:room.environment,epoch:room.epoch});
       return;
     }
     const existing = rooms.get(key);
-    if (existing?.members.size >= 24) throw failure(409, 'This world is full. Join a private party to play together.');
     leave(peer);
     const room = existing || { id: key, members: new Set(), host: null, enemies: [], environment:null, requests:new Map(), epoch: 0, killed: new Set(), contributors: new Map(), lastSnapshot: 0 };
     rooms.set(key, room); room.members.add(peer.account.id);
     if (peer.planet && peer.planet !== 'home' || peer.visit) peer.tripAt = Date.now(); // leaving a trip: delivery.ts catch-ups go to the chest
-    peer.planet = planet; peer.party = party; peer.room = key; peer.visit = visitId; peer.pose = { ...peer.pose, x: 0, z: planet === 'home' ? 0 : 9, ...(peer.pose.visual?{visual:{...peer.pose.visual,carriage:null,fishing:null},...(peer.pose.visual.carriage?{y:0,moving:false}:{})}:{}) }; arrived(peer);
+    peer.planet = planet; peer.room = key; peer.visit = visitId; peer.pose = { ...peer.pose, x: 0, z: planet === 'home' ? 0 : 9, ...(peer.pose.visual?{visual:{...peer.pose.visual,carriage:null,fishing:null},...(peer.pose.visual.carriage?{y:0,moving:false}:{})}:{}) }; arrived(peer);
     elect(room);
-    send(peer.socket, { type: 'joined', id: peer.account.id, room: key, party, host: room.host, planet, visiting:visitId, players: roster(room), enemies: room.enemies, environment:room.environment, epoch: room.epoch });
+    send(peer.socket, { type: 'joined', id: peer.account.id, room: key, host: room.host, planet, visiting:visitId, players: roster(room), enemies: room.enemies, environment:room.environment, epoch: room.epoch });
     broadcast(room, { type: 'enter', player: presence(peer) }, peer.account.id);
   }
 
@@ -329,6 +331,32 @@ export async function createGameServer(options = {}) {
       throw failure(409,'Reconnect to use server-approved actions.');
 
     }
+    if(route==='social/state'&&method==='GET')return respond(response,200,socialState(account));
+    if(route.startsWith('social/profile/')&&method==='GET'){
+      rate(`social-profile:${account.id}`,120);const target=remember(await store.get(route.slice('social/profile/'.length)));
+      if(!target)throw failure(404,'Không tìm thấy người chơi.');
+      return respond(response,200,{player:{...publicAccount(target),online:peers.has(target.id),planet:peers.get(target.id)?.planet??target.profile.planet}});
+    }
+    if(route.startsWith('social/')&&method==='POST'){
+      const value=await body(request);checkAccess();rate(`social:${account.id}`,40);
+      const target=remember(await store.get(typeof value.id==='string'?value.id:''));if(!target||target.id===account.id)throw failure(400,'Hãy chọn người chơi khác.');
+      if(route==='social/like'){
+        const result=await playerSocial.like(account.id,target.id,checkAccess);
+        for(const p of peers.values())send(p.socket,{type:'playerLikes',...result});
+        return respond(response,200,{...result,social:socialState(accounts.get(account.id))});
+      }
+      if(route==='social/block')return respond(response,200,await playerSocial.block(account.id,target.id,value.blocked!==false,checkAccess));
+      if(route==='social/report'){
+        console.info(JSON.stringify({type:'player-report',at:Date.now(),by:account.id,target:target.id,reason:text(value.reason,200)||'Báo cáo từ hồ sơ người chơi'}));
+        return respond(response,200,{ok:true});
+      }
+      if(route==='social/invite'){
+        if(blocks(account,target)||blocks(target,account))throw failure(403,'Người chơi này đang bị chặn.');
+        rate(`invite:${account.id}`,1,2000);const other=peers.get(target.id);if(!other)throw failure(409,'Người chơi hiện không online.');
+        send(other.socket,{type:'playInvite',player:publicAccount(account),planet:peers.get(account.id)?.planet??account.profile.planet});return respond(response,200,{ok:true});
+      }
+      throw failure(404,'That service was not found.');
+    }
     if (route === 'friends' && method === 'GET') return respond(response, 200, await refreshFriends(account));
     if (route.startsWith('friends/') && method === 'POST') {
       rate(`friend:${account.id}`, 25);
@@ -382,28 +410,25 @@ export async function createGameServer(options = {}) {
   });
   sockets.on('connection', (socket, request, account) => {
     const previous = peers.get(account.id); if (previous) { leave(previous); previous.socket.close(4001, 'This adventure was opened in another tab.'); }
-    const peer = { socket, account, active: true, visit: null, party: null, room: null, planet: account.profile.planet, pose: { x: 0, z: 0, facing: 0, moving: false }, poseAt: 0, messages: 0 };
+    const peer = { socket, account, active: true, visit: null, room: null, planet: account.profile.planet, pose: { x: 0, z: 0, facing: 0, moving: false }, poseAt: 0, messages: 0 };
     peers.set(account.id, peer); send(socket, { type: 'welcome', id: account.id, ...friendList(account) });
     try { join(peer, Object.hasOwn(Game.PLANETS, account.profile.planet) ? account.profile.planet : 'home'); }
     catch (error) { peers.delete(account.id); send(socket, { type: 'error', message: error.message }); socket.close(1008, 'World unavailable'); return; }
     socket.isAlive = true; socket.on('pong', () => { socket.isAlive = true; });
     for (const id of account.friends) if (accounts.has(id)) tellFriends(accounts.get(id));
-    socket.on('message', raw => {
+    socket.on('message', async raw => {
       let requestId;
       try {
         if (socket.readyState !== WebSocket.OPEN || peers.get(account.id) !== peer) return;
         if (validSession(request)?.id !== account.id) { socket.close(1000, 'Signed out'); return; }
         const message = JSON.parse(raw.toString());
         if (!message || typeof message.type !== 'string') return;
-        if (message.type === 'chat' && typeof message.requestId === 'string' && /^[a-zA-Z0-9-]{16,80}$/.test(message.requestId)) requestId = message.requestId;
+        if (['chat','dm'].includes(message.type) && typeof message.requestId === 'string' && /^[a-zA-Z0-9-]{16,80}$/.test(message.requestId)) requestId = message.requestId;
         rate(`messages:${account.id}`, 80, 1000);
         const room = rooms.get(peer.room);
         if (message.type === 'active') { peer.active = message.active === true; if (room) elect(room); }
-        else if (message.type === 'join') {if(message.planet!==account.profile.planet)throw failure(403,'Travel to that planet before joining it.');join(peer, message.planet, text(message.party, 8).toUpperCase() || null);}
-        else if (message.type === 'party') {
-          const code = randomBytes(4).toString('hex').slice(0, 6).toUpperCase(); parties.set(code, { owner: account.id, created: Date.now() });
-          join(peer, peer.planet, code); send(socket, { type: 'party', code });
-        } else if (message.type === 'pose' && room) {
+        else if (message.type === 'join') {if(message.planet!==account.profile.planet)throw failure(403,'Travel to that planet before joining it.');join(peer, message.planet);}
+        else if (message.type === 'pose' && room) {
           const now = Date.now(); if (now - peer.poseAt < 65) return;
           const x = number(message.x), z = number(message.z), distance = Math.hypot(x - peer.pose.x, z - peer.pose.z);
           // Movement budget (pose-budget.mjs): refills at the top speed and saves up only a short burst, so neither a pause
@@ -420,34 +445,26 @@ export async function createGameServer(options = {}) {
           peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,hidden:combat.portalHidden||combat.inkDashing,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0,carriage,fishing},block:combat.statuses.block>0,decoys:combatAuthority.decoys(peer) };
           broadcastPose(room, peer);
         } else if (message.type === 'dm') {
-          // A private message to a friend, online or not: it lands in their guest diary (and pops up if they are playing).
-          rate(`dm:${account.id}`, 10);
-          const target = accounts.get(typeof message.to === 'string' ? message.to : ''), body = text(message.text, 120);
-          if (!target || !account.friends.includes(target.id) || !target.friends.includes(account.id)) throw failure(403, 'Only friends can send messages.');
-          if (!body) return;
-          noteGuest(target.id, { at: Date.now(), by: account.id, name: account.profile.name, kind: 'message', text: body }).then(ok => send(socket, { type: 'dmSent', to: target.id, ok }));
+          if(!requestId)throw failure(400,'This message needs a valid request ID.');
+          const prior=(account.social?.inbox??[]).find(m=>m.messageId===requestId&&m.id===account.id);
+          if(!prior)rate(`chat:${account.id}`,1,CHAT_INTERVAL);
+          const checkAccess=()=>{if(peers.get(account.id)!==peer||validSession(request)?.id!==account.id)throw failure(401,'Sign in to play online.');};
+          const result=await playerSocial.dm(account.id,message.to,message.text,requestId,checkAccess);
+          if(!result.replayed){const target=peers.get(result.entry.to);if(target)send(target.socket,result.entry);send(socket,result.entry);}
+          send(socket,{type:'dmAck',requestId,dmLeft:result.dmLeft,day:result.day});
         } else if (message.type === 'chat') {
           if (!room) throw failure(409, 'Join a world before sending a message.');
           if (message.requestId !== undefined && !requestId) throw failure(400, 'This message needs a valid request ID.');
-          const value = text(message.message, 160), receiptKey = requestId && `${account.id}:${requestId}`;
-          const prior = receiptKey && chatReceipts.get(receiptKey);
-          if (prior && Date.now() - prior.at < 10 * 60_000) {
-            if (prior.room !== room.id || prior.message !== value) throw failure(409, 'That message was already sent in another conversation.');
-            send(socket, { type: 'chatAck', requestId }); return;
-          }
-          rate(`chat:${account.id}`, 24);
-          if (!value) throw failure(400, 'Write a message before sending.');
-          broadcast(room, { type: 'chat', id: account.id, name: account.profile.name, message: value, at: Date.now() });
-          if (receiptKey) {
-            chatReceipts.set(receiptKey, { room: room.id, message: value, at: Date.now() });
-            if (chatReceipts.size > 10_000) chatReceipts.delete(chatReceipts.keys().next().value);
-            send(socket, { type: 'chatAck', requestId });
-          }
+          const value=socialText(message.message),receiptKey=requestId&&`${account.id}:${requestId}`,prior=receiptKey&&chatReceipts.get(receiptKey);
+          if(prior){if(prior.planet!==peer.planet||prior.message!==value)throw failure(409,'That message was already sent in another conversation.');send(socket,{type:'chatAck',requestId});return;}
+          rate(`chat:${account.id}`,1,CHAT_INTERVAL);
+          const payload={type:'chat',id:account.id,name:account.profile.name,message:value,at:Date.now(),planet:peer.planet};
+          for(const other of peers.values())if(other.planet===peer.planet&&!blocks(other.account,account)&&!blocks(account,other.account))send(other.socket,payload);
+          if(receiptKey){chatReceipts.set(receiptKey,{planet:peer.planet,message:value,at:Date.now()});if(chatReceipts.size>10000)chatReceipts.delete(chatReceipts.keys().next().value);send(socket,{type:'chatAck',requestId});}
         } else if (message.type === 'visit') {
           const target = accounts.get(message.id);
           if (!target || !account.friends.includes(target.id)) throw failure(403, 'Become friends before visiting.');
-          if(!peer.visit)peer.visitReturnParty=peer.party;
-          join(peer, 'home', peers.get(target.id)?.party || peer.party,target.id); peer.pose = { ...peer.pose, x: 0, z: 3 };
+          join(peer, 'home', target.id); peer.pose = { ...peer.pose, x: 0, z: 3 };
           noteGuest(target.id, { at: Date.now(), by: account.id, name: account.profile.name, kind: 'visit' }); // the owner's guest diary (best effort)
           send(socket, { type: 'visit', home: publicHome(target) }); { peer.lastSent = null; broadcastPose(rooms.get(peer.room), peer); }
         } else if (message.type === 'leaveVisit') {
@@ -490,7 +507,6 @@ export async function createGameServer(options = {}) {
     if ([...sessions.values()].some(value => value.expires <= now)) saveSessions();
     for (const [key, value] of limits) if (now - value.at > 120_000) limits.delete(key);
     for (const [key, value] of chatReceipts) if (now - value.at > 10 * 60_000) chatReceipts.delete(key);
-    for (const [key, value] of parties) if (now - value.created > 24 * 60 * 60 * 1000 && ![...rooms.keys()].some(room => room.startsWith(key + ':'))) parties.delete(key);
   }, 60_000); cleanup.unref();
   const heartbeat = setInterval(() => {
     for (const socket of sockets.clients) {

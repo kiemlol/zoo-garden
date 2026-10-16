@@ -444,7 +444,7 @@ function floating(text:string,x=world.position.x,z=world.position.z,style='item'
 function cleansedFx(){world.fx?.burst({x:world.position.x,z:world.position.z},{n:18,color:['#ffffff','#bff7ff','#ffe9a8'],glow:true,size:.1,speed:3,up:4,y:1});toast('Cleansed! Bad effects wash away at home.','✨');}
 function levelCheck(before:number) {if(state.level>before){toast(`Level ${state.level}! A little stronger, a little braver.`,'🌟');for(const l of M.milestonesBetween(before,state.level))toast(t('Milestone: level {level}! +{energy} energy and a moonstone. Onward, legend!',{level:l,energy:M.milestoneReward(l).energy.toLocaleString()}),'🏅');tone('level');world.burst(world.position.x,world.position.z,'#f5dc8f',35);}}
 function change<T>(action:()=>T):T {const before=state.level;const result=action();levelCheck(before);save();updateHud();return result;}
-function uiBlocked(){return !!modal||!!document.querySelector('dialog[open]')||shipSequence?.busy||!!flight||arriving;}
+function uiBlocked(){return !!document.querySelector('[data-player-panel]:not([hidden])')||!!modal||!!document.querySelector('dialog[open]')||shipSequence?.busy||!!flight||arriving;}
 function botActive(){return started&&!actionHandler&&!document.hidden&&!uiBlocked()&&!placement&&!world.interior&&world.planet==='home'&&state.hp>0;}
 /** 'wardrobe' while the bag was opened from the bedroom wardrobe: it then lists only things to wear (house-stores.ts). */
 let bagMode:'bag'|'wardrobe'='bag';
@@ -1715,6 +1715,8 @@ const sharedKills=new Set<string>();
 export const gameBridge:GameBridge={
   enterGame:start,
   getState:()=>state,getWorld:()=>world,
+  sayPlayer(id,text,local){const remote=world.remotePlayers.get(id),at=()=>{const mesh=local?world.player:world.remotePlayers.get(id)?.mesh;const p=mesh?.position??world.position;return {x:p.x,z:p.z,y:p.y+2.5*(mesh?.scale.y??1)};};if(local||remote)helperChat.say('player:'+id,text,at,5,true);},
+  clearPlayerSpeech(id){helperChat.clearPlayers(id);},
   getPresence:()=>({y:house.poseY(world.carriage?.active?world.player.position.y:world.position.y+world.jump.height),x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,visible:!document.hidden,visual:world.visualSnapshot(),dog:(()=>{const dog=world.ownDog?.();return dog!==null&&dog!==undefined&&M.dogWorn(state.gear)&&dogFollows(world.planet,world.position,!!world.interior)?dog:null;})()}),
   getOfflineState:()=>{try{return M.parseSave(localStorage.getItem(activeKey()));}catch{return null;}},
   applyState(next){fishingEpoch++;mysteryCaller=newMysteryCaller();fishingView.dropMystery();if(flight)exitSpace();shipSequence?.reset();arriving=false;autopilotTarget=null;homeQueued=false;state=next;applyMovePad();graphics.setResolution(state.settings.renderRes??'auto');world.applyGraphics(graphics.profile,graphics.ratio);const nameInput=document.querySelector<HTMLInputElement>('#name-input');if(nameInput)nameInput.value=state.name;visiting=null;visitHome=null;world.state=state;resetCombat();world.build(state.planet);world.refreshPlayer();if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal)closeDialog();updateHud();updateLabels();},

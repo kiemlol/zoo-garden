@@ -58,8 +58,7 @@ test('local multiplayer: accounts, saves, friendship, privacy, rooms and host mi
   a.send({type:'active',active:false});assert.equal((await b.next(m=>m.type==='authority'&&m.host===bob.data.account.id)).host,bob.data.account.id);
   b.send({type:'visit',id:alice.data.account.id});assert.equal((await b.next(m=>m.type==='visit')).home.id,alice.data.account.id);
   b.send({type:'leaveVisit'});assert.equal((await b.next(m=>m.type==='visit')).home,null);
-  b.send({type:'party'});const privateParty=await b.next(m=>m.type==='party');assert.match(privateParty.code,/^[A-F0-9]{6}$/);
-  a.send({type:'join',planet:'home',party:privateParty.code});const joinedParty=await a.next(m=>m.type==='joined'&&m.party===privateParty.code);assert.equal(joinedParty.players.length,2);
+  b.send({type:'party'});a.send({type:'join',planet:'home',party:'OBSOLETE'});a.send({type:'chat',message:'Still the same planet'});assert.equal((await b.next(m=>m.type==='chat'&&m.message==='Still the same planet')).id,alice.data.account.id);
   const raw=await readFile(path.join(dataDir,'accounts.json'),'utf8');assert.ok(!raw.includes('password-one'));assert.ok(!raw.includes('zoo_session'));assert.equal(JSON.parse(raw).accounts.find(v=>v.username==='alice').profile.energy,0);
   await call('auth/logout',{},alice.cookie);assert.equal((await call('auth/session',null,alice.cookie)).data.account,null);
   await game.close();
@@ -83,7 +82,7 @@ async function protocolRoom(t,{planet='home',configure=()=>{}}={}) {
   const host=await explorer('host_player'),peer=await explorer('peer_player');
   assert.equal(peer.joined.host,host.id);
   // Chat is an ordered protocol barrier, avoiding arbitrary sleeps for negative assertions.
-  async function barrier(sender,receiver){const marker=randomUUID();sender.send({type:'chat',message:marker});await receiver.next(m=>m.type==='chat'&&m.message===marker);}
+  async function barrier(sender,receiver){await new Promise(r=>setTimeout(r,2010));const marker=randomUUID();sender.send({type:'chat',message:marker});await receiver.next(m=>m.type==='chat'&&m.message===marker);}
   async function action(client,type,payload={},extra={}){const current=await (await fetch(game.url+'/api/auth/session',{headers:{Cookie:client.cookie}})).json();const response=await fetch(game.url+'/api/actions',{method:'POST',headers:{Cookie:client.cookie,'Content-Type':'application/json'},body:JSON.stringify({type,payload,rulesVersion:1,requestId:randomUUID(),expectedRevision:current.revision,...extra})});return {status:response.status,data:await response.json()};}
   return {game,host,peer,explorer,barrier,store,action};
 }
@@ -98,7 +97,7 @@ test('visiting a garden from another planet preserves the saved destination and 
   assert.equal((await peer.next(message=>message.type==='visit')).home.id,host.id);
   assert.equal((await store.get(peer.id)).profile.planet,'lava');
   peer.send({type:'leaveVisit'});assert.equal((await peer.next(message=>message.type==='visit'&&!message.home)).home,null);
-  const back=await peer.next(message=>message.type==='joined'&&message.planet==='lava');assert.equal(back.visiting,null);assert.equal(back.room,'public:lava');
+  const back=await peer.next(message=>message.type==='joined'&&message.planet==='lava');assert.equal(back.visiting,null);assert.equal(back.room,'lava');
   assert.equal((await store.get(peer.id)).profile.planet,'lava');
 });
 
@@ -110,7 +109,7 @@ test('returning from a garden in the same room refreshes the canonical scene and
   peer.send({type:'visit',id:host.id});await peer.next(message=>message.type==='joined'&&message.visiting===host.id);await peer.next(message=>message.type==='visit'&&message.home?.id===host.id);
   const visiting=await (await fetch(game.url+'/api/drops',{headers:{Cookie:peer.cookie}})).json();assert.deepEqual(visiting.drops,[]);
   peer.send({type:'leaveVisit'});await peer.next(message=>message.type==='visit'&&!message.home);
-  const returned=await peer.next(message=>message.type==='joined'&&message.visiting===null);assert.equal(returned.room,'public:home');assert.ok(returned.players.some(player=>player.id===peer.id));
+  const returned=await peer.next(message=>message.type==='joined'&&message.visiting===null);assert.equal(returned.room,'home');assert.ok(returned.players.some(player=>player.id===peer.id));
   const own=await (await fetch(game.url+'/api/drops',{headers:{Cookie:peer.cookie}})).json();assert.equal(own.drops.length,1);assert.equal(own.drops[0].id,dropped.data.result.id);
 });
 
@@ -238,7 +237,7 @@ test('chat acknowledgements are sender-only and retries do not broadcast twice',
 });
 
 test('a chat request ID cannot be reused for changed text or another room',async t=>{
-  const {host,peer,barrier}=await protocolRoom(t);
+  const {game,store,host,peer,barrier}=await protocolRoom(t);
   const message={type:'chat',requestId:randomUUID(),message:'Original conversation'};
   host.send(message);await host.next(m=>m.type==='chatAck'&&m.requestId===message.requestId);
   await peer.next(m=>m.type==='chat'&&m.message===message.message);await host.next(m=>m.type==='chat'&&m.message===message.message);
@@ -247,7 +246,7 @@ test('a chat request ID cannot be reused for changed text or another room',async
   assert.deepEqual(await host.next(m=>m.type==='error'),{type:'error',requestId:message.requestId,message:'That message was already sent in another conversation.'});
   await barrier(host,peer);assert.deepEqual(peer.drain(m=>m.type==='chat'&&m.message==='Changed text'),[]);assert.deepEqual(host.drain(m=>m.type==='chatAck'),[]);
 
-  host.send({type:'party'});const room=await host.next(m=>m.type==='party');await host.next(m=>m.type==='joined'&&m.party===room.code);
+  const saved=await store.get(host.id);await store.command({actorId:host.id,requestId:randomUUID(),expectedRevision:saved.profileRevision||0,hash:'a'.repeat(64),actionType:'testPlanet',run:records=>{records.get(host.id).profile.planet='ocean';return true;}});await fetch(game.url+'/api/auth/session',{headers:{Cookie:host.cookie}});host.send({type:'join',planet:'ocean'});await host.next(m=>m.type==='joined'&&m.planet==='ocean');
   host.send(message);
   assert.deepEqual(await host.next(m=>m.type==='error'),{type:'error',requestId:message.requestId,message:'That message was already sent in another conversation.'});
   await barrier(host,host);assert.deepEqual(host.drain(m=>m.type==='chat'&&m.message===message.message),[]);assert.deepEqual(host.drain(m=>m.type==='chatAck'),[]);
@@ -267,12 +266,12 @@ test('empty chat rejection includes its request ID and broadcasts no message',as
 
 test('chat rate rejection preserves request IDs while an accepted retry remains idempotent',async t=>{
   const {host,peer,barrier}=await protocolRoom(t),accepted=[];
-  for(let i=0;i<24;i++){
+  for(let i=0;i<1;i++){
     const message={type:'chat',requestId:randomUUID(),message:`Allowed message ${i}`};accepted.push(message);host.send(message);
     assert.equal((await host.next(m=>m.type==='chatAck')).requestId,message.requestId);
   }
   await peer.next(m=>m.type==='chat'&&m.message===accepted.at(-1).message);
-  assert.equal(peer.drain(m=>m.type==='chat').length,23);assert.equal(host.drain(m=>m.type==='chat').length,24);
+  assert.equal(peer.drain(m=>m.type==='chat').length,0);assert.equal(host.drain(m=>m.type==='chat').length,1);
 
   const rejected={type:'chat',requestId:randomUUID(),message:'This exceeds the limit'};host.send(rejected);
   assert.deepEqual(await host.next(m=>m.type==='error'),{type:'error',requestId:rejected.requestId,message:'Please wait a moment before trying again.'});
@@ -290,7 +289,7 @@ test('same-account reconnect retains chat receipts and acknowledges a retry with
   host.send(message);await host.next(m=>m.type==='chatAck'&&m.requestId===message.requestId);await peer.next(m=>m.type==='chat'&&m.message===message.message);
   const replaced=new Promise(resolve=>host.socket.once('close',code=>resolve(code)));
   const reconnected=await connect(game.url,host.cookie);t.after(()=>reconnected.socket.terminate());
-  const joined=await reconnected.next(m=>m.type==='joined');assert.equal(joined.id,host.id);assert.equal(joined.room,'public:home');assert.equal(await replaced,4001);
+  const joined=await reconnected.next(m=>m.type==='joined');assert.equal(joined.id,host.id);assert.equal(joined.room,'home');assert.equal(await replaced,4001);
   reconnected.send(message);assert.deepEqual(await reconnected.next(m=>m.type==='chatAck'),{type:'chatAck',requestId:message.requestId});
   await barrier(reconnected,peer);
   assert.deepEqual(peer.drain(m=>m.type==='chat'&&m.message===message.message),[]);

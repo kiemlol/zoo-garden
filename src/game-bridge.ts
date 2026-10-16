@@ -47,6 +47,8 @@ export interface GameBridge {
   /** The Delvers' Vault online (dungeon.ts): a dg* message from the server, and the way to send one (null when offline). */
   dungeonMessage?(message:{type:string;[key:string]:unknown}):void;
   setDungeonSender?(send:((message:Record<string,unknown>)=>boolean)|null):void;
+  sayPlayer?(id:string,text:string,local:boolean):void;
+  clearPlayerSpeech?(id?:string):void;
   onFrame(listener:(dt:number)=>void):()=>void;
   onAction(listener:(action:GameAction)=>void):()=>void;
 }

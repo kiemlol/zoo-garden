@@ -9,8 +9,8 @@ import { DUNGEON } from '../src/dungeon-rules.ts';
 function setup() {
   const peers = new Map(), rooms = new Map(), parties = new Map(), outbox = [], joins = [];
   const send = (socket, message) => outbox.push({ to: socket.id, ...(typeof message === 'string' ? JSON.parse(message) : message) });
-  const join = (peer, planet, party) => { const key = `${party || 'public'}:${planet}`; if (party && !parties.has(party)) throw new Error('no party'); peer.room = key; peer.party = party; peer.pose = { ...peer.pose, x: 0, z: 0 }; joins.push({ id: peer.account.id, key }); };
-  const add = (id, x, z, extra = {}) => { const profile = Game.newGame(id); const peer = { socket: { id }, account: { id, profile }, active: true, visit: null, planet: 'home', room: 'public:home', party: null, pose: { x, z }, ...extra }; peers.set(id, peer); return peer; };
+  const join=(peer,planet)=>{const key=peer.dungeon?`dungeon:${peer.dungeon.id}`:planet;peer.room=key;peer.pose={...peer.pose,x:0,z:0};joins.push({id:peer.account.id,key});};
+  const add = (id, x, z, extra = {}) => { const profile = Game.newGame(id); const peer = { socket: { id }, account: { id, profile }, active: true, visit: null, planet: 'home', room: 'home', pose: { x, z }, ...extra }; peers.set(id, peer); return peer; };
   let clock = Date.UTC(2026, 9, 6, 5);
   const lobby = createDungeonLobby({ peers, rooms, parties, join, send, arrived: () => {}, now: () => clock });
   return { peers, parties, outbox, joins, add, lobby, tick: s => { for (let t = 0; t < s; t += .25) { clock += 250; lobby.tick(.25); } } };
@@ -47,7 +47,7 @@ test('everyone in the circle when the 10 s countdown ends goes in together (at m
   const go = w.outbox.filter(m => m.type === 'dgGo');
   assert.equal(go.length, 5); assert.equal(new Set(go.map(m => m.runId)).size, 1); assert.equal(go[0].host, 'p0');
   for (const m of go) { assert.equal(m.you, m.to); assert.equal(m.members.length, 5); assert.ok(Math.hypot(m.spawn.x - DUNGEON.arena.x, m.spawn.z - DUNGEON.arena.z) < DUNGEON.arenaR); }
-  const room = w.peers.get('p0').room; assert.match(room, /^DG[0-9A-F]{6}:home$/); assert.ok([...w.peers.values()].filter(p => p.room === room).length === 5);
+  const room = w.peers.get('p0').room; assert.match(room, /^dungeon:dg-[0-9a-f]{12}$/); assert.ok([...w.peers.values()].filter(p => p.room === room).length === 5);
   assert.equal(w.peers.get('p5').dungeon, undefined, 'the sixth waits for the next party');
 });
 
@@ -84,7 +84,7 @@ test('leaving or disconnecting hands the run to the next member and takes you ba
   w.lobby.message(a, { type: 'dgLeave', runId: run.id });
   assert.equal(w.lobby.check('a', 'dungeonClaim', { runId: run.id, stage: 0 }), true, 'a room cleared before leaving can still be claimed');
   assert.equal(w.lobby.check('a', 'dungeonStart', { runId: run.id }), false);
-  assert.equal(a.dungeon, null); assert.equal(a.room, 'public:home'); assert.ok(Math.hypot(a.pose.x - L.x, a.pose.z - L.z) < 8);
+  assert.equal(a.dungeon, null); assert.equal(a.room, 'home'); assert.ok(Math.hypot(a.pose.x - L.x, a.pose.z - L.z) < 8);
   assert.deepEqual(w.outbox.filter(m => m.type !== 'dgClear').map(m => [m.type, m.to]), [['dgEnd', 'a'], ['dgHost', 'b']]); assert.equal(run.host, 'b');
-  w.lobby.disconnect(b); assert.equal(w.lobby.runs.size, 0); assert.ok(!w.parties.has(run.code), 'the private room code is retired');
+  w.lobby.disconnect(b); assert.equal(w.lobby.runs.size, 0); assert.equal(run.code,undefined,'no joinable party code is created');
 });

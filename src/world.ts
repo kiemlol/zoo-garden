@@ -827,6 +827,8 @@ export class World {
   portraitAvatar(color:string,gear:SaveState['gear'],look:string){return this.avatar(color,{hat:gear.hat,outfit:gear.outfit,disguise:gear.disguise},look);}
   /** Which of the files that picture is drawn from have arrived (body, body style, then each worn piece): its cache key, so a late file redraws it once. */
   avatarArt(gear:SaveState['gear'],look:string){const worn=gear.disguise?[gear.disguise]:[gear.hat,gear.outfit];return `${+heroKit.ready}${+heroKitFor(toLook(look)??DEFAULT_LOOK).ready}${worn.map(id=>+(!!id&&!!this.kitFor(id))).join('')}`;}
+  /** Full social preview also refreshes when a late weapon/boots/companion kit arrives. */
+  equipmentArt(gear:SaveState['gear'],look:string){return this.avatarArt(gear,look)+Object.values(gear).map(id=>id?+(!!this.kitFor(id)):0).join('');}
   /** A body style shown while previewing at the mirror: local only, never saved or sent online. */
   tryOnLook?:LookId|null;
   /** The cottage interior while the explorer is inside (house-session.ts): its own scene, walkable plan, and hooks to re-home the explorer and to drop it on a rebuild. */

@@ -1,5 +1,7 @@
+import {PlayerChat} from './chat-ui.ts';
+import type {SocialState,SocialPlayer} from './social-rules.ts';
 import type { GameBridge, NetworkDrop } from './game-bridge.ts';
-import { newGame, cropProgress, ITEMS, type SaveState, type PlanetId, type Difficulty } from './model.ts';
+import { newGame, cropProgress, ITEMS, PLANETS, type SaveState, type PlanetId, type Difficulty } from './model.ts';
 import type { LookId } from './looks.ts';
 import './online.css';
 import { t, onLanguageChange, getLanguage, switchLanguage } from './i18n.ts';
@@ -7,7 +9,7 @@ import {gameplayKey} from './gameplay-controls.ts';
 import type {GameIntent,ActionReply} from './actions.ts';
 
 interface GuestEntry { at:number;by:string;name:string;kind:'visit'|'water'|'gift'|'steal'|'message';what?:string;count?:number;text?:string }
-interface Explorer { id:string;username?:string;name:string;color:string;level:number;gear:SaveState['gear'];look?:LookId;online?:boolean;x?:number;z?:number;y?:number;facing?:number;moving?:boolean;space?:string;planet?:string;difficulty?:string }
+interface Explorer { id:string;username?:string;name:string;color:string;level:number;gear:SaveState['gear'];look?:LookId;online?:boolean;x?:number;z?:number;y?:number;facing?:number;moving?:boolean;space?:string;planet?:string;difficulty?:string;likes?:number;stats?:SocialPlayer['stats'] }
 interface Home extends Explorer { discovered?:PlanetId[]; plots:SaveState['plots'];farm?:SaveState['farm'];placed?:unknown[];decorations?:unknown[];helper?:unknown;friends?:unknown[] }
 interface EnemyState { id:string;x:number;z:number;hp:number;maxHp:number;[key:string]:unknown }
 interface NetworkWorld {
@@ -22,9 +24,8 @@ interface NetworkWorld {
   applyEnvironmentAction(action:{kind:'light-pillar'|'collect-ore';id:string;index?:number}):{ok:boolean;rewards?:{id:string;count:number}[]};
   grantEnvironmentReward(eventId:string,rewards:{id:string;count:number}[]):unknown;
 }
-interface Session { authorityVersion?:number;account:Explorer|null;profile?:SaveState;revision?:number;friends?:Explorer[];requests?:Explorer[] }
+interface Session { authorityVersion?:number;account:Explorer|null;profile?:SaveState;revision?:number;friends?:Explorer[];requests?:Explorer[];social?:SocialState }
 interface ActionJob extends GameIntent {requestId:string;expectedRevision:number;rulesVersion:1;submitted?:boolean;retries?:number}
-interface ChatAttempt { requestId:string;draft:string;accountId:string;room:string;connection:WebSocket;pending:boolean;timer?:number }
 const el = <K extends keyof HTMLElementTagNameMap>(tag:K,className='',text='') => {const node=document.createElement(tag);node.className=className;node.textContent=text;return node;};
 // Header of the native panels as in the bottom-sheet panels: icon tile, kicker, title. Kept local so each file loads standalone.
 const headerParts = (icon: string, kicker: string, heading: HTMLElement) => { const tile = el('span', 'social-icon', icon); tile.setAttribute('aria-hidden', 'true'); const text = el('div', 'social-title'); text.append(el('span', 'social-kicker eyebrow', t(kicker)), heading); return [tile, text]; };
@@ -64,7 +65,7 @@ export function initOnline(game:GameBridge) {
   if(import.meta.env.VITE_STATIC_HOST==='true'){initSoloEdition();return;}
   const serviceBase=import.meta.env.BASE_URL;
   let account:Explorer|null=null,friends:Explorer[]=[],requests:Explorer[]=[],sent:Explorer[]=[],visitLog:GuestEntry[]=[],unreadLog=0,socket:WebSocket|null=null;
-  let host:string|null=null,party:string|null=null,planet='',visiting:string|null=null,offline:SaveState|null=null,roomEpoch=0;
+  let host:string|null=null,planet='',visiting:string|null=null,offline:SaveState|null=null,roomEpoch=0;
   let reconnect:number|undefined,saveTimer:number|undefined,saving:Promise<void>|null=null,stopped=false,revision=0,sessionEpoch=0;
   let actionQueue:ActionJob[]=[];const waiting=new Map<string,{resolve:(reply:ActionReply)=>void;reject:(error:Error)=>void}>();
   const pendingSave=()=>actionQueue.length>0;
@@ -74,8 +75,8 @@ export function initOnline(game:GameBridge) {
   const authErrors=new Map<string,string>();
   const title=document.querySelector<HTMLElement>('#title-screen');
   title?.classList.add('account-entry');
-  const players=new Map<string,Explorer>(),rewardIds=new Set<string>(),chat:{name:string;message:string}[]=[];
-  let chatRoom:string|null=null,chatDraft='',chatReady=false,chatAttempt:ChatAttempt|null=null;
+  const players=new Map<string,Explorer>(),rewardIds=new Set<string>();
+  let chatRoom:string|null=null;
   let sharingLoot=false;
   const toggle=button(`👥 ${t('Play together')}`,()=>{render();dialog.showModal();},'social-toggle');toggle.id='online-button';const socialSlot=document.querySelector('#social-slot');if(socialSlot){socialSlot.append(toggle);toggle.classList.add('social-inline-toggle');}else document.body.append(toggle);toggle.setAttribute('aria-label',t('Play together'));
   const dialog=el('dialog','social-dialog');dialog.id='online-dialog';dialog.setAttribute('aria-label',t('Play together'));document.body.append(dialog);
@@ -100,49 +101,11 @@ export function initOnline(game:GameBridge) {
     let value:{error?:string};try{value=await response.json();}catch{throw Object.assign(new Error(response.status>=500?'The game server is having trouble. Please try again shortly.':'Online play needs the game server. Your offline adventure is ready to play.'),{status:response.status});}
     if(!response.ok)throw Object.assign(new Error(response.status>=500?'The game server is having trouble. Please try again shortly.':value.error||'Connection interrupted. Please try again.'),{status:response.status});return value as T;
   }
-  const send=(value:unknown)=>{if(socket?.readyState===WebSocket.OPEN){socket.send(JSON.stringify(value));return true;}return false;};
-  function captureChatDraft(){const input=content.querySelector<HTMLInputElement>('.social-chat-input');if(input)chatDraft=input.value;}
-  function refreshChatControls(){
-    const input=content.querySelector<HTMLInputElement>('.social-chat-input');if(input)input.value=chatDraft;
-    const submit=content.querySelector<HTMLButtonElement>('.social-chat-send');if(submit){submit.disabled=!!chatAttempt?.pending||!chatReady;submit.textContent=t(chatAttempt?.pending?'Sending…':'Send');}
-  }
-  function stopChatWait(){if(chatAttempt?.timer!==undefined){clearTimeout(chatAttempt.timer);chatAttempt.timer=undefined;}}
-  function releaseChat(message?:string){captureChatDraft();stopChatWait();if(chatAttempt)chatAttempt.pending=false;refreshChatControls();if(message)announce(message);}
-  function clearChat(room:string|null=null){
-    stopChatWait();chatAttempt=null;chatRoom=room;chatDraft='';chatReady=false;chat.length=0;
-    const input=content.querySelector<HTMLInputElement>('.social-chat-input');if(input)input.value='';renderChat();refreshChatControls();
-  }
-  function chatMatches(requestId:unknown,connection:WebSocket){return !!chatAttempt&&chatAttempt.requestId===requestId&&chatAttempt.accountId===account?.id&&chatAttempt.room===chatRoom&&chatAttempt.connection===connection;}
-  function acknowledgeChat(requestId:unknown,connection:WebSocket){
-    if(!chatMatches(requestId,connection))return;captureChatDraft();const sent=chatAttempt!;stopChatWait();
-    if(chatDraft===sent.draft)chatDraft='';chatAttempt=null;refreshChatControls();setNotice('Message sent.');
-  }
-  function submitChat(){
-    captureChatDraft();if(chatAttempt?.pending||!chatDraft.trim())return;
-    if(!account||!chatRoom||!chatReady||socket?.readyState!==WebSocket.OPEN){announce('Chat is reconnecting. Your draft is kept.');return;}
-    // Reuse an uncertain delivery's ID so a retry cannot broadcast an accepted message twice.
-    const previous=chatAttempt,requestId=previous&&previous.accountId===account.id&&previous.room===chatRoom&&previous.draft===chatDraft?previous.requestId:crypto.randomUUID();
-    stopChatWait();const attempt:ChatAttempt={requestId,draft:chatDraft,accountId:account.id,room:chatRoom,connection:socket,pending:true};chatAttempt=attempt;
-    refreshChatControls();setNotice('');
-    try{socket.send(JSON.stringify({type:'chat',message:attempt.draft,requestId}));}
-    catch{releaseChat('Chat is reconnecting. Your draft is kept.');return;}
-    attempt.timer=window.setTimeout(()=>{if(chatAttempt===attempt&&attempt.pending)releaseChat('Message delivery is unconfirmed. Your draft is kept; you can try sending again.');},10000);
-  }
-  function sendRoom(value:{type:string;planet?:string;party?:string|null;id?:string}){
-    if(!send(value))return false;
-    // The server intentionally sends no new joined event for a room we already occupy.
-    const sameRoom=value.type==='join'&&`${value.party?.trim().toUpperCase()||'public'}:${value.planet||'home'}`===chatRoom;
-    if(!sameRoom){captureChatDraft();chatReady=false;refreshChatControls();}return true;
-  }
-
-  /** A private message to a friend, online or not: it shows in their guest diary and pops up if they are playing. */
-  function messageForm(friendId:string,box:HTMLElement){
-    box.replaceChildren(el('h4','',t('Message')));
-    const form=el('form','social-inline'),input=el('input');input.maxLength=120;input.placeholder=t('Write a short message…');input.setAttribute('aria-label',t('Message'));input.name='friend-message';
-    const submit=el('button','',t('Send'));submit.type='submit';form.append(input,submit);
-    form.addEventListener('submit',event=>{event.preventDefault();const text=input.value.trim();if(!text)return;if(send({type:'dm',to:friendId,text})){input.value='';announce('Message sent.');}});
-    box.append(form);input.focus();
-  }
+  const send=(value:unknown)=>{if(socket?.readyState===WebSocket.OPEN){try{socket.send(JSON.stringify(value));return true;}catch{return false;}}return false;};
+  const playerChat=new PlayerChat({game,send,api,friend:id=>friends.some(f=>f.id===id),friendAction:async(action,id)=>{await friendAction(action,id);},player:id=>players.get(id)??friends.find(f=>f.id===id),notice:message=>announce(message)});
+  function clearChat(room:string|null=null){chatRoom=room;playerChat.enterPlanet(room??'');playerChat.online(false);}
+  function sendRoom(value:{type:string;planet?:string;id?:string}){if(!send(value))return false;if(value.type==='join'&&value.planet!==chatRoom)playerChat.online(false);return true;}
+  function messageForm(friendId:string,_box:HTMLElement){const person=players.get(friendId)??friends.find(f=>f.id===friendId);if(person){dialog.close();playerChat.openMail(person);}}
   /** Gifts: pick things from your bag to hand a friend (server: friends only, a daily limit; it lands in their chest). */
   function giftPicker(friendId:string,box:HTMLElement){
     box.replaceChildren(el('h4','',t('Give from your bag')));
@@ -152,27 +115,16 @@ export function initOnline(game:GameBridge) {
     for(const [id,n] of bag)list.append(button(`${t(ITEMS[id].name)} ×${n}`,async()=>{try{await queueAction({type:'giftFriend',payload:{ownerId:friendId,item:id,count:1}});announce('Gift sent!');giftPicker(friendId,box);}catch(error){announce((error as Error).message);}}));
     box.append(list);
   }
-  function openPlayer(id:string){
-    const player=players.get(id);if(!player||id===account?.id)return;captureChatDraft();render();dialog.showModal();
-    const card=el('section','social-player-card'),title=el('h3','',player.name),actions=el('div','social-actions');card.append(title);
-    if(player.username)card.append(el('p','social-small','@'+player.username));
-    if(friends.some(friend=>friend.id===id)){actions.append(button('Visit garden',()=>{sendRoom({type:'visit',id});dialog.close();}));const gifts=el('div','social-gifts');actions.append(button('Send a gift',()=>giftPicker(id,gifts)),button('Message',()=>messageForm(id,gifts)));card.append(gifts);}
-    else actions.append(button('Send friend request',async()=>{try{await api('friends/request',{id});announce('Friend request sent.');}catch(error){announce((error as Error).message);}}));
-    card.append(actions);content.prepend(card);
-  }
+  function openPlayer(id:string){dialog.close();void playerChat.openPlayer(id);}
   world().onRemotePlayerClick=openPlayer;
-  document.addEventListener('keydown',event=>{
-    if(gameplayKey(event)!=='Enter'||event.repeat||(event.target as HTMLElement).closest('input,textarea,select,[contenteditable="true"]'))return;
-    if(document.querySelector('#dialog-layer:not([hidden])')||!account)return;event.preventDefault();captureChatDraft();tab='world';render();if(!dialog.open)dialog.showModal();content.querySelector<HTMLInputElement>('.social-chat-input')?.focus();
-  });
   /** One line for the guest diary and for the toast when a friend does something at your home. */
   function guestLine(e:GuestEntry){const what=e.what&&ITEMS[e.what]?t(ITEMS[e.what].name):'';
     return e.kind==='water'?t('{name} watered your {item}!',{name:e.name,item:what}):e.kind==='gift'?t('{name} sent you a gift: {count} {item}',{name:e.name,count:e.count??1,item:what}):e.kind==='steal'?t('{name} picked your {item}!',{name:e.name,item:what}):e.kind==='message'?`${e.name}: ${e.text??''}`:t('{name} is visiting your garden',{name:e.name});}
   const ago=(at:number)=>{const s=Math.max(0,(Date.now()-at)/1000);return s<60?t('just now'):s<3600?t('{n} min ago',{n:Math.floor(s/60)}):s<86400?t('{n} h ago',{n:Math.floor(s/3600)}):t('{n} d ago',{n:Math.floor(s/86400)});};
-  function refreshButton(){const label=account?t(status,{code:party||''}):t('Play together');toggle.textContent=socialSlot?'👥':`👥 ${label}`;toggle.dataset.badge=String(requests.length+unreadLog||'');world().friendIds=new Set(friends.map(f=>f.id));toggle.title=label;toggle.setAttribute('aria-label',t('Play together'));dialog.setAttribute('aria-label',t(account?'Your online world':'Welcome to ZooPet'));close.setAttribute('aria-label',t(account?'Close online menu':'Play offline on this device'));toggle.dataset.online=String(!!account);}
+  function refreshButton(){const label=account?t(status):t('Play together');toggle.textContent=socialSlot?'👥':`👥 ${label}`;toggle.dataset.badge=String(requests.length+unreadLog||'');world().friendIds=new Set(friends.map(f=>f.id));toggle.title=label;toggle.setAttribute('aria-label',t('Play together'));dialog.setAttribute('aria-label',t(account?'Your online world':'Welcome to ZooPet'));close.setAttribute('aria-label',t(account?'Close online menu':'Play offline on this device'));toggle.dataset.online=String(!!account);}
   function expireSession(){
     if(!account)return;game.setDungeonSender?.(null);sessionEpoch++;stopped=true;if(reconnect)clearTimeout(reconnect);if(saveTimer)clearTimeout(saveTimer);
-    clearChat();const previous=socket;socket=null;previous?.close();account=null;host=null;party=null;visiting=null;players.clear();rejectActions('Your session ended. Pending actions remain on this device.');
+    clearChat();const previous=socket;socket=null;previous?.close();account=null;host=null;visiting=null;players.clear();playerChat.session(null);rejectActions('Your session ended. Pending actions remain on this device.');
     authority(null);world().clearRemotePlayers();game.setVisiting(null);game.setPersistence(null);game.setActionHandler(null);const previousOffline=offline||game.getOfflineState();if(previousOffline)game.applyState(previousOffline);offline=null;
     status='Play together';setSaveStatus('● Offline adventure restored');refreshButton();render();if(!dialog.open)dialog.showModal();announce('Your online session ended. Sign in again to continue; pending online progress is kept on this device.');
   }
@@ -180,8 +132,8 @@ export function initOnline(game:GameBridge) {
   function syncRoomDifficulty(){const d=host&&host!==account?.id?players.get(host)?.difficulty:null;world().roomDifficulty=d==='easy'||d==='normal'||d==='hard'?d:null;}
   function renderPlayers(){
     syncRoomDifficulty();
-    const local=game.getPresence();const space=visiting?`home:${visiting}`:local.planet==='home'&&Math.hypot(local.x,local.z)<18?`home:${account?.id}`:'wild';
-    world().updateRemotePlayers([...players.values()].filter(player=>player.id!==account?.id&&player.planet===local.planet&&(player.space==='wild'||player.space===space)));
+    const local=game.getPresence();
+    world().updateRemotePlayers([...players.values()].filter(player=>player.id!==account?.id&&player.planet===local.planet));
   }
   function authority(next:string|null,enemies?:EnemyState[]){
     const becomingHost=next===account?.id&&host!==next;host=next;syncRoomDifficulty();
@@ -241,23 +193,23 @@ export function initOnline(game:GameBridge) {
     return saving;
   }
   function connect(){
-    if(!account||stopped)return;releaseChat();chatReady=false;refreshChatControls();let desiredParty=party,restoring=false,fallbackJoin:any=null;const desiredPlanet=game.getPresence().planet;const socketUrl=new URL(`${serviceBase}socket`,location.href);socketUrl.protocol=location.protocol==='https:'?'wss:':'ws:';socket=new WebSocket(socketUrl);
+    if(!account||stopped)return;playerChat.online(false);const socketUrl=new URL(`${serviceBase}socket`,location.href);socketUrl.protocol=location.protocol==='https:'?'wss:':'ws:';socket=new WebSocket(socketUrl);
     const connection=socket;
     function joined(message:any){
-      if(desiredParty&&message.party!==desiredParty){if(!restoring){restoring=true;fallbackJoin=message;sendRoom({type:'join',planet:desiredPlanet,party:desiredParty});}return;}
-      const nextRoom=typeof message.room==='string'?message.room:`${message.party||'public'}:${message.planet}`;if(chatRoom!==nextRoom)clearChat(nextRoom);chatReady=true;
-      desiredParty=null;restoring=false;if(visiting)game.setVisiting(null);players.clear();for(const player of message.players||[])players.set(player.id,player);party=message.party;planet=message.planet;visiting=typeof message.visiting==='string'?message.visiting:null;
+      const nextRoom=typeof message.room==='string'?message.room:message.planet;chatRoom=nextRoom;playerChat.enterPlanet(message.planet);playerChat.online(true);
+      if(visiting)game.setVisiting(null);players.clear();for(const player of message.players||[])players.set(player.id,player);planet=message.planet;visiting=typeof message.visiting==='string'?message.visiting:null;
       // A visit changes the room, never the owner's saved adventure planet.
-      if(message.enemies?.length)world().applyEnemySnapshots(message.enemies);game.clearNetworkDrops();const dropEpoch=++roomEpoch;void api<{drops:NetworkDrop[]}>('drops').then(result=>{if(socket===connection&&roomEpoch===dropEpoch&&chatRoom===nextRoom&&!visiting&&account)for(const drop of result.drops||[])if(drop.room===nextRoom)game.spawnNetworkDrop(drop,account.id);}).catch(()=>{});if(message.environment)world().applyEnvironmentSnapshot(message.environment);authority(message.host,message.enemies);renderPlayers();status=party?'Party {code}':'Online';refreshButton();if(dialog.open)render();else refreshChatControls();
+      if(message.enemies?.length)world().applyEnemySnapshots(message.enemies);game.clearNetworkDrops();const dropEpoch=++roomEpoch;void api<{drops:NetworkDrop[]}>('drops').then(result=>{if(socket===connection&&roomEpoch===dropEpoch&&chatRoom===nextRoom&&!visiting&&account)for(const drop of result.drops||[])if(drop.room===nextRoom)game.spawnNetworkDrop(drop,account.id);}).catch(()=>{});if(message.environment)world().applyEnvironmentSnapshot(message.environment);authority(message.host,message.enemies);renderPlayers();status='Online';refreshButton();if(dialog.open)render();
     }
     socket.addEventListener('open',()=>{if(socket!==connection)return;status='Online';refreshButton();send({type:'active',active:!document.hidden});void flushSave();game.setDungeonSender?.(value=>socket===connection&&send(value));});
     socket.addEventListener('message',event=>{
       if(socket!==connection)return;let message:any;try{message=JSON.parse(event.data);}catch{return;}
-      if(message.type==='welcome'){friends=message.friends||[];requests=message.requests||[];sent=message.sent||[];visitLog=message.visitLog||[];refreshButton();}
+      if(playerChat.receive(message))return;
+      if(message.type==='welcome'){friends=message.friends||[];requests=message.requests||[];sent=message.sent||[];visitLog=message.visitLog||[];if(message.social)playerChat.setState(message.social);refreshButton();}
       else if(message.type==='joined')joined(message);
       else if(message.type==='authority'){if(message.environment)world().applyEnvironmentSnapshot(message.environment);authority(message.host,message.enemies);}
       else if(message.type==='enter'||message.type==='pose'){if(message.player?.id){const merged=message.delta&&players.has(message.player.id)?{...players.get(message.player.id),...message.player}:message.player;for(const key of Object.keys(merged))if(merged[key]===null)delete (merged as Record<string,unknown>)[key];players.set(message.player.id,merged);}renderPlayers();}
-      else if(message.type==='leave'){players.delete(message.id);renderPlayers();}
+      else if(message.type==='leave'){players.delete(message.id);game.clearPlayerSpeech?.(message.id);renderPlayers();}
       // The server dropped a pose that outran its movement budget (server/pose-budget.mjs): go back to its spot, so the proximity rules agree with the screen again.
       else if(message.type==='poseFix'){const w=world();if(message.planet===w.planet&&(message.visit??null)===visiting&&Number.isFinite(message.x)&&Number.isFinite(message.z)){w.position.set(message.x,w.position.y,message.z);w.destination=null;w.route=[];w.selected=null;}}
       else if(message.type==='enemies')world().applyEnemySnapshots(message.enemies);
@@ -281,32 +233,28 @@ export function initOnline(game:GameBridge) {
       else if(message.type==='healthResult')game.applyAuthorityHealth(message.delta||0,!!message.died);
       else if(message.type==='decoyHp'&&Number.isFinite(message.id)&&Number.isFinite(message.hp))game.applyDecoyHp(message.id,message.hp,String(message.kind),Number(message.x)||0,Number(message.z)||0);
       else if(typeof message.type==='string'&&message.type.startsWith('dg'))game.dungeonMessage?.(message);
-      else if(message.type==='chatAck')acknowledgeChat(message.requestId,connection);
-      else if(message.type==='chat'&&!restoring&&chatRoom){chat.push({name:String(message.name),message:String(message.message)});if(chat.length>60)chat.shift();if(dialog.open&&tab==='world')renderChat();else game.showNotice(`${message.name}: ${message.message}`);}
       else if(message.type==='friends'){const before=requests.length;friends=message.friends||[];requests=message.requests||[];sent=message.sent||[];visitLog=message.visitLog||visitLog;if(requests.length>before)announce('You have a new friend request!');refreshButton();if(dialog.open&&tab==='friends')render();}
-      else if(message.type==='dmSent'&&message.ok===false)announce('That message could not be delivered. Try again.');
       else if(message.type==='guestNotice'&&message.entry){const e=message.entry as GuestEntry;visitLog=[e,...visitLog].slice(0,30);unreadLog++;refreshButton();announce(guestLine(e));if(dialog.open&&tab==='diary'){unreadLog=0;render();}}
       else if(message.type==='visit'){
-        chatReady=true;refreshChatControls();visiting=message.home?.id||null;
+        playerChat.online(true);visiting=message.home?.id||null;
         if(message.home){const home=message.home as Home;const state={...newGame(home.name,home.color),discovered:home.discovered??['home'],plots:home.plots,gear:home.gear,...(home.farm?{farm:home.farm}:{}),...(home.placed?{placed:home.placed}:{}),...(home.decorations?{decorations:home.decorations}:{}),...(home.helper?{helper:home.helper}:{}),...(home.friends?{friends:home.friends}:{})};game.setVisiting(home.name,state as SaveState);}
         else game.setVisiting(null);renderPlayers();announce(visiting?"Visiting {name}'s garden":'Back in your garden',{name:message.home?.name||''});if(dialog.open)render();
       }else if(message.type==='home'&&message.home?.id===visiting)game.setVisiting(message.home.name,{discovered:message.home.discovered,plots:message.home.plots,decorations:message.home.decorations,farm:message.home.farm,helper:message.home.helper,friends:message.home.friends} as Partial<SaveState>);
       else if(message.type==='effect'){if(message.visual)game.applyRemoteEffect(message.visual,message.by);else world().burst(message.x,message.z,message.color,8);}
-      else if(message.type==='party'){party=message.code;announce('Party code: {code}',{code:party||''});if(dialog.open)render();}
-      else if(message.type==='error'){if(chatMatches(message.requestId,connection))releaseChat();if(!message.requestId){chatReady=!!chatRoom&&connection.readyState===WebSocket.OPEN;refreshChatControls();}if(restoring&&fallbackJoin){desiredParty=null;restoring=false;joined(fallbackJoin);}announce(message.message||'That action was unavailable.');}
+      else if(message.type==='error')announce(message.message||'That action was unavailable.');
     });
     socket.addEventListener('close',event=>{
-      if(socket!==connection)return;game.setDungeonSender?.(null);chatReady=false;releaseChat(chatAttempt?.pending?'Connection interrupted. Your chat draft is kept.':undefined);authority(null);world().clearRemotePlayers();players.clear();
+      if(socket!==connection)return;game.setDungeonSender?.(null);playerChat.online(false);authority(null);world().clearRemotePlayers();players.clear();
       if(!account||stopped)return;if(event.code===4001){stopped=true;rejectActions('This online adventure is active in another tab.');if(saveTimer)clearTimeout(saveTimer);game.setPersistence(()=>{});status='Open in another tab';announce('This online adventure is active in another tab. Close it there, then reconnect here.');}
       else{status='Reconnecting';reconnect=window.setTimeout(connect,2500);const epoch=sessionEpoch;void api<Session>('auth/session').then(session=>{if(socket===connection&&sessionEpoch===epoch&&account&&!session.account)expireSession();}).catch(()=>{});}refreshButton();
     });
-    socket.addEventListener('error',()=>{if(socket!==connection)return;chatReady=false;releaseChat(chatAttempt?.pending?'Connection interrupted. Your chat draft is kept.':undefined);status='Reconnecting';refreshButton();});
+    socket.addEventListener('error',()=>{if(socket!==connection)return;playerChat.online(false);status='Reconnecting';refreshButton();});
   }
   function begin(session:Session){
     if(!session.account||!session.profile)throw new Error('The server could not restore your adventure. Please try again.');if(session.authorityVersion!==1)throw new Error('This server needs the current game rules.');sessionEpoch++;authErrors.clear();
-    if(account?.id!==session.account.id){rememberActions();rejectActions('Your session ended. Pending actions remain on this device.');clearChat();party=null;visiting=null;}
+    if(account?.id!==session.account.id){rememberActions();rejectActions('Your session ended. Pending actions remain on this device.');clearChat();visiting=null;}
     const previous=socket;socket=null;previous?.close();if(reconnect)clearTimeout(reconnect);if(saveTimer)clearTimeout(saveTimer);
-    if(!account)offline=structuredClone(game.getState());account=session.account;friends=session.friends||[];requests=session.requests||[];stopped=false;
+    if(!account)offline=structuredClone(game.getState());account=session.account;playerChat.session(account,session.social);friends=session.friends||[];requests=session.requests||[];stopped=false;
     revision=session.revision||0;try{const raw=localStorage.getItem(`cute-game-actions-${account.id}`),cached=raw?JSON.parse(raw):null;if(Array.isArray(cached))actionQueue=cached.filter(job=>job&&typeof job.requestId==='string'&&typeof job.type==='string'&&job.rulesVersion===1&&Number.isSafeInteger(job.expectedRevision)).slice(0,100);}catch{/* Keep this account's in-memory queue if storage is unavailable. */}
     game.setPersistence(queueSave);game.setActionHandler(queueAction);game.applyState(session.profile);connect();render();dialog.close();title?.classList.remove('account-entry');void game.enterGame?.();void flushSave();announce('Welcome, {name}. Your online adventure is ready.',{name:account.name});
   }
@@ -315,7 +263,7 @@ export function initOnline(game:GameBridge) {
     stopped=true;const epoch=sessionEpoch;
     try{await api('auth/logout',{});if(sessionEpoch!==epoch)return;}catch(error){if(sessionEpoch!==epoch)return;if((error as {status?:number}).status===401){expireSession();return;}stopped=false;announce((error as Error).message);return;}
     sessionEpoch++;
-    clearChat();stopped=true;if(reconnect)clearTimeout(reconnect);if(saveTimer)clearTimeout(saveTimer);socket?.close();socket=null;account=null;host=null;party=null;visiting=null;players.clear();authority(null);world().clearRemotePlayers();
+    clearChat();stopped=true;if(reconnect)clearTimeout(reconnect);if(saveTimer)clearTimeout(saveTimer);socket?.close();socket=null;account=null;host=null;visiting=null;players.clear();playerChat.session(null);authority(null);world().clearRemotePlayers();
     game.setVisiting(null);game.setPersistence(null);game.setActionHandler(null);const state=offline||game.getOfflineState();if(state)game.applyState(state);setSaveStatus('● Saved on this device');status='Play together';refreshButton();render();if(!dialog.open)dialog.showModal();announce('Your offline adventure is restored.');
   }
   async function reconnectOnline(){
@@ -371,23 +319,18 @@ export function initOnline(game:GameBridge) {
   }
   function personRow(person:Explorer,actions:HTMLElement[]){const row=el('div','social-person');const badge=el('span','social-avatar','●');badge.style.color=person.color;const name=el('span','',t('{name} · Lv {level}{online}',{name:person.name,level:person.level,online:person.online?t(' · online'):''}));row.append(badge,name,...actions);return row;}
   async function friendAction(action:string,id:string){try{const list=await api<{friends:Explorer[];requests:Explorer[];sent?:Explorer[]}>(`friends/${action}`,{id});friends=list.friends;requests=list.requests;sent=list.sent??sent;refreshButton();render();}catch(error){announce((error as Error).message);}}
-  function renderChat(){const log=content.querySelector('.social-chat-log');if(!log)return;log.replaceChildren(...chat.slice(-30).map(entry=>{const line=el('p');line.append(el('strong','',entry.name+': '),document.createTextNode(entry.message));return line;}));log.scrollTop=log.scrollHeight;}
   // A failed probe leaves the form and the existing offline option available.
   let serverDown=false;
   function render(){
-    captureChatDraft();
     if(!account&&content.querySelector('.social-auth'))return;
     content.replaceChildren();tabs.replaceChildren();authSubmit=null;setNotice('');heading.textContent=t(account?'Your online world':'Welcome to ZooPet');
     dialog.classList.toggle('account-auth',!account);
     if(!account){renderAuth();return;}
     for(const [id,label]of [['world','🌍 World'],['friends',`${t('👥 Friends')}${requests.length?` (${requests.length})`:''}`],['diary',`${t('📒 Guest diary')}${unreadLog?` (${unreadLog})`:''}`],['account','🏡 Account']]as const){const item=button(label,()=>{tab=id;if(id==='diary'){unreadLog=0;refreshButton();}render();});item.setAttribute('aria-pressed',String(tab===id));tabs.append(item);}
     if(tab==='world'){
-      content.append(el('p','social-intro',t(visiting?'Tap a ripe crop to try collecting it. A guard dog protects this garden if one lives here.':party?'Private party · {code}':'Public world · meet explorers outside your garden',{code:party||''})));
-      const actions=el('div','social-actions');actions.append(button('Create private party',()=>sendRoom({type:'party'})),button('Return to public world',()=>sendRoom({type:'join',planet:game.getState().planet})));if(visiting)actions.append(button('Return to my garden',()=>send({type:'leaveVisit'})));else actions.append(button('Share nearby loot',()=>void shareNearbyLoot()));content.append(actions);
-      const join=el('form','social-inline'),code=el('input');code.placeholder=t('Party code');code.setAttribute('aria-label',t('Party code'));code.name='party-code';code.maxLength=6;const submit=el('button','',t('Join party'));submit.type='submit';join.append(code,submit);join.addEventListener('submit',event=>{event.preventDefault();sendRoom({type:'join',planet:game.getState().planet,party:code.value.trim()});});content.append(join);
+      content.append(el('p','social-intro',t(visiting?'Tap a ripe crop to try collecting it. A guard dog protects this garden if one lives here.':PLANETS?.[game.getState().planet]?.name??game.getState().planet)));
+      const actions=el('div','social-actions');if(visiting)actions.append(button('Return to my garden',()=>send({type:'leaveVisit'})));else actions.append(button('Share nearby loot',()=>void shareNearbyLoot()));actions.append(button('💬 Trò chuyện',()=>{dialog.close();playerChat.openChat();}));content.append(actions);
       const roster=el('div','social-roster');roster.append(el('h3','',t('Explorers in this world ({count})',{count:players.size})));for(const player of players.values())roster.append(personRow(player,player.id===account.id?[]:[button('View explorer',()=>openPlayer(player.id))]));content.append(roster);
-      const log=el('div','social-chat-log');log.setAttribute('role','log');log.setAttribute('aria-label',t('World chat'));content.append(log);renderChat();
-      const chatForm=el('form','social-inline'),input=el('input','social-chat-input');input.placeholder=t('Say hello…');input.setAttribute('aria-label',t('Chat message'));input.name='world-chat';input.maxLength=160;input.value=chatDraft;input.addEventListener('input',()=>{chatDraft=input.value;});const chatButton=el('button','social-chat-send',t('Send'));chatButton.type='submit';chatForm.append(input,chatButton);chatForm.addEventListener('submit',event=>{event.preventDefault();submitChat();});content.append(chatForm);refreshChatControls();
     }else if(tab==='diary'){
       content.append(el('p','social-intro',t('Friends who visit, water, or give gifts at your home show up here.')));
       if(!visitLog.length)content.append(el('p','social-small',t('No one has visited yet. Invite a friend to come and water your plants!')));
@@ -404,7 +347,7 @@ export function initOnline(game:GameBridge) {
   }
   game.onFrame(dt=>{
     if(!account||socket?.readyState!==WebSocket.OPEN)return;poseClock+=dt;enemyClock+=dt;const presence=game.getPresence();
-    if(!visiting&&presence.planet!==planet){game.setVisiting(null);planet=presence.planet;sendRoom({type:'join',planet,party});return;}
+    if(!visiting&&presence.planet!==planet){game.setVisiting(null);planet=presence.planet;sendRoom({type:'join',planet});return;}
     if(poseClock>=.1){poseClock=0;send({type:'pose',...presence});renderPlayers();}
     // The elected browser supplies AI positions/telegraphs; the server replaces HP,
     // damage and rewards with canonical combat values before relaying the snapshot.

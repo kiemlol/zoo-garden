@@ -53,10 +53,10 @@ test('friends see each other when one visits, and a gift reaches their chest', a
   const diary = (await call(ann.cookie, 'auth/session')).data.visitLog;
   assert.deepEqual(diary.map(e => e.kind), ['gift', 'visit']); assert.equal(diary[0].name, 'visit_ben'); assert.equal(diary[0].what, 'carrot');
   // A private message to a friend lands in their guest diary and pops up for them; strangers cannot send one.
-  ben.send({ type: 'dm', to: ann.id, text: 'Come and see my farm!' });
-  const popup = await ann.next(m => m.type === 'guestNotice' && m.entry.kind === 'message'); assert.equal(popup.entry.text, 'Come and see my farm!'); assert.equal(popup.entry.name, 'visit_ben');
-  assert.equal((await ben.next(m => m.type === 'dmSent')).ok, true);
-  assert.equal((await call(ann.cookie, 'auth/session')).data.visitLog[0].kind, 'message');
+  ben.send({ type: 'dm', requestId:randomUUID(), to: ann.id, text: 'Come and see my farm!' });
+  const popup = await ann.next(m => m.type === 'dm'); assert.equal(popup.message, 'Come and see my farm!'); assert.equal(popup.name, 'visit_ben');
+  assert.equal((await ben.next(m => m.type === 'dmAck')).dmLeft, 9);
+  assert.equal((await call(ann.cookie, 'auth/session')).data.social.inbox.at(-1).type, 'dm');
   // A friend request can be cancelled by the one who sent it.
   const eve = await explorer('visit_eve');
   assert.equal((await call(eve.cookie, 'friends/request', { id: ann.id })).status, 200);
@@ -85,7 +85,7 @@ test('a friend visiting or messaging does not make the owner\'s next action fail
   await call(guest.cookie, 'friends/request', { id: owner.id }); await call(owner.cookie, 'friends/accept', { id: guest.id });
   const before = (await call(owner.cookie, 'auth/session')).data.revision;
   guest.send({ type: 'visit', id: owner.id }); await guest.next(m => m.type === 'visit' && m.home);
-  guest.send({ type: 'dm', to: owner.id, text: 'hi' }); await owner.next(m => m.type === 'guestNotice' && m.entry.kind === 'message');
+  guest.send({ type: 'dm', requestId:randomUUID(), to: owner.id, text: 'hi' }); await owner.next(m => m.type === 'dm');
   const after = (await call(owner.cookie, 'auth/session')).data;
   assert.equal(after.revision, before, 'a visit and a message leave the game revision alone');
   const next = await call(owner.cookie, 'actions', { type: 'settings', payload: { settings: { sound: false } }, requestId: randomUUID(), rulesVersion: 1, expectedRevision: before });

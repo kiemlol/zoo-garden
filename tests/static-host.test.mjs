@@ -45,7 +45,7 @@ async function online({staticHost='true',base='/cute_game/',slotPresent=true,lan
   const exports={};
   vm.runInNewContext(await compile('online.ts',{VITE_STATIC_HOST:staticHost,BASE_URL:base}),{
     exports,document,window,AbortController,clearTimeout:()=>{},
-    require:name=>{if(name==='./i18n.ts')return i18n;if(name==='./gameplay-controls.ts')return {gameplayKey};assert.equal(name,'./model.ts');return {};},
+    require:name=>{if(name==='./chat-ui.ts')return {PlayerChat:class{session(){}setState(){}online(){}enterPlanet(){}receive(){return false;}openMail(){}openPlayer(){}}};if(name==='./i18n.ts')return i18n;if(name==='./gameplay-controls.ts')return {gameplayKey};assert.equal(name,'./model.ts');return {};},
     fetch:async(url,options)=>{requests.push({url,options});return loginError&&url.endsWith('auth/login')?{ok:false,status:401,json:async()=>({error:loginError})}:{ok:true,json:async()=>session};},
     WebSocket:staticHost==='true'?class{constructor(){throw new Error('Unexpected socket connection');}}:Socket,
     localStorage:staticHost==='true'?new Proxy({},{get(){throw new Error('Static mode must not modify browser saves');}}):{getItem:()=>null,setItem(){}},
@@ -99,21 +99,13 @@ test('changing online language preserves typed credentials, focus and server err
   app.setLanguage('en');assert.ok(elements(app.body).some(node=>node.textContent==='The username or password is incorrect.'));
 });
 
-test('Vietnamese social labels keep player names, party codes and chat text verbatim',async()=>{
+test('Vietnamese social labels preserve player names and no longer expose party codes',async()=>{
   const account={id:'local',name:'Online',username:'fern_1',color:'#789abc',level:2,gear:{}};
   const app=await online({staticHost:'',base:'/',session:{authorityVersion:1,account,profile:{...account,planet:'home'},revision:0}});
-  await Promise.resolve();await Promise.resolve();app.slot.children[0].click();
-  const socket=app.sockets[0];assert.ok(socket);
-  socket.message({type:'joined',host:'local',party:'AB12CD',planet:'home',players:[account]});
-  socket.message({type:'chat',name:'Send',message:'Sign in {name}'});
-  const draft=elements(app.body).find(node=>node.name==='world-chat');draft.value='Online {code}';
-  app.setLanguage('vi');const nodes=elements(app.body);
-  assert.ok(nodes.some(node=>node.textContent==='Nhóm riêng · AB12CD'));
-  assert.ok(nodes.some(node=>node.textContent==='Online · Cấp 2'));
-  assert.ok(nodes.some(node=>node.textContent==='Send: '));assert.ok(nodes.some(node=>node.textContent==='Sign in {name}'));
-  assert.equal(nodes.find(node=>node.name==='world-chat').value,'Online {code}');
-  assert.equal(app.slot.children[0].title,'Nhóm AB12CD');
-  assert.equal(app.requests.length,2,'relabeling must not queue another profile save or network request');
+  await Promise.resolve();await Promise.resolve();app.slot.children[0].click();const socket=app.sockets[0];assert.ok(socket);
+  socket.message({type:'joined',host:'local',planet:'home',room:'home',players:[account]});app.setLanguage('vi');const nodes=elements(app.body);
+  assert.ok(nodes.some(node=>node.textContent==='Online · Cấp 2'));assert.equal(nodes.some(node=>node.name==='party-code'),false);assert.equal(app.slot.children[0].title,'Trực tuyến');
+  assert.equal(app.requests.length,2,'relabeling does not create a save or another request');
 });
 
 test('switching languages during sign-in cannot submit the same credentials twice',async()=>{
