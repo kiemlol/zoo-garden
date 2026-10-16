@@ -39,6 +39,7 @@ import { GardenBeds } from './garden-beds.ts';
 import { PlacementGhost } from './placement-ghost.ts';
 import {GhostCarriageRide,drawCarriagePassenger} from './ghost-carriage.ts';
 import type {CarriagePose} from './carriage-pose.ts';
+import {drawFishingPose,type FishingPose} from './fishing-pose.ts';
 import { FarmPenView, farmKit, PEN_PROPS, BACK_FENCE, BACK_FENCE_Z } from './farm-view.ts';
 import { GuardDogs } from './dog-world.ts';
 import { PetCompanion } from './pet-world.ts';
@@ -89,7 +90,7 @@ export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;
 /** A boss attacks faster as it weakens, like the reference (bundle @837714): ×0.7 below half health, ×0.6 once enraged.
  * Applies to its skills and its basic attacks and charges alike. */
 export const bossCooldownScale=(e:{boss:boolean;hp:number;maxHp:number;enraged?:boolean})=>e.boss?(e.hp<e.maxHp*.5?.7:1)*(e.enraged?.6:1):1;
-export interface AvatarVisual {hidden?:boolean;size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean;carriage?:CarriagePose|null}
+export interface AvatarVisual {hidden?:boolean;size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean;carriage?:CarriagePose|null;fishing?:FishingPose|null}
 export interface Enemy {wildCooldown?:number;titanAttacks?:TitanAttack[];titanLift?:number}
 /** An enemy run by its own module (colossus.ts): no generic AI or drawing here; `incoming` may scale a blow before it lands. */
 export interface Enemy {driver?:{incoming(e:Enemy,amount:number,hazard:boolean):number}}
@@ -1062,6 +1063,10 @@ export class World {
       if(l.legL)l.legL.rotation.x=0;if(l.legR)l.legR.rotation.x=0;if(l.armL)l.armL.rotation.x=0;if(l.armR)l.armR.rotation.x=0;
       const bob=applyGait(l,g,gaitSwing(u.speed,leg)),body=m.children[0];if(body)body.position.y=bob;
       if(flying){superheroFlightPose(m,moving&&remote.pose.gear?.disguise==='dz_superhero');if(body)body.position.y=0;g.blend=0;}
+      const fishing=remote.pose.visual?.fishing;
+      if(fishing){if(body)body.position.y=0;g.blend=0;m.rotation.x=drawFishingPose(m,fishing,this.time);}
+      else if(u.wasFishing){m.rotation.x=0;const hand=part(m,'hand-right');if(hand)hand.rotation.x=0;}
+      u.wasFishing=!!fishing;
       const passenger=remote.pose.visual?.carriage;
       if(passenger){if(body)body.position.y=0;g.blend=0;drawCarriagePassenger(m,passenger);}
       else if(u.wasPassenger){m.rotation.x=m.rotation.z=0;for(const name of ['leg-left','leg-right','arm-left','arm-right','head'])part(m,name)?.rotation.set(0,0,0);m.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,remote.pose.visual?.size??1)));}
@@ -1071,14 +1076,15 @@ export class World {
     }
   }
   receiveRemoteHit(id:string,amount:number,stun=0){const e=this.enemies.find(e=>e.id===id);if(!e||e.hp<=0||!Number.isFinite(amount)||amount<0)return false;this.damageEnemy(e,amount,stun);return true;}
-  addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',pose.gear,pose.look);if(perfFlags.mergeRemoteAvatars)mergeParts(avatar,{exact:true});avatar.userData.remoteId=id;this.remoteRoot.add(avatar);pose.pets?.slice(0,2).forEach((petId,i)=>{const pet=this.petFor(petId);pet.name='remote-pet';pet.position.set(1,0,-.6-i*.6);avatar.add(pet);addOutlines(pet,{merge:true});});this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
-  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||pose.color&&pose.color!==remote.pose.color||(pose.look??remote.pose.look)!==remote.pose.look){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',pose.gear??remote.pose.gear,pose.look??remote.pose.look);if(perfFlags.mergeRemoteAvatars)mergeParts(avatar,{exact:true});this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;// Each pose is a target the avatar glides to (per frame, below): poses arrive about every 100 ms and a tunnel bunches them, so setting the position outright made others jump and blink. First sight, big jumps and rebuilds snap.
+  private remoteGear(pose:RemotePose){return {...pose.gear,...(pose.visual?.fishing?{weapon:pose.visual.fishing.rod}:{})};}
+  addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',this.remoteGear(pose),pose.look);if(perfFlags.mergeRemoteAvatars)mergeParts(avatar,{exact:true});avatar.userData.remoteId=id;this.remoteRoot.add(avatar);pose.pets?.slice(0,2).forEach((petId,i)=>{const pet=this.petFor(petId);pet.name='remote-pet';pet.position.set(1,0,-.6-i*.6);avatar.add(pet);addOutlines(pet,{merge:true});});this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
+  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||(pose.visual!==undefined&&(pose.visual.fishing?.rod??null)!==(remote.pose.visual?.fishing?.rod??null))||pose.color&&pose.color!==remote.pose.color||(pose.look??remote.pose.look)!==remote.pose.look){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',this.remoteGear({...remote.pose,...pose}),pose.look??remote.pose.look);if(perfFlags.mergeRemoteAvatars)mergeParts(avatar,{exact:true});this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;// Each pose is a target the avatar glides to (per frame, below): poses arrive about every 100 ms and a tunnel bunches them, so setting the position outright made others jump and blink. First sight, big jumps and rebuilds snap.
     {const ty=(current.y??0)-(indoor?INDOOR_Y:0),u=remote.mesh.userData,p=remote.mesh.position;u.target={x:current.x,y:ty,z:current.z,f:current.facing??0};
       // Its jump height, for ground attacks (remoteDodges): read from the pose, and only for as long as a real jump can last.
       {const air=indoor||!this.environment?0:poseAir(ty,terrainHeight(this.environment.layout,current),current.visual?.flight?1.7:0),now=this.time??0;if(air>0){u.airSince??=now;u.air=now-u.airSince<=MAX_AIR_SECONDS?air:0;}else{u.airSince=undefined;u.air=0;}}
       if(!u.placed||Math.hypot(p.x-current.x,p.z-current.z)>8||Math.abs(p.y-ty)>3){p.set(current.x,ty,current.z);remote.mesh.rotation.y=u.target.f;u.placed=true;}}
     this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(current.visual?.carriage?.scale??HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));if(current.visual?.carriage)drawCarriagePassenger(remote.mesh,current.visual.carriage);remote.mesh.visible=!current.visual?.hidden&&(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
-  visualSnapshot():AvatarVisual{return {hidden:this.playerHidden,size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat,carriage:this.carriage?.snapshot()??null};}
+  visualSnapshot():AvatarVisual{return {hidden:this.playerHidden,size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat,carriage:this.carriage?.snapshot()??null,fishing:this.fishing&&this.fishing!=='idle'?{phase:this.fishing,cast:this.castT,tension:this.fishTension||0,rod:this.state.gear.weapon??'rod'}:null};}
   private applyAvatarVisual(mesh:T.Group,visual?:Partial<AvatarVisual>){
     // Nothing to change until stealth first fades the explorer: a new avatar starts fully opaque, so it is never copied for opacity 1
     // (the copy used to replace the flash materials and the ink outlines' push-out shader, which Material.clone does not carry).
@@ -2096,11 +2102,7 @@ export class World {
     // Laser gaze (skill-fx.ts): the head turns with the sweep, so the beams leave the eyes along the line they hit.
     const gaze=this.gazeAngle;if(head&&gaze!=null){const turn=Math.atan2(Math.sin(gaze-this.facing),Math.cos(gaze-this.facing));head.rotation.set(-.06,Math.max(-1.2,Math.min(1.2,turn)),0);}
     // Fishing: the cast swings the rod overhead and forward; reeling leans back against the line.
-    if(this.fishing&&this.fishing!=='idle'&&armR){
-      armR.rotation.set(-.75,0,.1);armL?.rotation.set(-.8,0,.5);
-      if(this.fishing==='cast'){const t=Math.min(1,1-this.castT/.5);armR.rotation.x=-2.4+t*1.7;if(armL)armL.rotation.x=-2.2+t*1.4;}
-      if(this.fishing==='fight'){const n=this.fishTension||0;lean=-.25-n*.2;armR.rotation.x=-1+Math.sin(this.time*40)*n*.08;if(armL)armL.rotation.x=-.9+Math.sin(this.time*12)*.35;legL?.rotation.set(.3,0,0);}
-    }
+    if(this.fishing&&this.fishing!=='idle'&&armR)lean=drawFishingPose(p,{phase:this.fishing,cast:this.castT,tension:this.fishTension||0,rod:this.state.gear.weapon??'rod'},this.time);
     if(this.hurtT>0){const k=1+this.hurtT*.4;sx*=k;sy*=k;sz*=k;}
     if(this.landT>0){const k=Math.sin(this.landT/.25*Math.PI);sx*=1+k*.18;sy*=1-k*.22;sz*=1+k*.18;}
     p.rotation.y=this.spinT>0&&pose?.kind!=='slide'?this.facing+(2.2-this.spinT)*22:this.facing+twist;

@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { poseStep, poseFix, arrived } from './pose-budget.mjs';
 import {validateCarriagePose} from '../src/carriage-pose.ts';
+import {readFishingPose} from '../src/fishing-pose.ts';
 import { clientAddress } from './client-address.mjs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -13,7 +14,7 @@ import { dogFollows } from '../src/guard-dog.ts';
 import { dogWorn } from '../src/pet-slots.ts';
 import { lookOf } from '../src/looks.ts';
 import { createAccountStore } from './account-store.mjs';
-import { createActionService, commandHash, logGuest } from './action-service.mjs';
+import { createActionService, commandHash, logGuest, waterNodes } from './action-service.mjs';
 import { createCombatAuthority } from './combat-authority.mjs';
 import { createDungeonLobby } from './dungeon-lobby.mjs';
 import { EFFECT_LOOKS } from '../src/combat.ts';
@@ -242,7 +243,7 @@ export async function createGameServer(options = {}) {
     const room = existing || { id: key, members: new Set(), host: null, enemies: [], environment:null, requests:new Map(), epoch: 0, killed: new Set(), contributors: new Map(), lastSnapshot: 0 };
     rooms.set(key, room); room.members.add(peer.account.id);
     if (peer.planet && peer.planet !== 'home' || peer.visit) peer.tripAt = Date.now(); // leaving a trip: delivery.ts catch-ups go to the chest
-    peer.planet = planet; peer.party = party; peer.room = key; peer.visit = visitId; peer.pose = { ...peer.pose, x: 0, z: planet === 'home' ? 0 : 9, ...(peer.pose.visual?{visual:{...peer.pose.visual,carriage:null},...(peer.pose.visual.carriage?{y:0,moving:false}:{})}:{}) }; arrived(peer);
+    peer.planet = planet; peer.party = party; peer.room = key; peer.visit = visitId; peer.pose = { ...peer.pose, x: 0, z: planet === 'home' ? 0 : 9, ...(peer.pose.visual?{visual:{...peer.pose.visual,carriage:null,fishing:null},...(peer.pose.visual.carriage?{y:0,moving:false}:{})}:{}) }; arrived(peer);
     elect(room);
     send(peer.socket, { type: 'joined', id: peer.account.id, room: key, party, host: room.host, planet, visiting:visitId, players: roster(room), enemies: room.enemies, environment:room.environment, epoch: room.epoch });
     broadcast(room, { type: 'enter', player: presence(peer) }, peer.account.id);
@@ -411,9 +412,11 @@ export async function createGameServer(options = {}) {
           const combat=combatAuthority.engineFor(peer).sim;
           const garden=peer.visit?accounts.get(peer.visit)?.profile:account.profile;
           const carriage=account.profile.hp>0?validateCarriagePose(message.visual?.carriage,garden?.decorations??[],{x,z},peer.planet):null;
+          const requestedFishing=readFishingPose(message.visual?.fishing);
+          const fishing=!carriage&&account.profile.hp>0&&!peer.visit&&requestedFishing&&account.profile.bag[requestedFishing.rod]>0&&waterNodes(peer.planet).some(w=>Math.hypot(x-w.x,z-w.z)<=w.r+3.05)?requestedFishing:null;
           peer.poseAt = now; if (peer.planet !== 'home' || peer.visit) peer.tripAt = now; const y = number(message.y, 0, -30, 50), dog = !peer.visit && dogWorn(account.profile.gear) && account.profile.farm?.animals?.find(a => a.kind === 'dog'); // only a dog worn as a pet comes along (pet-slots.ts)
           // A guard dog follows its explorer only away from the safe village (guard-dog.ts); its breed is all others need.
-          peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,hidden:combat.portalHidden||combat.inkDashing,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0,carriage},block:combat.statuses.block>0,decoys:combatAuthority.decoys(peer) };
+          peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,hidden:combat.portalHidden||combat.inkDashing,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0,carriage,fishing},block:combat.statuses.block>0,decoys:combatAuthority.decoys(peer) };
           broadcastPose(room, peer);
         } else if (message.type === 'dm') {
           // A private message to a friend, online or not: it lands in their guest diary (and pops up if they are playing).

@@ -33,13 +33,18 @@ function penguinFit(look:LookId){
 
 export const birdLookPoint=(p:T.Vector3,look:LookId)=>birdLookTransform(look)(p);
 
+// Palm centres from the authored costume meshes (Blender x/z/-y), before look fitting.
+const COSTUME_PALMS:Record<string,[number,number,number]>={
+ dz_penguin:[.39,.64,.02],dz_explorer_duck:[.48,.59,.04],dz_sorcerer:[.48,.58,.035],dz_ink_painter:[.53,.48,.02],
+};
+
 /** Retarget the rig and costume geometry together, preserving hidden base meshes and shared kit resources. */
 export function fitBirdDisguise(root:T.Object3D,id:string,look:LookId){
  const penguin=id==='dz_penguin'?penguinFit(look):null;
  const transform=(part?:string,rig=false)=>penguin?penguin.transform(part,rig):birdLookTransform(look,rig&&(part==='body'||part==='head'||part?.startsWith('leg-'))?undefined:part);
  root.updateMatrixWorld(true);const toRoot=root.matrixWorld.clone().invert(),posed=new Set(Object.keys(DEFAULT_PIVOTS));
  const bones:{node:T.Object3D;at:T.Vector3}[]=[],pieces:{mesh:T.Mesh;old:T.Matrix4}[]=[];
- root.traverse(o=>{if(posed.has(o.name))bones.push({node:o,at:transform(o.name,true)(new T.Vector3().setFromMatrixPosition(toRoot.clone().multiply(o.matrixWorld)))});if(o instanceof T.Mesh&&o.visible&&o.name.startsWith(id))pieces.push({mesh:o,old:toRoot.clone().multiply(o.matrixWorld)});});
+ root.traverse(o=>{if(posed.has(o.name)){const palm=COSTUME_PALMS[id],hand=palm&&o.name.startsWith('hand-'),at=hand?new T.Vector3(palm[0]*(o.name==='hand-left'?-1:1),palm[1],palm[2]):new T.Vector3().setFromMatrixPosition(toRoot.clone().multiply(o.matrixWorld));bones.push({node:o,at:transform(o.name,true)(at)});}if(o instanceof T.Mesh&&o.visible&&o.name.startsWith(id))pieces.push({mesh:o,old:toRoot.clone().multiply(o.matrixWorld)});});
  // Parents precede their hand anchors in traversal order.
  for(const {node,at}of bones){node.parent!.updateWorldMatrix(true,false);const parentToRoot=toRoot.clone().multiply(node.parent!.matrixWorld);node.position.copy(at).applyMatrix4(parentToRoot.invert());node.updateMatrix();node.updateWorldMatrix(false,true);}
  root.updateMatrixWorld(true);
