@@ -2,7 +2,7 @@ import * as T from 'three';
 import {toonMaterial} from './toon.ts';
 import type {FishingPose} from './fishing-pose.ts';
 
-export const KEY_ROD='rod_key';
+import {isKeyRod} from './fishing-rods.ts';
 const TAU=Math.PI*2;
 /** Shared, untextured star geometry: no sprites, lights or per-frame allocations. */
 function starShape(points:number,outer:number,inner:number){const shape=new T.Shape();for(let i=0;i<points*2;i++){const a=Math.PI/2+i*Math.PI/points,r=i%2?inner:outer;const x=Math.cos(a)*r,y=Math.sin(a)*r;if(i)shape.lineTo(x,y);else shape.moveTo(x,y);}shape.closePath();return shape;}
@@ -47,7 +47,7 @@ const remotePosition=new T.Vector3(),remoteRotation=new T.Quaternion(),remoteSca
 /** The new rod has an invisible line: observers only need its authoritative visual float point. */
 export function drawRemoteKeyBobber(player:T.Object3D,pose:FishingPose|null|undefined,time:number){
  let bobber=remoteBobbers.get(player);
- if(pose?.rod!==KEY_ROD||!pose.bobber){if(bobber)bobber.visible=false;return;}
+ if(!pose||!isKeyRod(pose.rod)||!pose.bobber){if(bobber)bobber.visible=false;return;}
  if(!bobber){bobber=makeStarBobber();bobber.userData.animated=true;player.add(bobber);remoteBobbers.set(player,bobber);}
  bobber.visible=true;player.updateWorldMatrix(true,false);remotePosition.set(pose.bobber.x,pose.bobber.y,pose.bobber.z);player.worldToLocal(remotePosition);bobber.position.copy(remotePosition);
  player.getWorldQuaternion(remoteRotation);bobber.quaternion.copy(remoteRotation).invert();player.getWorldScale(remoteScale);bobber.scale.set(1/remoteScale.x,1/remoteScale.y,1/remoteScale.z);pulseStarBobber(bobber,time);

@@ -40,7 +40,8 @@ import { PlacementGhost } from './placement-ghost.ts';
 import {GhostCarriageRide,drawCarriagePassenger} from './ghost-carriage.ts';
 import type {CarriagePose} from './carriage-pose.ts';
 import {drawFishingPose,type FishingPose} from './fishing-pose.ts';
-import {KEY_ROD,prepareKeyRod,animateKeyRod,drawRemoteKeyBobber} from './rod-key.ts';
+import {prepareKeyRod,animateKeyRod,drawRemoteKeyBobber} from './rod-key.ts';
+import {isKeyRod} from './fishing-rods.ts';
 import { FarmPenView, farmKit, PEN_PROPS, BACK_FENCE, BACK_FENCE_Z } from './farm-view.ts';
 import { GuardDogs } from './dog-world.ts';
 import { PetCompanion } from './pet-world.ts';
@@ -774,7 +775,7 @@ export class World {
     if(kitDisguise)this.wearKit(c,id,'body');
     if(fullBodyDisguise)fitBirdDisguise(c,id,combo);
     if(gear.weapon&&!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);
-    if(baseOf(gear.weapon??'')===KEY_ROD)prepareKeyRod(c);
+    if(isKeyRod(baseOf(gear.weapon??'')))prepareKeyRod(c);
     // Up to two pets beside them (pet-slots.ts): the first on the left as ever, the second on the right; with their dog out (drawn by dog-world.ts on the left) the one pet takes the right.
     for(let i=0;i<2;i++){const id=M.companionId(gear,i);if(!id)break;const pet=this.petFor(id);pet.name='remote-pet';pet.position.set(i||M.dogWorn(gear)?1:-1,0,-.6);c.add(pet);}
     addOutlines(c,{merge:true});
@@ -1090,7 +1091,7 @@ export class World {
       {const air=indoor||!this.environment?0:poseAir(ty,terrainHeight(this.environment.layout,current),current.visual?.flight?1.7:0),now=this.time??0;if(air>0){u.airSince??=now;u.air=now-u.airSince<=MAX_AIR_SECONDS?air:0;}else{u.airSince=undefined;u.air=0;}}
       if(!u.placed||Math.hypot(p.x-current.x,p.z-current.z)>8||Math.abs(p.y-ty)>3){p.set(current.x,ty,current.z);remote.mesh.rotation.y=u.target.f;u.placed=true;}}
     this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(current.visual?.carriage?.scale??HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));if(current.visual?.carriage)drawCarriagePassenger(remote.mesh,current.visual.carriage);remote.mesh.visible=!current.visual?.hidden&&(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
-  visualSnapshot():AvatarVisual{return {hidden:this.playerHidden,size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat,carriage:this.carriage?.snapshot()??null,fishing:this.fishing&&this.fishing!=='idle'?{phase:this.fishing,cast:this.castT,tension:this.fishTension||0,rod:this.state.gear.weapon??'rod',...(this.state.gear.weapon===KEY_ROD?{bobber:this.fishingBobber?.()}:{} )}:null};}
+  visualSnapshot():AvatarVisual{return {hidden:this.playerHidden,size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat,carriage:this.carriage?.snapshot()??null,fishing:this.fishing&&this.fishing!=='idle'?{phase:this.fishing,cast:this.castT,tension:this.fishTension||0,rod:this.state.gear.weapon??'rod',...(isKeyRod(this.state.gear.weapon)?{bobber:this.fishingBobber?.()}:{} )}:null};}
   private applyAvatarVisual(mesh:T.Group,visual?:Partial<AvatarVisual>){
     // Nothing to change until stealth first fades the explorer: a new avatar starts fully opaque, so it is never copied for opacity 1
     // (the copy used to replace the flash materials and the ink outlines' push-out shader, which Material.clone does not carry).

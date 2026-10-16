@@ -61,7 +61,7 @@ test('all sixteen legacy costumes preserve the original hand anchors and held-ro
 });
 
 test('every avatar and all authored rods lean forward another 20 degrees at wait, keep the grip fixed and restore idle',()=>{
- const w=world();for(const id of ['',...Object.keys(DISGUISES)])for(const rod of ['rod','rod_gold','rod_steady','rod_key']){
+ const w=world();for(const id of ['',...Object.keys(DISGUISES)])for(const rod of ['rod','rod_gold','rod_steady','rod_key','rod_key_test']){
   w.state.gear={...(id?{disguise:id}:{}),weapon:rod};w.player=w.lookAvatar('#fff',w.state.gear,DEFAULT_LOOK);
   animate(w,'wait');const hand=w.player.getObjectByName('hand-right'),tip=w.player.getObjectByName('rod-tip'),grip=hand.getWorldPosition(new T.Vector3()),after=tip.getWorldPosition(new T.Vector3()).sub(grip).normalize();
   hand.rotation.x=0;w.player.updateMatrixWorld(true);const before=tip.getWorldPosition(new T.Vector3()).sub(hand.getWorldPosition(new T.Vector3())).normalize();

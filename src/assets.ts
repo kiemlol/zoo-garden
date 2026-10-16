@@ -544,7 +544,7 @@ export const wearKit = new KitLibrary([KIT_FILES.wear,KIT_FILES.festival]);
 export const festivalKit = new KitLibrary([KIT_FILES.festival]);
 export const weaponKit = new KitLibrary([KIT_FILES.weapons,KIT_FILES.swampGear,KIT_FILES.wildCreatures]);
 /** New gameplay item, existing Blender trident geometry; no duplicate weapon download. */
-export const weaponModelName = (id: string) => id === 'harpoon' ? 'trident' : id;
+export const weaponModelName = (id: string) => id === 'harpoon' ? 'trident' : id === 'rod_key_test' ? 'rod_key' : id;
 export const disguiseKit = new KitLibrary([KIT_FILES.disguises,KIT_FILES.birdDisguises,KIT_FILES.sorcerer,KIT_FILES.inkPainter]);
 export const petKit = new KitLibrary([KIT_FILES.pets]);
 /** Little boss companions (pet_b_<boss>), loaded the first time one is worn. */

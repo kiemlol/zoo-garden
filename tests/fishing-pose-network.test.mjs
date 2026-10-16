@@ -19,7 +19,7 @@ test('server relays fishing poses and contextual rods to live/late observers, va
  t.after(async()=>{clients.forEach(c=>c.socket.terminate());await server.close();await rm(dataDir,{recursive:true,force:true});});
  async function call(cookie,route,body){const r=await fetch(server.url+'/api/'+route,{method:'POST',headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:JSON.stringify(body)});assert.equal(r.status,200);return {data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
  async function explorer(username){const session=await call(null,'auth/register',{username,password:'Fishing-test-local-123',name:username}),id=session.data.account.id;
-  await store.command({actorId:id,requestId:randomUUID(),expectedRevision:session.data.revision,actionType:'testSetup',hash:'c'.repeat(64),run:records=>{const s=records.get(id).profile;s.bag.rod=1;s.bag.rod_gold=1;s.bag.rod_key=1;s.gear.weapon='sword_wood';return true;}});
+  await store.command({actorId:id,requestId:randomUUID(),expectedRevision:session.data.revision,actionType:'testSetup',hash:'c'.repeat(64),run:records=>{const s=records.get(id).profile;s.bag.rod=1;s.bag.rod_gold=1;s.bag.rod_key=1;s.bag.rod_key_test=1;s.gear.weapon='sword_wood';return true;}});
   const c={id,cookie:session.cookie,...connect(server.url,session.cookie)};clients.push(c);await c.next(m=>m.type==='joined');return c;
  }
  const owner=await explorer('fishing_owner'),guest=await explorer('fishing_guest');await call(guest.cookie,'friends/request',{id:owner.id});await call(owner.cookie,'friends/accept',{id:guest.id});guest.send({type:'visit',id:owner.id});await guest.next(m=>m.type==='visit'&&m.home);await guest.next(m=>m.type==='joined'&&m.visiting===owner.id);
@@ -30,6 +30,9 @@ test('server relays fishing poses and contextual rods to live/late observers, va
  const key={...wait,rod:'rod_key',bobber:{x:-7.5,y:.12,z:11.2}};await send(key);
  guest.send({type:'visit',id:owner.id});const keyRoster=await guest.next(m=>m.type==='joined'&&m.visiting===owner.id);assert.deepEqual(keyRoster.players.find(p=>p.id===owner.id).visual.fishing,key);
  await send({...key,bobber:{x:100,y:.12,z:100}},{...wait,rod:'rod_key'});
+ const trial={...key,rod:'rod_key_test'};await send(trial);
+ guest.send({type:'join',planet:'home'});const trialRoster=await guest.next(m=>m.type==='joined');assert.deepEqual(trialRoster.players.find(p=>p.id===owner.id).visual.fishing,trial);
+ await send({...trial,phase:'fight',tension:.8});await send(null);
  await send({...wait,phase:'fight',tension:.8});await send(null);
  for(const bad of [{...wait,tension:5},{...wait,cast:Infinity},{...wait,rod:'rod_steady'},{...wait,rod:'sword_wood'}]){await send(wait);await send(bad,null);}
  await send(wait);await send(wait,null,0,0); // A real owned rod and proximity to an actual pond are required.

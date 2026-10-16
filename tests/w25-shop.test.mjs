@@ -15,11 +15,11 @@ import { createActionService } from '../server/action-service.mjs';
 
 const recipeIndex = (result, station = 'craft') => M.RECIPES.findIndex(r => r.result === result && r.station === station);
 
-test('special offers: crafted and boss-only gear, pets and decorations, never keepsakes, materials, food or shop goods', () => {
+test('special offers: crafted, boss-only and explicitly labelled premium gear, never keepsakes or ordinary shop goods', () => {
   const ids = M.specialIds();
   for (const id of ['pet_dragon', 'pet_robot', 'deco_volcano', 'deco_owlstatue', 'crown', 'hat_bear', 'sword_obsidian', 'armor_wings', 'hat_t_eye', 'pet_t_whale']) assert.ok(ids.includes(id), id);
   for (const id of ['bunny', 'obsidian', 'cooked_apple', 'omelette', 'sword_wood', 'rod', 'harpoon', 'dz_ninja', 'carrot', 'constructor', '__proto__']) assert.equal(M.isSpecial(id), false, id);
-  for (const id of ids) { const item = M.ITEMS[id]; assert.ok(item.slot || item.type === 'decor', id); assert.equal(item.price, undefined, `${id} is not a normal shop item`); }
+  for (const id of ids) { const item = M.ITEMS[id]; assert.ok(item.slot || item.type === 'decor', id); if (!item.specialOffer) assert.equal(item.price, undefined, `${id} is not a normal shop item`); else assert.equal(M.specialPrice(id), item.price, `${id} keeps its configured premium price`); }
   assert.equal(M.SPECIAL_PRICE, 10_000); assert.equal(M.TITAN_PRICE, 25_000);
   const s = M.newGame();
   assert.equal(M.shopPrice(s, 'pet_dragon'), 10_000); assert.equal(M.shopPrice(s, 'deco_rainbow'), 10_000);

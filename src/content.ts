@@ -32,6 +32,8 @@ export interface WeaponDef {
     quality?: number;
     /** Steady rods (rod_steady): tension builds slower, and the reel pulls heavy fish in faster. */
     steady?: boolean;
+    /** Per-strain snap chance; omitted rods retain their existing quality/steady defaults. */
+    breakChance?: number;
     spread?: number;
     fx?: string;
 }
@@ -55,6 +57,8 @@ export interface ItemDef {
     grow?: number;
     rare?: boolean;
     legend?: boolean;
+    /** Explicit special label for premium gear with a configured shop price. */
+    specialOffer?: boolean;
     stats?: Partial<Record<'hp' | 'atk' | 'def' | 'crit' | 'speed' | 'regen', number>>;
     weapon?: WeaponDef;
     pet?: {
@@ -1108,8 +1112,9 @@ const ITEM_FACTS: Record<string, any> = {
     "rod_key": {
         "name": "Sealed Key Fishing Rod",
         "type": "weapon",
-        "sell": 225,
-        "weapon": { "kind": "rod", "quality": 0.8, "fx": "#B56DFF" }
+        "sell": 1500,
+        "specialOffer": true,
+        "weapon": { "kind": "rod", "quality": 1.5, "steady": true, "breakChance": 0.01, "fx": "#B56DFF" }
     },
     "hat_straw": {
         "name": "Straw hat",
@@ -2779,8 +2784,7 @@ const SHOP_FACTS: {
             },
             {
                 "id": "rod_key",
-                "cost": 450,
-                "mats": { "gear": 3, "battery": 2, "starshard": 1 }
+                "cost": 10000
             },
             {
                 "id": "plot_kit",
@@ -4049,7 +4053,7 @@ const englishNames: Record<string, string> = {
     ...Object.fromEntries(Object.entries(FRUIT_FACTS).map(([id, fact]) => [id, fact.name])),
     radish: 'Radish', carrot: 'Carrot', pumpkin: 'Pumpkin', mint: 'Mint', chili: 'Chili', candy: 'Candy bloom', bean: 'Shield bean', star: 'Star fruit', berry: 'Berry', coffee: 'Coffee bean', moonflower: 'Moonflower', magnetmelon: 'Magnet melon', melon: 'Melon', clover: 'Lucky clover', glowshroom: 'Glow mushroom', iceberry: 'Ice berry', goldcorn: 'Golden corn', dragonfruit: 'Dragon fruit', rainbowrose: 'Rainbow rose',
     pet_dog: 'Garden guard dog',
-    seed_fire: 'Fire seed', seed_ice: 'Ice seed', seed_star: 'Star seed', plot_kit: 'Garden bed kit', meat: 'Meat', leather: 'Leather', bone: 'Bone', manure: 'Fertilizer', spore: 'Magic spore', tusk: 'Tusk', claw: 'Claw', sap: 'Sap', nectar: 'Nectar', spine: 'Cactus spine', cwater: 'Cactus water', bloom: 'Wild flower', honey: 'Honey', sugar: 'Sugar', icecrystal: 'Ice crystal', magma: 'Magma', starshard: 'Star shard', mcrystal: 'Magma crystal', obsidian: 'Obsidian', firecore: 'Fire core', dragonscale: 'Dragon scale', fcrystal: 'Fire crystal', gear: 'Toy gear', battery: 'Battery', vine: 'Vine', amber: 'Amber', pearl: 'Pearl', coral: 'Coral', feather: 'Feather', thunderstone: 'Thunder stone', shadow: 'Shadow essence', moonstone: 'Moonstone', dragonegg: 'Dragon egg', potion: 'Healing potion', worm: 'Worm bait', boot: 'Old boot', rod: 'Fishing rod', rod_gold: 'Golden fishing rod', rod_steady: 'Steady fishing rod', crown: 'Royal crown', trident: 'Ocean trident', toy_hammer: 'Toy hammer', wood: 'Wild wood', bunny: 'Mochi bunny',
+    seed_fire: 'Fire seed', seed_ice: 'Ice seed', seed_star: 'Star seed', plot_kit: 'Garden bed kit', meat: 'Meat', leather: 'Leather', bone: 'Bone', manure: 'Fertilizer', spore: 'Magic spore', tusk: 'Tusk', claw: 'Claw', sap: 'Sap', nectar: 'Nectar', spine: 'Cactus spine', cwater: 'Cactus water', bloom: 'Wild flower', honey: 'Honey', sugar: 'Sugar', icecrystal: 'Ice crystal', magma: 'Magma', starshard: 'Star shard', mcrystal: 'Magma crystal', obsidian: 'Obsidian', firecore: 'Fire core', dragonscale: 'Dragon scale', fcrystal: 'Fire crystal', gear: 'Toy gear', battery: 'Battery', vine: 'Vine', amber: 'Amber', pearl: 'Pearl', coral: 'Coral', feather: 'Feather', thunderstone: 'Thunder stone', shadow: 'Shadow essence', moonstone: 'Moonstone', dragonegg: 'Dragon egg', potion: 'Healing potion', worm: 'Worm bait', boot: 'Old boot', rod: 'Fishing rod', rod_gold: 'Golden fishing rod', rod_steady: 'Steady fishing rod', rod_key: 'Sealed Key Fishing Rod', crown: 'Royal crown', trident: 'Ocean trident', toy_hammer: 'Toy hammer', wood: 'Wild wood', bunny: 'Mochi bunny',
     fish_perch: 'Perch', fish_clown: 'Clownfish', fish_puffer: 'Pufferfish', fish_carp: 'Carp', fish_shark: 'Shark', fish_rainbow: 'Rainbow fish', fish_catfish: 'Catfish', fish_koi: 'Koi', fish_eel: 'Eel', fish_swordfish: 'Swordfish', fish_jelly: 'Jellyfish', fish_icepike: 'Ice pike', fish_whale: 'Whale', fish_kraken: 'Kraken', fish_golden: 'Golden fish', fish_sunfish: 'Sunfish', fish_angler: 'Anglerfish', fish_manta: 'Manta ray',
     armor_wings: 'Dragon wings', armor_tux: 'Tuxedo', armor_kimono: 'Kimono', armor_hawaii: 'Island shirt', armor_hoodie: 'Hoodie', armor_army: 'Army uniform', armor_navy: 'Navy uniform', armor_aodai: 'Vietnamese long dress', armor_aodai_man: 'Vietnamese long gown', armor_usa: 'Stars and stripes outfit', armor_vietnam: 'Vietnam flag outfit', hat_halo: 'Halo', hat_graduate: 'Graduation cap', boots_flipper: 'Swim flippers',
     dz_ninja: 'Shadow ninja', dz_mage: 'Archmage', dz_knight: 'Sun knight', dz_mecha: 'Battle robot', dz_dino: 'Tyrannosaur', dz_fairy: 'Flower fairy', dz_pirate: 'Pirate captain', dz_army: 'Army soldier', dz_navy: 'Navy sailor', dz_aodai: 'Ao dai lady', dz_aodai_man: 'Ao dai gentleman', dz_usa: 'Stars and stripes', dz_vietnam: 'Vietnam flag', dz_superhero: 'Superhero', dz_vampire: 'Vampire count', dz_snowman: 'Snowman',
@@ -4100,7 +4104,7 @@ for (const recipe of RECIPES)
     recipe.category = categoryLabels.get(recipe.category) || recipe.category;
 // Explain how to use specialist equipment where a stat line alone is not enough.
 ITEMS.rod.desc='Keep this rod in your backpack. It is held automatically near a pond; your combat weapon returns away from water. Hook at the bite, then balance reeling with line tension. Its bamboo line snaps 60% of the time when it strains (the tension bar fills).';
-ITEMS.rod_key.desc='A silver tech key with a cyan gear, a pulsing violet crystal and a golden star float. Its invisible line behaves like an ordinary fishing line.';
+ITEMS.rod_key.desc='A special tech key with a cyan gear, violet crystal and golden star float. Quality 150%: faster bites, better rare catches and the strongest steady line (1% snap chance at maximum tension). Invisible fishing line. Craft at the ancient furnace or buy for 10000 energy.';
 ITEMS.rod_gold.desc='A stronger rod that makes difficult fish easier to land and improves rare catches. A strained line snaps only 30% of the time.';
 ITEMS.rod_steady.desc='A sturdy rod with a forgiving line: tension builds slowly and heavy fish feel lighter. A strained line snaps only 10% of the time, so let go of Reel when the fish surges.';
 const worldDescriptions:Record<PlanetId,string>={home:'Your garden and four trails: forest, meadow, swamp and canyon.',candy:'Sweet forests, springy surprises and powerful candy creatures.',ice:'Slippery ice, frozen ponds and snowbound bosses. Plan your stopping distance.',lava:'Eruptions, rising lava, meteors and a hidden cave furnace. Watch the warning circles.',toy:'Ride the moving trains and open surprise gifts among giant toys.',jungle:'Changing thorn walls, poisonous plants and restorative fruit.',ocean:'Swim between islands. Refill your air at bubbles or ride a sea turtle.',cloud:'Bounce between floating islands and watch the wind near their edges.',shadow:'Explore the darkness, light ancient pillars and face the Night Lord.'};
@@ -4157,5 +4161,11 @@ Object.assign(ITEMS,BIRD_ITEMS);
 RECIPES.push(...BIRD_SHOP);
 for(const [id,skills] of Object.entries(BIRD_SKILLS))DISGUISES[id]={name:BIRD_ITEMS[id].name,emoji:BIRD_ITEMS[id].icon,color:id==='dz_penguin'?'#b8efff':'#b995ff',weapon:{kind:'fist',range:2.6,cd:.4,special:'fist'},skills};
 SHOP_CATEGORIES.find(c=>c.tab==='Disguises')?.items.push(...Object.keys(BIRD_ITEMS).map(id=>({id,cost:1})));
+// Premium key rod: append recipes so existing save/in-flight indexes keep their identity.
+RECIPES.push({result:'rod_key',energy:3000,materials:{rod_lava:1,gear:12,battery:8,starshard:4,moonstone:6},category:'Weapons',station:'forge'});
+// The test edition shares all fishing stats and art, with no resale/trade value.
+ITEMS.rod_key_test={...ITEMS.rod_key,name:'Sealed Key Fishing Rod (Test)',desc:'Test edition: identical special rod, quality 150%, steady line and 1% snap chance at maximum tension. Costs 1 energy, no materials. Cannot be sold or traded.',sell:0,noTrade:true,price:1,materials:{},weapon:{...ITEMS.rod_key.weapon!}};
+RECIPES.push({result:'rod_key_test',energy:1,materials:{},category:'Weapons',station:'shop'});
+SHOP_CATEGORIES.find(c=>c.tab==='Weapons')?.items.push({id:'rod_key_test',cost:1});
 // Dyes (dye-skins.ts): energy-priced recolours of existing gear, generated last so every base item exists.
 registerDyes(ITEMS);

@@ -69,8 +69,11 @@ export const RESTOCK_AFTER_CATCH=3, RESTOCK_AFTER_LOSS=4;
  */
 export const LINE_BREAK={bamboo:.6,golden:.3,steady:.1} as const;
 export const STRAIN={warn:.8,relief:.7,slip:.08} as const;
-/** The chance a rod's line snaps on each strain: steady rods 10 %, rods of quality 0.7+ (golden) 30 %, others (bamboo) 60 %. */
-export function lineBreakChance(rod:{quality?:number;steady?:boolean}|undefined){return rod?.steady?LINE_BREAK.steady:(rod?.quality??0)>=.7?LINE_BREAK.golden:LINE_BREAK.bamboo;}
+/** An explicit per-rod chance, otherwise the existing steady/golden/bamboo strain defaults. Shared with server tickets. */
+export function lineBreakChance(rod:{quality?:number;steady?:boolean;breakChance?:number}|undefined){
+  if(rod?.breakChance!==undefined&&Number.isFinite(rod.breakChance))return Math.max(0,Math.min(1,rod.breakChance));
+  return rod?.steady?LINE_BREAK.steady:(rod?.quality??0)>=.7?LINE_BREAK.golden:LINE_BREAK.bamboo;
+}
 /** The roll for strain `index` of a fight seeded `seed`, in [0, 1): a hash, so the client and the server's proof check agree. */
 export function lineRoll(seed:number,index:number){
   let n=Math.imul((seed>>>0)^0x9e3779b9,0x85ebca6b)^Math.imul(index+1,0xc2b2ae35);n=Math.imul(n^(n>>>16),0x7feb352d);n=Math.imul(n^(n>>>15),0x846ca68b);

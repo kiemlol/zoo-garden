@@ -767,7 +767,7 @@ const SHOP_TABS=['Weapons','Clothing','Pets','Disguises','Supplies','Decor','Dye
 function tryOnButton(id:M.ItemId){return canTryOn(id)&&!Object.values(state.gear).includes(id)?`<button class="soft-button try-on" data-action="try-on" data-item="${id}" aria-pressed="${tryingOn===id}">${tryingOn===id?'👀 Trying on':'👕 Try on'}</button>`:'';}
 function shop(){
   // Special offers (special-offers.ts): a tag by the name and a line on how the item is usually obtained.
-  const specialTag=(id:string)=>M.isSpecial(id)?` <span class="special-tag">${esc(t('✨ Special'))}</span>`:'',gated=(id:string)=>M.gearLevel(id)>state.level,gate=(id:string)=>gated(id)?`<span class="chips"><span class="chip chip-gate">🔒 ${esc(t('Needs level {level}',{level:M.gearLevel(id)}))}</span></span>`:'',specialNote=(id:string)=>M.isSpecial(id)?`<p class="special-note">${esc(t(M.SOURCE_NOTE[M.specialSource(id)]))}</p>`:'';
+  const specialTag=(id:string)=>M.isSpecial(id)?` <span class="special-tag">${esc(t('✨ Special'))}</span>`:'',gated=(id:string)=>M.gearLevel(id)>state.level,gate=(id:string)=>gated(id)?`<span class="chips"><span class="chip chip-gate">🔒 ${esc(t('Needs level {level}',{level:M.gearLevel(id)}))}</span></span>`:'',specialNote=(id:string)=>M.isSpecial(id)&&!M.ITEMS[id].specialOffer?`<p class="special-note">${esc(t(M.SOURCE_NOTE[M.specialSource(id)]))}</p>`:'';
   const matches=(item:M.ItemDef)=>shopTabMatches(shopTab,item),buyState=(id:string,item:M.ItemDef)=>priceButtonState(gated(id),state.energy<M.shopPrice(state,id)!||!M.hasMaterials(state,item.materials));
   // Weakest to strongest (item-power.ts), ties by price; special offers (one flat price) tie by their usual worth.
   const entries=IG.groupItems(Object.entries(M.ITEMS).filter(([id,item])=>M.shopPrice(state,id)!==null&&matches(item)),([id])=>id,IG.GEAR_ORDER,([id])=>M.isSpecial(id)?M.ITEMS[id].sell:M.shopPrice(state,id)??0);
@@ -1130,7 +1130,7 @@ function fish(pond?:Entity|null){
     if(mysteryId){const f=M.FISH[mysteryId];return {id:mysteryId,power:f.power,size:0,huge:false,mystery:true};}
     const selected=selectCatch(weights.map(([id,weight])=>{const f=M.FISH[id];return {id,weight:catchWeight(weight,f.rarity,bonus),min:f.size[0],max:f.size[1],junk:f.rarity==='junk'};}));return {...selected,power:M.FISH[selected.id].power};
   };
-  const simulation=new FishingSimulation<FishPick>({quality:rod.quality??.3,steady:rod.steady===true,bait:(state.bag.worm??0)>0,luck:stats.luck,choose,approachFrom:p=>fishingView.approachDistance(p.id,!!p.mystery),water,cast,player:{x:world.position.x,z:world.position.z}});
+  const simulation=new FishingSimulation<FishPick>({quality:rod.quality??.3,steady:rod.steady===true,breakChance:rod.breakChance,bait:(state.bag.worm??0)>0,luck:stats.luck,choose,approachFrom:p=>fishingView.approachDistance(p.id,!!p.mystery),water,cast,player:{x:world.position.x,z:world.position.z}});
   fishingEpoch++;fishGame={input,simulation,lastPhase:'cast',seen:{missed:0,bait:0,early:0},tooEarlyUntil:0,approach:0,pondId:pond.id};
   world.destination=null;world.route=[];world.moving=false;world.selected=null;world.ring.visible=false;world.facing=Math.atan2(cast.x-world.position.x,cast.z-world.position.z);
   world.fishing='cast';world.castT=.5;showReel(true);

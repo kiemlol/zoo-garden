@@ -1,12 +1,13 @@
 import type {Object3D} from 'three';
+import {isKeyRod} from './fishing-rods.ts';
 import {part} from './part-cache.ts';
 
 /** Visual state only: catches, tension rules and rewards stay in the fishing simulation. */
 export interface FishingPose {phase:'cast'|'wait'|'fight';cast:number;tension:number;rod:string;bobber?:{x:number;y:number;z:number}}
 export function readFishingPose(raw:unknown):FishingPose|null{
  if(!raw||typeof raw!=='object')return null;const p=raw as FishingPose;
- if(!['cast','wait','fight'].includes(p.phase)||!Number.isFinite(p.cast)||p.cast<0||p.cast>.5||!Number.isFinite(p.tension)||p.tension<0||p.tension>1||typeof p.rod!=='string'||!['rod','rod_gold','rod_steady','rod_key'].includes(p.rod))return null;
- const b=p.bobber;if(b&&(p.rod!=='rod_key'||![b.x,b.y,b.z].every(n=>Number.isFinite(n)&&Math.abs(n)<=2000)))return null;
+ if(!['cast','wait','fight'].includes(p.phase)||!Number.isFinite(p.cast)||p.cast<0||p.cast>.5||!Number.isFinite(p.tension)||p.tension<0||p.tension>1||typeof p.rod!=='string'||!['rod','rod_gold','rod_steady','rod_key','rod_key_test'].includes(p.rod))return null;
+ const b=p.bobber;if(b&&(!isKeyRod(p.rod)||![b.x,b.y,b.z].every(n=>Number.isFinite(n)&&Math.abs(n)<=2000)))return null;
  return {phase:p.phase,cast:p.cast,tension:p.tension,rod:p.rod,...(b?{bobber:{x:b.x,y:b.y,z:b.z}}:{})};
 }
 /** Same hand, cast and reeling pose for local and online avatars. Return the body's lean. */
