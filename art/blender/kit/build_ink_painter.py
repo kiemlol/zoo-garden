@@ -82,43 +82,178 @@ def brush():
  it=item('ink_brush','prop');brush_geometry(it,'body');return it
 
 def dragon():
+ from mathutils import Vector
  it=item('ink_dragon','prop');p='body'
- path=[]
- for j in range(43):
-  t=j/42;path.append((math.sin(t*math.pi*2)*(.68-.28*t),.09*math.cos(t*math.pi*3),1.8-1.65*t))
- radii=[.18*(1-j/50)**.8 if j<38 else .10*(42-j)/4+.003 for j in range(43)]
- line(it,p,path,radii,'coal',12)
- for j in range(2,39):
-  x,y,z=path[j];r=radii[j]
-  ell(it,p,(x,y-r*.68,z),(r*.82,r*.40,.045),'paper' if j%3 else 'seam',10,5)
-  # Three overlapping rows of scales and a calligraphic dorsal mane.
-  for side in [-1,1]:ell(it,p,(x+side*r*.7,y,z),(.065,.055,.043),'cloth' if j%2 else 'fold',8,4)
-  if j%2==0:line(it,p,[(x,y+r*.6,z),(x-.10,y+r*1.3,z+.07),(x-.15,y+r*1.5,z+.17)],[.045,.032,.001],'ink',7)
- # A snarling long muzzle, brows, white fangs, beard and antler horns.
- x,y,z=path[0];ell(it,p,(x,-.02,z+.05),(.27,.22,.22),'cloth',16,8)
- ell(it,p,(x,-.22,z-.02),(.22,.19,.12),'coal',16,7)
- ell(it,p,(x,-.27,z-.105),(.19,.14,.047),'dark',14,6)
+ # Keep InkDragonRig's rest centreline exactly: head t=0, tail t=1.
+ path=[Vector((math.sin(t*math.tau)*(.68-.28*t),.09*math.cos(t*math.pi*3),1.8-1.65*t)) for t in [j/64 for j in range(65)]]
+ radii=[.142*(1-j/64)**.65+.003 for j in range(65)]
+ frames=[]
+ it.add(p,W.tube(path,radii,12,cap_start=True,cap_end=True,ref=(0,-1,0),frames=frames),it.palette['ink'])
+ def stroke(points,r,col,sides=7,steps=8):
+  # Cubic Bezier brush strokes: round roots, flowing silhouette, pointed ends.
+  a,b,c,d=map(Vector,points)
+  pts=[a*(1-t)**3+b*(3*t*(1-t)**2)+c*(3*t*t*(1-t))+d*t**3 for t in [i/steps for i in range(steps+1)]]
+  line(it,p,pts,[r*(1-i/steps)**.75+.001 for i in range(steps+1)],col,sides)
+ def leaf(c,across,along,normal,w,h,col,ridge=.012):
+  # A closed, low-poly shield scale / lance-shaped fin with a raised centre.
+  c=Vector(c);a=Vector(across)*w;b=Vector(along)*h;n=Vector(normal)*ridge
+  verts=[c-a*.75-b*.45,c+a*.75-b*.45,c+a,c+b,c-a,c+n]
+  faces=[(5,i,(i+1)%5) for i in range(5)]+[tuple(reversed(range(5)))]
+  it.add(p,W.Geo(verts,faces).outward(),it.palette[col])
+ # Overlapping ventral plates follow the curve's local frame, never the world Z axis.
+ # Four staggered rows of smaller shields expose dark seams between ink-wash scales.
+ for j in range(3,63):
+  c=path[j];front,side=frames[j];tangent=(path[j+1]-path[j-1]).normalized();r=radii[j]
+  # Curved paper bands hug the belly instead of sticking out like teeth.
+  band=[]
+  for along in [-1,1]:
+   for k in range(5):
+    angle=(k-2)*.30;radial=front*math.cos(angle)+side*math.sin(angle)
+    band.append(c+radial*(r+.004)+tangent*(along*.025-.008*math.cos(angle)))
+  it.add(p,W.Geo(band,[(k,k+1,k+6,k+5) for k in range(4)]),it.palette['paper' if j%4 else 'seam'])
+  for row,angle in enumerate([-.95,-1.85,1.85,.95]):
+   radial=front*math.cos(angle)+side*math.sin(angle);across=-front*math.sin(angle)+side*math.cos(angle)
+   shade='cloth' if j%7==row else 'fold' if row in [0,3] else 'coal'
+   leaf(c+radial*(r+.002)+tangent*(.012 if row%2 else 0),across,tangent,radial,r*.40,.040,shade,.005)
+  if j%4==0:
+   back=-front
+   leaf(c+back*r,side,tangent,back,r*.20,.058,'seam',.011)
+   stroke([c+back*r,c+back*(r+.08)-tangent*.05,c+back*(r+.11)+tangent*.025,c+back*(r+.12)+tangent*.085],.025*(1-j/80),'coal',6,4)
+ # Compact skull and a long, chiselled muzzle; the eye line stays at the head joint.
+ ell(it,p,(0,.035,1.86),(.205,.195,.175),'coal',16,8)
+ ell(it,p,(0,-.19,1.79),(.142,.22,.091),'fold',14,6)
+ ell(it,p,(0,-.365,1.80),(.16,.095,.068),'coal',12,6)
+ ell(it,p,(0,-.21,1.695),(.128,.19,.032),'dark',12,5)
+ ell(it,p,(0,-.24,1.665),(.125,.185,.033),'seam',12,5)
+ leaf((0,-.11,1.99),(1,0,0),(0,-1,-.32),(0,-.3,1),.087,.13,'fold',.018)
  for side in [-1,1]:
-  ell(it,p,(x+side*.15,-.18,z+.1),(.09,.045,.065),'white',12,6)
-  ell(it,p,(x+side*.15,-.215,z+.1),(.029,.015,.042),'dark',8,5)
-  line(it,p,[(x+side*.05,-.18,z+.19),(x+side*.15,-.20,z+.20),(x+side*.29,-.08,z+.22)],.035,'ink',7)
-  for j in range(3):line(it,p,[(x+side*(.07+j*.04),-.32,z-.07),(x+side*(.07+j*.04),-.32,z-.14)],[.024,.002],'white',7)
-  line(it,p,[(x+side*.18,.02,z+.19),(x+side*.28,.06,z+.39),(x+side*.22,.03,z+.58)],[.06,.035,.003],'paper',9)
-  line(it,p,[(x+side*.26,.05,z+.35),(x+side*.40,.08,z+.43),(x+side*.43,.05,z+.53)],[.03,.02,.002],'paper',7)
-  line(it,p,[(x+side*.18,-.28,z-.01),(x+side*.45,-.32,z+.03),(x+side*.65,-.24,z+.22),(x+side*.70,-.12,z+.41)],[.014,.012,.008,.001],'seam',6)
-  for j in range(4):line(it,p,[(x+side*.22,.02,z+.1-j*.05),(x+side*(.38+j*.035),.05,z+.22-j*.03),(x+side*.49,.08,z+.30-j*.025)],[.05,.035,.001],'ink',7)
- for j in range(4):line(it,p,[(x+(j-1.5)*.05,-.19,z-.13),(x+(j-1.5)*.08,-.18,z-.35)],[.035,.001],'ink',7)
- # Four bent limbs with three individually tapered claws each.
- for index,side in [(8,-1),(12,1),(25,-1),(29,1)]:
-  x,y,z=path[index];k=side
-  line(it,p,[(x,y,z),(x+k*.27,y-.05,z-.05),(x+k*.32,y-.2,z-.18)],[.09,.075,.05],'coal',9)
-  for toe in range(3):line(it,p,[(x+k*.32,y-.2,z-.18),(x+k*(.43+toe*.025),y-.28+toe*.07,z-.20),(x+k*(.45+toe*.025),y-.30+toe*.07,z-.29)],[.035,.022,.001],'paper' if toe==1 else 'ink',7)
+  # Narrow almond eyes under a swept brow, cheek plates and nostrils.
+  ell(it,p,(side*.135,-.135,1.865),(.077,.040,.040),'paper',12,5)
+  ell(it,p,(side*.144,-.170,1.866),(.017,.009,.029),'dark',8,4)
+  ell(it,p,(side*.138,-.178,1.88),(.007,.004,.008),'white',6,3)
+  stroke([(side*.055,-.17,1.895),(side*.12,-.19,1.93),(side*.21,-.12,1.94),(side*.25,-.04,1.96)],.029,'ink',7,5)
+  leaf((side*.19,-.07,1.78),(0,1,0),(side*.7,0,.7),(side,0,0),.07,.12,'cloth',.015)
+  ell(it,p,(side*.087,-.443,1.805),(.029,.012,.016),'dark',8,4)
+  stroke([(side*.035,-.40,1.85),(side*.08,-.45,1.86),(side*.15,-.42,1.86),(side*.18,-.37,1.84)],.018,'seam',6,4)
+  # Two ivory fangs per side, with dark negative space above the lower jaw.
+  for y,z in [(-.33,1.735),(-.16,1.73)]:
+   stroke([(side*.105,y,z),(side*.117,y-.012,z-.025),(side*.10,y-.01,z-.058),(side*.085,y-.025,z-.055)],.020,'white',6,3)
+  # Deer antlers branch upward/backward with paper-coloured branches.
+  stroke([(side*.14,.055,1.98),(side*.23,.095,2.08),(side*.25,.13,2.24),(side*.31,.16,2.40)],.042,'paper',8,7)
+  stroke([(side*.23,.11,2.16),(side*.31,.09,2.21),(side*.39,.11,2.24),(side*.42,.12,2.33)],.025,'paper',7,5)
+  stroke([(side*.27,.14,2.28),(side*.20,.16,2.32),(side*.20,.18,2.38),(side*.19,.18,2.43)],.018,'paper',6,4)
+  # Fine long whiskers flow outward in generous curves rather than angular sticks.
+  stroke([(side*.13,-.375,1.76),(side*.48,-.48,1.65),(side*.64,-.30,1.90),(side*.72,-.16,2.07)],.014,'paper',6,12)
+  stroke([(side*.14,-.36,1.75),(side*.36,-.43,1.62),(side*.50,-.31,1.69),(side*.55,-.25,1.75)],.009,'seam',5,8)
+  # Layered swept cheek/neck mane, with separated paper-edged brush tips.
+  for j in range(4):
+   root=Vector((side*(.16-j*.012),.02+j*.037,1.88-j*.035))
+   end=Vector((side*(.36+j*.025),.20+j*.025,2.00-j*.075))
+   stroke([root,root+Vector((side*.18,.03,.03)),end+Vector((side*.015,-.03,.05)),end],.043-j*.003,'coal' if j%2 else 'fold',7,5)
+   stroke([root+Vector((0,-.026,.013)),root+Vector((side*.16,.01,.045)),end+Vector((side*.01,-.025,.04)),end],.009,'seam',5,5)
+  stroke([(side*.055,-.32,1.65),(side*.09,-.30,1.49),(side*.23,-.20,1.50),(side*.25,-.13,1.59)],.024,'paper',7,8)
+ # Each leg, palm and four talons form ONE connected mesh. Point colours keep
+ # the pale claws in the same glTF primitive, so the unchanged rig binds the
+ # entire small limb together instead of sending detached fingers to other joints.
+ limb_material=it.m('limbs','#FFFFFF');it.dragon_colors={}
+ bind_curve=[Vector((math.sin(t*math.tau)*(.68-.28*t),.09*math.cos(t*math.pi*3),1.8-1.65*t)) for t in [j/84 for j in range(85)]]
+ for index in [20,43]:
+  c=path[index];front,across=frames[index];tangent=(path[index+1]-path[index-1]).normalized()
+  for side in [-1,1]:
+   outward=across*side;root=c+outward*radii[index]*.55
+   elbow=root+outward*.16-tangent*.06+front*.015
+   wrist=root+outward*.24+tangent*.035+front*.13
+   g=W.tube([root,elbow,wrist],[.060,.046,.043],8,cap_start=True)
+   colors=[it.palette['coal'].diffuse_color[:]]*len(g.verts)
+   # Divide the open wrist into four quadrants, each extended into a finger.
+   ring=list(range(len(g.verts)-8,len(g.verts)));centre=len(g.verts)
+   g.verts.append(wrist);colors.append(it.palette['fold'].diffuse_color[:])
+   for toe in range(4):
+    base=[ring[toe*2],ring[(toe*2+1)%8],ring[(toe*2+2)%8],centre]
+    start=sum((g.verts[i] for i in base),Vector())/4
+    direction=(front+outward*.45+tangent*((toe-1)*.65)).normalized() if toe<3 else (-outward+front*.4).normalized()
+    a=direction.cross(tangent).normalized();b=direction.cross(a).normalized()
+    # Align each next ring with its root quad to avoid twisted finger faces.
+    offsets=[(g.verts[i]-start).normalized() for i in base]
+    for length,radius,shade in [(.055,.019,'cloth'),(.105,.012,'paper')]:
+     next_ring=[];at=start+direction*length+front*(.015 if length>.1 else 0)
+     for offset in offsets:
+      projected=a*offset.dot(a)+b*offset.dot(b)
+      if projected.length<.01:projected=a
+      next_ring.append(len(g.verts));g.verts.append(at+projected.normalized()*radius);colors.append(it.palette[shade].diffuse_color[:])
+     g.faces.extend((base[k],base[(k+1)%4],next_ring[(k+1)%4],next_ring[k]) for k in range(4));base=next_ring
+    tip=len(g.verts);g.verts.append(start+direction*.12+front*.05);colors.append(it.palette['paper'].diffuse_color[:])
+    g.faces.extend((base[k],base[(k+1)%4],tip) for k in range(4))
+   # Embed the shoulder/hip at the centreline point selected by the rig's
+   # existing bounds-centre binding rule. The whole limb then follows the
+   # same interpolated joint as its root, even on the outside of a bend.
+   for _ in range(32):
+    centre=Vector(tuple((min(v[i] for v in g.verts)+max(v[i] for v in g.verts))*.5 for i in range(3)))
+    candidates=[]
+    for a,b in zip(bind_curve,bind_curve[1:]):
+     ab=b-a;u=max(0,min(1,(centre-a).dot(ab)/ab.length_squared));candidates.append(a+ab*u)
+    target=min(candidates,key=lambda point:(point-centre).length_squared)
+    delta=target-sum(g.verts[:8],Vector())/8
+    for i in range(8):g.verts[i]+=delta
+    if delta.length<1e-6:break
+   assert delta.length<1e-4,'limb root did not settle on its binding point'
+   g.tags=[None]*len(g.faces);g.outward()
+   offset=len(it.parts[p].verts);it.add(p,g,limb_material)
+   assert len(it.parts[p].verts)-offset==len(colors)
+   it.dragon_colors.update({offset+i:color for i,color in enumerate(colors)})
+ # A split, tapered ink-brush tail stays small enough to bind near the last joints.
+ c=path[61];front,across=frames[61];tangent=(path[64]-path[60]).normalized()
+ for s in [-1,0,1]:
+  stroke([c,c+tangent*.07+across*(s*.045),c+tangent*.14+across*(s*.07),path[-1]+tangent*.045+across*(s*.045)],.024,'fold' if s else 'seam',6,5)
+ assert it.parts[p].tris()<=11000,it.parts[p].tris()
  return it
+
+def dragon_reveal_order(obj,colors):
+ # The shared exporter sorts triangles by X. This asset instead needs head-to-tail
+ # index order for the existing drawRange animation; do not change the runtime rig.
+ import bmesh
+ from mathutils import Vector
+ # Shared vertex colours preserve the connected palm/claw topology on export.
+ tint=obj.data.color_attributes.new(name='Dragon tint',type='FLOAT_COLOR',domain='POINT')
+ for i,value in enumerate(tint.data):value.color=colors.get(i,(1,1,1,1))
+ limb_slot=next(i for i,m in enumerate(obj.data.materials) if m.name.endswith(' limbs'))
+ material=obj.data.materials[limb_slot];node=material.node_tree.nodes.new('ShaderNodeVertexColor');node.layer_name=tint.name
+ material.node_tree.links.new(node.outputs['Color'],material.node_tree.nodes.get('Principled BSDF').inputs['Base Color'])
+ bm=bmesh.new();bm.from_mesh(obj.data)
+ for edge in bm.edges:
+  if any(f.material_index==limb_slot for f in edge.link_faces):edge.smooth=True
+ curve=[Vector((math.sin(t*math.tau)*(.68-.28*t),.09*math.cos(t*math.pi*3),1.8-1.65*t)) for t in [j/84 for j in range(85)]]
+ def nearest(point):
+  best=float('inf');result=0
+  for j,(a,b) in enumerate(zip(curve,curve[1:])):
+   ab=b-a;u=max(0,min(1,(point-a).dot(ab)/ab.length_squared));distance=(point-a-ab*u).length_squared
+   if distance<best:best=distance;result=(j+u)/84
+  return result
+ visited=set();order={}
+ for vertex in bm.verts:
+  if vertex in visited:continue
+  group=[];pending=[vertex];visited.add(vertex)
+  while pending:
+   v=pending.pop();group.append(v)
+   for edge in v.link_edges:
+    other=edge.other_vert(v)
+    if other not in visited:visited.add(other);pending.append(other)
+  lo=Vector(tuple(min(v.co[i] for v in group) for i in range(3)))
+  hi=Vector(tuple(max(v.co[i] for v in group) for i in range(3)))
+  continuous=hi.z-lo.z>1 and len(group)>400;centre=(lo+hi)*.5;t=nearest(centre)
+  if t<.09 or centre.z>1.64:t=0
+  for face in {f for v in group for f in v.link_faces}:order[face]=nearest(face.calc_center_median()) if continuous else t
+ rank={f:i for i,f in enumerate(sorted(bm.faces,key=lambda f:(f.material_index,order[f],f.index)))}
+ bm.faces.sort(key=lambda f:rank[f]);bm.faces.index_update()
+ bm.to_mesh(obj.data);bm.free();obj.data.update()
 
 def main():
  reset_scene();entries={};objects=[]
  for build in [painter,brush,dragon]:
-  it=build();e=W.realise(it);entries[it.id]=e;objects.extend([e['empty']]+[o for _,o in e['pieces']])
+  it=build();e=W.realise(it)
+  if it.id=='ink_dragon':
+   for _,obj in e['pieces']:dragon_reveal_order(obj,it.dragon_colors)
+  entries[it.id]=e;objects.extend([e['empty']]+[o for _,o in e['pieces']])
  size=export_glb(objects,os.path.join(ROOT,'public/assets/models/ink-painter.glb'))
  manifest={'file':'public/assets/models/ink-painter.glb','bytes':size,'models':{id:{'triangles':sum(W.mesh_tris(o) for _,o in e['pieces']),'parts':[p for p,_ in e['pieces']],'skillOnly':not id.startswith('dz_')} for id,e in entries.items()}}
  with open(os.path.join(ROOT,'art/ink-painter-manifest.json'),'w') as f:json.dump(manifest,f,indent=2);f.write('\n')
