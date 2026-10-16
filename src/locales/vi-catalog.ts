@@ -249,6 +249,8 @@ export const VI_CATALOG: Record<string, string> = {
   "Rainbow blaster": "Súng Cầu Vồng",
   "Toy hammer": "Búa Kêu Chít Chít",
   "Ocean trident": "Đinh Ba Thuỷ Thần",
+  "Sealed Key Fishing Rod": "Cần câu chìa khóa phong ấn",
+  "A silver tech key with a cyan gear, a pulsing violet crystal and a golden star float. Its invisible line behaves like an ordinary fishing line.": "Chìa khóa công nghệ thân bạc, bánh răng cyan, pha lê tím phát sáng và phao sao vàng. Dây câu vô hình hoạt động như dây câu thường.",
   "Fishing rod": "Cần Câu Tre",
   "Golden fishing rod": "Cần Câu Vàng",
   "Straw hat": "Mũ Rơm",

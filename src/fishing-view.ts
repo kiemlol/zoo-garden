@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {KEY_ROD,makeStarBobber,pulseStarBobber} from './rod-key.ts';
 import type { KitLibrary } from './assets.ts';
 import type { Effects } from './fx.ts';
 import { CAST, FISH_PER_WATER, RESTOCK_AFTER_CATCH, MYSTERY, type FishingState, type Point } from './fishing.ts';
@@ -99,6 +100,8 @@ export class FishingView {
   private fish: Swimmer[] = [];
   private dressing: T.Object3D[] = [];
   private bobber: T.Object3D;
+  private rodId='rod';
+  private bobbers=new Map<boolean,T.Object3D>();
   private line: T.Line;
   private linePositions: Float32Array;
   private lineMaterial = new T.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: .95 });
@@ -126,15 +129,19 @@ export class FishingView {
     this.root.name = 'fishing';
     scene.add(this.root);
     this.school = new FishSchool(kit); this.root.add(this.school.root);
-    this.bobber = this.makeBobber(); this.bobber.visible = false; this.root.add(this.bobber);
+    this.bobber = this.makeBobber(); this.bobbers.set(false,this.bobber); this.bobber.visible = false; this.root.add(this.bobber);
     this.linePositions = new Float32Array(this.segments * 3);
     const geometry = new T.BufferGeometry(); geometry.setAttribute('position', new T.BufferAttribute(this.linePositions, 3));
     this.line = new T.Line(geometry, this.lineMaterial); this.line.frustumCulled = false; this.line.visible = false; this.root.add(this.line);
   }
 
+  /** Visual-only position for online observers; fishing rules remain in FishingSimulation. */
+  bobberPose(){return this.active&&this.rodId===KEY_ROD?{x:this.bobber.position.x,y:this.bobber.position.y,z:this.bobber.position.z}:undefined;}
+
   attach(scene: T.Scene) { if (this.root.parent !== scene) scene.add(this.root); }
 
-  private makeBobber() {
+  private makeBobber(rodId=this.rodId) {
+    if(rodId===KEY_ROD)return makeStarBobber();
     const kitBobber = this.kit.ready ? this.kit.instance('bobber') : null;
     if (kitBobber) return kitBobber;
     const group = new T.Group();
@@ -170,7 +177,7 @@ export class FishingView {
     for(const leap of this.leaps)this.root.remove(leap.obj);this.leaps=[];
     this.mysterySpecies=mysterySpecies??(waterId=>pool(waterId).find(id=>id!=='boot')??'fish_perch');
     this.ponds=ponds;
-    if (this.kit.ready) { const fresh = this.makeBobber(); this.root.remove(this.bobber); this.bobber = fresh; this.bobber.visible = false; this.root.add(fresh); }
+    if (this.kit.ready) { const fresh = this.makeBobber('rod'); this.bobbers.set(false,fresh); if(this.rodId!==KEY_ROD){this.root.remove(this.bobber); this.bobber = fresh; this.bobber.visible = false; this.root.add(fresh);} }
     for (const pond of ponds) {
       const species = pool(pond.waterId).filter(id => id !== 'boot');
       const count = FISH_PER_WATER[pond.waterId] ?? 4;
@@ -291,12 +298,14 @@ export class FishingView {
   }
 
   /** Start a cast from the rod tip to `cast` (chosen from the tap by planCast). */
-  begin(pond: PondView, rodTip: T.Vector3, cast: Point) {
+  begin(pond: PondView, rodTip: T.Vector3, cast: Point, rodId='rod') {
     this.cancel();
+    this.rodId=rodId;const key=rodId===KEY_ROD;let bobber=this.bobbers.get(key);if(!bobber){bobber=this.makeBobber();this.bobbers.set(key,bobber);}
+    this.root.remove(this.bobber);this.bobber=bobber;this.root.add(bobber);
     this.active = true; this.pond = this.fish.find(f=>f.pond.id===pond.id)?.pond??pond; this.t = 0; this.phase = 'cast'; this.dip = 0; this.seen = { nibbles: 0, missed: 0, early: 0, fled: 0 };
     this.castTo.set(cast.x, pond.surface, cast.z);
     this.castFrom.copy(rodTip);
-    this.bobber.visible = true; this.line.visible = true; this.bobber.position.copy(rodTip);
+    this.bobber.visible = true; this.line.visible = this.rodId!==KEY_ROD; this.bobber.position.copy(rodTip);
     this.sound('cast');
   }
 
@@ -402,7 +411,8 @@ export class FishingView {
     } else if (this.phase === 'hooked') { this.updateFight(dt, time, sim, player); float = null; }
     if (float !== null) bob.y += (float - bob.y) * Math.min(1, dt * 12);
     this.bobber.rotation.z = Math.sin(time * 3) * .1;
-    this.drawLine(time, rodTip, this.phase === 'hooked' ? sim.tension : 0);
+    if(this.rodId===KEY_ROD){this.line.visible=false;pulseStarBobber(this.bobber,this.clock);}
+    else this.drawLine(time, rodTip, this.phase === 'hooked' ? sim.tension : 0);
   }
 
   private enter(phase: string) {

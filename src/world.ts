@@ -40,6 +40,7 @@ import { PlacementGhost } from './placement-ghost.ts';
 import {GhostCarriageRide,drawCarriagePassenger} from './ghost-carriage.ts';
 import type {CarriagePose} from './carriage-pose.ts';
 import {drawFishingPose,type FishingPose} from './fishing-pose.ts';
+import {KEY_ROD,prepareKeyRod,animateKeyRod,drawRemoteKeyBobber} from './rod-key.ts';
 import { FarmPenView, farmKit, PEN_PROPS, BACK_FENCE, BACK_FENCE_Z } from './farm-view.ts';
 import { GuardDogs } from './dog-world.ts';
 import { PetCompanion } from './pet-world.ts';
@@ -219,6 +220,9 @@ export class World {
   target?: TargetMarker; decals?: TelegraphDecals;
   /** The creature last hit and when: it stays marked for TARGET_HOLD seconds. */
   lastHit?: {e:Enemy;t:number}|null;
+  fishingBobber?:()=>FishingPose['bobber'];
+  /** Cosmetic clock: key animations continue through menus without advancing fishing. */
+  private keyRodTime=0;
   // Player animation timers set by combat and fishing.
   punchT=0; punchArm=0; swingT=0; aimT=0; hurtT=0; spinT=0; landT=0; castT=0; /** Seconds left of the casting pose of a skill cast from a jump (air-cast.ts). */ castAirT=0; /** A flight that took a jump over: metres the explorer still is from the flight's height (air-cast.ts flightCarry). */ airCarry=0; /** The last tap on a pond's water, for the cast point. */ pondTap:{id:string;x:number;z:number}|null=null; fishing:'idle'|'cast'|'wait'|'fight'='idle';
   walkClock=0; weaponKind:'fist'|'sword'|'gun'|'rod'='fist'; pose:{kind:'dash'|'slam'|'slide';t:number}|null=null; fishTension=0; invulnerable=false;
@@ -770,6 +774,7 @@ export class World {
     if(kitDisguise)this.wearKit(c,id,'body');
     if(fullBodyDisguise)fitBirdDisguise(c,id,combo);
     if(gear.weapon&&!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);
+    if(baseOf(gear.weapon??'')===KEY_ROD)prepareKeyRod(c);
     // Up to two pets beside them (pet-slots.ts): the first on the left as ever, the second on the right; with their dog out (drawn by dog-world.ts on the left) the one pet takes the right.
     for(let i=0;i<2;i++){const id=M.companionId(gear,i);if(!id)break;const pet=this.petFor(id);pet.name='remote-pet';pet.position.set(i||M.dogWorn(gear)?1:-1,0,-.6);c.add(pet);}
     addOutlines(c,{merge:true});
@@ -1071,6 +1076,7 @@ export class World {
       if(passenger){if(body)body.position.y=0;g.blend=0;drawCarriagePassenger(m,passenger);}
       else if(u.wasPassenger){m.rotation.x=m.rotation.z=0;for(const name of ['leg-left','leg-right','arm-left','arm-right','head'])part(m,name)?.rotation.set(0,0,0);m.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,remote.pose.visual?.size??1)));}
       u.wasPassenger=!!passenger;
+      animateKeyRod(m,this.keyRodTime??this.time);drawRemoteKeyBobber(m,fishing,this.keyRodTime??this.time);
       // Their pet waits at their own pen while they are in the safe village (pet-pen.ts): it is drawn beside them only away from it.
       const pets=(u.pets??=m.children.filter(o=>o.name==='remote-pet')) as T.Object3D[],follows=pets.length>0&&petFollows(remote.pose.planet??this.planet,remote.pose);for(const pet of pets)pet.visible=follows;
     }
@@ -1084,7 +1090,7 @@ export class World {
       {const air=indoor||!this.environment?0:poseAir(ty,terrainHeight(this.environment.layout,current),current.visual?.flight?1.7:0),now=this.time??0;if(air>0){u.airSince??=now;u.air=now-u.airSince<=MAX_AIR_SECONDS?air:0;}else{u.airSince=undefined;u.air=0;}}
       if(!u.placed||Math.hypot(p.x-current.x,p.z-current.z)>8||Math.abs(p.y-ty)>3){p.set(current.x,ty,current.z);remote.mesh.rotation.y=u.target.f;u.placed=true;}}
     this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(current.visual?.carriage?.scale??HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));if(current.visual?.carriage)drawCarriagePassenger(remote.mesh,current.visual.carriage);remote.mesh.visible=!current.visual?.hidden&&(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
-  visualSnapshot():AvatarVisual{return {hidden:this.playerHidden,size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat,carriage:this.carriage?.snapshot()??null,fishing:this.fishing&&this.fishing!=='idle'?{phase:this.fishing,cast:this.castT,tension:this.fishTension||0,rod:this.state.gear.weapon??'rod'}:null};}
+  visualSnapshot():AvatarVisual{return {hidden:this.playerHidden,size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat,carriage:this.carriage?.snapshot()??null,fishing:this.fishing&&this.fishing!=='idle'?{phase:this.fishing,cast:this.castT,tension:this.fishTension||0,rod:this.state.gear.weapon??'rod',...(this.state.gear.weapon===KEY_ROD?{bobber:this.fishingBobber?.()}:{} )}:null};}
   private applyAvatarVisual(mesh:T.Group,visual?:Partial<AvatarVisual>){
     // Nothing to change until stealth first fades the explorer: a new avatar starts fully opaque, so it is never copied for opacity 1
     // (the copy used to replace the flash materials and the ink outlines' push-out shader, which Material.clone does not carry).
@@ -1868,6 +1874,7 @@ export class World {
   /** The explorer touched down from a jump (main.ts: dust, sound, the dive strike). */
   onLanded?:(landing:Landing)=>void;
   update(dt:number,active:boolean,draw=true,simulateWorld=active||this.networkRole==='host') {
+    this.keyRodTime=(this.keyRodTime??0)+dt;
     this.onStep?.(dt);
     // The jump runs on the world's clock. Indoors, aboard the ship, thrown by the Colossus or carried by the world it ends at once.
     {const j=this.jump??=new JumpState();if(j.airborne&&(this.interior||this.boarded||(this.playerLift??0)>0||this.environment?.airborne))j.cancel();
@@ -2114,6 +2121,7 @@ export class World {
     const flash=this.hurtT>0?'hurt':this.invulnerable&&Math.sin(this.time*30)>0?'blink':'';
     for(const m of this.playerMaterials??[])if(m.userData.flash!==flash){m.userData.flash=flash;m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;
       if(flash==='hurt'){m.emissive.setRGB(...HURT_TINT);m.emissiveIntensity=1;}else if(flash==='blink'){m.emissive.setRGB(.4,.4,.4);m.emissiveIntensity=1;}else{m.emissive.setHex(m.userData.baseEmissive);m.emissiveIntensity=m.userData.baseGlow??1;}}
+    animateKeyRod(p,this.keyRodTime??this.time);
   }
 
 

@@ -947,6 +947,7 @@ function help(){openDialog('help','A small guide to a big world',`<div class="he
 // Fishing happens in the world: no panel, just the pond, the line and a big Reel button.
 let fishPond:Entity|null=null,recastUntil=0;
 const fishingView=new FishingView(world.scene,world.fx!,fishKit,sound=>tone(sound));
+world.fishingBobber=()=>fishingView.bobberPose();
 // The mystery shadow is called only while fishing (fishing.ts attractMystery): offline this caller decides, online the server's does and this one mirrors it for the view.
 let mysteryCaller=newMysteryCaller();
 /** A mystery that came and was not landed: one try used; after the last one the shadow sinks away. */
@@ -1133,7 +1134,7 @@ function fish(pond?:Entity|null){
   fishingEpoch++;fishGame={input,simulation,lastPhase:'cast',seen:{missed:0,bait:0,early:0},tooEarlyUntil:0,approach:0,pondId:pond.id};
   world.destination=null;world.route=[];world.moving=false;world.selected=null;world.ring.visible=false;world.facing=Math.atan2(cast.x-world.position.x,cast.z-world.position.z);
   world.fishing='cast';world.castT=.5;showReel(true);
-  fishingView.begin(pondView(pond),tipPosition(),cast);
+  fishingView.begin(pondView(pond),tipPosition(),cast,rodId);
 }
 const FISH_HINTS:Record<string,string>={cast:'Casting…',wait:'Wait for a fish…',approach:'A fish is coming… wait!',nibble:'A nibble… not yet!',bite:'Bite! Press Reel!'};
 function updateFishing(dt:number){

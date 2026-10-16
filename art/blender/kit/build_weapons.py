@@ -1,6 +1,6 @@
 """Zoo Garden weapons and pet companions: gear-weapons.glb, pets.glb and their item icons.
 
-Nineteen hand-held weapons (swords, blasters, hammers, a scythe, a bow, a staff, a trident and three
+Hand-held weapons (swords, blasters, hammers, a scythe, a bow, a staff, a trident and
 fishing rods) and seven pet companions, authored procedurally as chunky, glossy toys that read in the
 explorer's hand from the high game camera: bold silhouettes, strong colour contrast and emissive parts
 for anything that should glow. See CONTRACT.md, "Explorer and gear".
@@ -72,6 +72,7 @@ WEAPONS = [
     ('rod', 'rod', 'Fishing rod', None),
     ('rod_gold', 'rod', 'Golden fishing rod', None),
     ('rod_steady', 'rod', 'Steady fishing rod', None),
+    ('rod_key', 'rod', 'Cần câu chìa khóa phong ấn', 'key-sparkles'),
 ]
 WEAPON_IDS = [w[0] for w in WEAPONS]
 KIND = {w[0]: w[1] for w in WEAPONS}
@@ -646,6 +647,7 @@ class Weapon:
         self.kind = KIND[wid]
         self.piece = Piece(f'{wid}@hand-right')
         self.empties = {}
+        self.parts = {}
         self.handle = (Vector((0, 0.15, 0)), Vector((0, -0.15, 0)))
         self.grip_mats = set()
         self.note = ''
@@ -1326,13 +1328,81 @@ def build_rod_steady():
     return W
 
 
+def build_rod_key():
+    W = Weapon('rod_key')
+    navy = W.m('navy', '#172439', .4, metal=.3)
+    edge = W.m('cyan circuit', '#57E7FF', .3, emit='#34DFFF', strength=1.2)
+    silver = W.m('grip silver', '#DDECF2', .3, metal=.3)
+    purple = W.m('crystal', '#220B3E', .25, emit='#5B169B', strength=.55)
+    facet = W.m('crystal facets', '#521780', .25, emit='#8429BF', strength=.45)
+    glint = W.m('glint', '#FFFFFF', .2, emit='#F7DDFF', strength=1.5)
+    # The palm wraps the LOW silver shaft, just above the notched key bit.
+    grip_sweep(W, silver, silver, (0, .10, 0), (0, -.12, 0), .037, bands=2)
+    W.add(cyl((0, -.10, 0), (0, -.99, 0), .032, r1=.027, sides=8), silver)
+    for y in [-.97, .12]:
+        W.add(cyl((0, y-.025, 0), (0, y+.025, 0), .047, sides=8), navy)
+        W.add(cyl((0, y-.007, 0), (0, y+.007, 0), .049, sides=8), edge)
+    def plate(outline, depth):
+        n=len(outline);v=[(x,y,z) for z in [-depth/2,depth/2] for x,y in outline]
+        f=[tuple(reversed(range(n))),tuple(range(n,2*n))]+[(i,(i+1)%n,(i+1)%n+n,i+n) for i in range(n)]
+        return Geo(v,f).outward().all_flat()
+    bit=[(.05,.15),(.05,.40),(-.14,.40),(-.14,.345),(-.015,.345),(-.015,.29),(-.17,.29),(-.17,.235),(-.015,.235),(-.015,.15)]
+    W.add(plate(bit,.075).mirrored(),navy)
+    # Thin circuit traces on both sides of the dark notched bit.
+    route=[(.025,.16),(.025,.375),(-.115,.375),(-.115,.365)]
+    branch=[(.025,.265),(-.145,.265)]
+    for z in [-.039,.039]:
+        for points in [route,branch]:
+            for a,b in zip(points,points[1:]):W.add(cyl((-a[0],a[1],z),(-b[0],b[1],z),.0045,sides=4),edge)
+    centre=Vector((0,-1.27,0));gear=Piece('gear');crystal=Piece('crystal')
+    def annulus(piece,outer,inner,depth,material):
+        n=len(outer);v=[]
+        for z in [-depth/2,depth/2]:
+            for radius in [outer,[inner]*n]:
+                v.extend((math.cos(i*TAU/n)*r,math.sin(i*TAU/n)*r,z) for i,r in enumerate(radius))
+        f=[]
+        for i in range(n):
+            j=(i+1)%n
+            f.extend([(i,j,n+j,n+i),(2*n+i,3*n+i,3*n+j,2*n+j),(i,2*n+i,2*n+j,j),(n+i,n+j,3*n+j,3*n+i)])
+        piece.add(Geo(v,f).outward().all_flat(),material)
+    # Eight chunky teeth, each outlined by a cyan raised face perimeter.
+    outline=[.238 if i%3==0 else .278 for i in range(24)]
+    annulus(gear,outline,.181,.09,navy)
+    # A narrow tracing strip follows the complete toothed silhouette, on both faces.
+    for z in [-.047,.047]:
+        n=len(outline);verts=[]
+        for offset in [0,-.008]:
+            verts.extend((math.cos(i*TAU/n)*(r+offset),math.sin(i*TAU/n)*(r+offset),z) for i,r in enumerate(outline))
+        faces=[(i,(i+1)%n,(i+1)%n+n,i+n) for i in range(n)]
+        g=Geo(verts,faces)
+        if z<0:g=g.flipped()
+        gear.add(g,edge)
+    # Silver inner bearing and bright cyan inner ring frame the fixed gem.
+    for outer,inner,depth,material in [(.194,.179,.10,silver),(.178,.166,.104,edge)]:
+        for z in [-depth/2,depth/2]:
+            verts=[(math.cos(i*TAU/16)*r,math.sin(i*TAU/16)*r,z) for r in [outer,inner] for i in range(16)]
+            g=Geo(verts,[(i,(i+1)%16,(i+1)%16+16,i+16) for i in range(16)])
+            gear.add(g if z>0 else g.flipped(),material)
+    gem=lathe([(0,-.068),(.119,-.043),(.151,0),(.119,.043),(0,.068)],4,phase=math.pi/4,flat=True).outward()
+    crystal.add(gem,{0:purple})
+    # Facet cuts read as a square jewel rather than a round orb.
+    crystal.add(lathe([(.117,.044),(.090,.064)],4,phase=math.pi/4,cap_bottom=None,cap_top=0,flat=True),facet)
+    star=[(0,.048),(.009,.009),(.039,0),(.009,-.009),(0,-.048),(-.009,-.009),(-.039,0),(-.009,.009)]
+    for z in [-.071,.071]:
+        g=plate(star,.003).moved((0,0,z));crystal.add(g,glint)
+    W.parts={'gear':(gear,centre),'crystal':(crystal,centre)}
+    W.empties['rod-tip']=centre+Vector((0,-.292,0))
+    W.note='Tech key: lower silver-shaft grip; gear rotates about local Z independently of the fixed pulsing crystal; key-sparkles at the head.'
+    return W
+
+
 WEAPON_BUILDERS = dict(
     sword_wood=build_sword_wood, sword_tusk=build_sword_tusk, sword_crystal=build_sword_crystal,
     gun_pea=build_gun_pea, gun_bubble=build_gun_bubble, gun_spike=build_gun_spike, sword_candy=build_sword_candy,
     gun_ice=build_gun_ice, sword_lava=build_sword_lava, sword_obsidian=build_sword_obsidian,
     hammer_thunder=build_hammer_thunder, scythe_moon=build_scythe_moon, bow_star=build_bow_star,
     staff_fire=build_staff_fire, blaster_rainbow=build_blaster_rainbow, toy_hammer=build_toy_hammer,
-    trident=build_trident, rod=build_rod, rod_gold=build_rod_gold, rod_steady=build_rod_steady)
+    trident=build_trident, rod=build_rod, rod_gold=build_rod_gold, rod_steady=build_rod_steady, rod_key=build_rod_key)
 
 
 def pose_rotation(kind):
@@ -1362,6 +1432,11 @@ def realise_weapon(W):
     node = new_empty(W.id, 0.2)
     obj = triangulate(W.piece.build(sharp=80))
     obj.parent = node
+    meshes=[obj]
+    for name,(piece,pivot) in W.parts.items():
+        part=triangulate(piece.build(sharp=80))
+        part.parent=node;part.matrix_local=pose @ Matrix.Translation(pivot)
+        meshes.append(part)
     empties = {}
     for name, p in W.empties.items():
         e = new_empty(name, 0.06, 'SPHERE')
@@ -1369,7 +1444,7 @@ def realise_weapon(W):
         e.location = pose @ p
         empties[name] = e
     handle = [pose @ W.handle[0], pose @ W.handle[1]]
-    return dict(weapon=W, node=node, meshes=[obj], empties=empties, handle=handle, pose=pose)
+    return dict(weapon=W, node=node, meshes=meshes, empties=empties, handle=handle, pose=pose)
 
 
 # ==================================================================== pets
@@ -1731,14 +1806,14 @@ def seg_distance(p, a, b):
 
 def weapon_stats(e):
     W, obj = e['weapon'], e['meshes'][0]
-    pts = world_points([obj])
+    pts = world_points(e['meshes'])
     b = bounds(pts)
     grip_idx = {i for i, m in enumerate(obj.data.materials) if m in W.grip_mats}
     grip_pts = [obj.matrix_world @ obj.data.vertices[vi].co for poly in obj.data.polygons
                 if poly.material_index in grip_idx for vi in poly.vertices]
     s = dict(kind=W.kind, name=next(w[2] for w in WEAPONS if w[0] == W.id),
              special=next(w[3] for w in WEAPONS if w[0] == W.id),
-             mesh=obj.name, triangles=mesh_tris(obj), materials=[m.name for m in obj.data.materials],
+             mesh=obj.name, triangles=sum(mesh_tris(o) for o in e['meshes']), materials=list(dict.fromkeys(m.name for o in e['meshes'] for m in o.data.materials)),
              bounds=b, bounds_gltf=gltf_bounds(b),
              handle=dict(axis_distance=round(seg_distance(HAND, *e['handle']), 4),
                          surface_distance=round(min((p - HAND).length for p in grip_pts), 4) if grip_pts else None,
@@ -1750,7 +1825,7 @@ def weapon_stats(e):
     if W.kind == 'rod':
         tip = e['empties']['rod-tip'].matrix_world.translation
         s['length'] = round(max((tip - p).length for p in pts), 4)
-    s['emissive'] = sorted(m.name for m in obj.data.materials if material_info(m)['emissive'])
+    s['emissive'] = sorted({m.name for o in e['meshes'] for m in o.data.materials if material_info(m)['emissive']})
     if W.note:
         s['note'] = W.note
     return s
@@ -2191,7 +2266,7 @@ def icon_rotation(kind):
 
 def icon_matrix_weapon(e, centred=False):
     """World matrix for a weapon node that shows it in its icon orientation (hand frame, rotated)."""
-    rot = icon_rotation(e['weapon'].kind)
+    rot = (Matrix.Rotation(RAD(-18),4,'Z') @ Matrix.Rotation(RAD(180),4,'Z') @ Matrix.Rotation(RAD(-90),4,'X')) if e['weapon'].id=='rod_key' else icon_rotation(e['weapon'].kind)
     m = rot @ pose_rotation(e['weapon'].kind).inverted() @ Matrix.Translation(-HAND)
     if centred:
         pts = [m @ v.co for v in e['meshes'][0].data.vertices]
@@ -2276,6 +2351,20 @@ def render_icons(weapons, pets):
         written[key] = dict(bytes=size, quality=q)
     reset_nodes(everything)
     return written
+
+
+def preview_key_rod(entry,everything):
+    """A standing reference view that includes the key bit below the low grip."""
+    show_only(everything,['rod_key'])
+    entry['node'].matrix_world=icon_matrix_weapon(entry)
+    bpy.context.view_layer.update()
+    entry['node'].location.z+=.08-min(p.z for p in world_points(entry['meshes']))
+    _preview_studio((640,800),ground='#BAC2DF')
+    scene=bpy.context.scene;scene.render.engine='CYCLES';scene.cycles.device='CPU'
+    scene.cycles.samples=24;scene.cycles.use_denoising=False
+    icon_camera(entry['meshes'],14,margin=1.16)
+    render(os.path.join(PREVIEWS,'rod_key.webp'))
+    reset_nodes(everything)
 
 
 def contact_sheet(ids, out_path):
@@ -2482,6 +2571,7 @@ def main():
                 report_pets({pid: s})
                 failures += [f'{pid}: {x}' for x in check_pet(pid, s, e)]
         sizes = render_icons(weapons, pets)
+        if opts['render'] and 'rod_key' in weapons:preview_key_rod(weapons['rod_key'],{**weapons,**pets})
         for key, info in sizes.items():
             if info['bytes'] > ICON_LIMIT:
                 failures.append(f"icon {key}.webp is {info['bytes']} bytes (> {ICON_LIMIT})")
