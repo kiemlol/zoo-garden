@@ -1,4 +1,5 @@
 import * as M from './model.ts';
+import {aquariumRefusal} from './aquarium.ts';
 import { HELPER_COST } from './helper-state.ts';
 import { robotResting } from './helper.ts';
 import { autoPlanting } from './auto-plant.ts';
@@ -185,7 +186,10 @@ export const REFUSALS: Record<string, Reason> = {
   moveBed: 'That spot is taken. Choose a free spot.',
   placeDecoration: s => s.planet !== 'home' ? home : 'That spot is taken. Choose a free spot.',
   moveDecoration: s => s.planet !== 'home' ? home : 'That spot is taken. Choose a free spot.',
-  removeDecoration: s => s.planet !== 'home' ? home : 'That decoration is already gone.',
+  removeDecoration: (s,p) => s.planet !== 'home' ? home : s.decorations.find(d=>d.uid===p.uid)?.fish?.length?'Take all fish out before packing this aquarium away.':'That decoration is already gone.',
+  putAquariumFish: (s,p) => {const d=s.decorations.find(d=>d.uid===p.uid);return s.planet!=='home'?home:!d?'This aquarium is no longer here.':aquariumRefusal(d.id,d.fish,id(p))||'You have none of this fish left in your bag.';},
+  takeAquariumFish: s => s.planet!=='home'?home:'That fish is no longer in this aquarium.',
+  showFish: 'Keep a fish in your bag to show it off.',
   buildPen: penReason,
   buyAnimal: animalReason,
   feedAnimal: feedReason,

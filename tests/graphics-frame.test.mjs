@@ -15,7 +15,8 @@ const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8'
 const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
 const declaration = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'frame');
 assert.ok(declaration, 'main.ts must provide the actual frame controller');
-const compiled = ts.transpileModule(declaration.getText(ast), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+const placementFollow=ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='followPlacement');
+const compiled = ts.transpileModule(declaration.getText(ast)+'\n'+placementFollow.getText(ast), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 
 function fixture() {
   const boulders=new BoulderFx({ground:()=>0,explorerAt:()=>null});
@@ -29,14 +30,14 @@ function fixture() {
     M, frameSteps, graphics, previous: 0, frameTime: 0, elapsed: 0, uiElapsed: 0,
     flight: null, arriving: false, started: true, blocked: false, settledAt: -1,actionHandler:null,
     wasAirborne: false, fishGame: null, recastUntil: 0, modal: '',
-    state: M.newGame(), document: { hidden: false }, performance: { now: () => now },
+    state: M.newGame(), placement:null,movePlacement:noop,document: { hidden: false }, performance: { now: () => now },
     innerWidth: 1280, innerHeight: 720, network: { role: null },
     ship: { update: noop }, gestures: { update: noop }, joystick:{update:noop},combatTimers: { advance: noop }, stepFight: noop,
     combat: { update: noop, statuses: {}, airborne: 0, projectiles: [], allies: [], pose: 'idle' },
     inkFx:{update:noop},inkWash:{update:noop},sorcererFx:{update:noop},birdFx:{update:noop},combatView: { update: noop }, fishingView: { update: noop, active: false }, rodTip: {}, skillFx: { disguises: new DisguiseFx({ground:()=>0,explorerAt:()=>null}), boulders, update: noop, gazeAngle: () => null },
     uiBlocked: () => context.blocked,
     world: {
-      time: 0, player: { position: { y: 0 } }, position: { x: 0, z: 0 },
+      time: 0, player: { position: { y: 0 } }, position: { x: 0, z: 0 },facing:0,stickAngle:()=>null,
       fx: { hitstop: 0, updateText: noop }, update: noop, syncCrops: noop,
       applyGraphics(profile, ratio) {
         events.push('resize'); painted = false; changes.push({ profile, ratio });
@@ -106,3 +107,7 @@ test('a boulder pauses with solo combat and resumes on the same simulation clock
 });
 
 test('persistent disguise fields pause with solo combat and reset',()=>{const f=fixture(),fx=f.ctx.skillFx.disguises;fx.play({kind:'cast',look:'heal',x:0,z:0,radius:4,color:'#ffffff',duration:1});f.run(60,.2);f.ctx.blocked=true;f.run(60,2);assert.equal(fx.busy,true);f.ctx.blocked=false;f.run(60,1);assert.equal(fx.busy,false);});
+test('placement follows 2.2 m ahead, stays pinned after a precision tap and resumes on direct movement input',()=>{
+ const f=fixture();f.ctx.placement={follow:true};let ghost;f.ctx.movePlacement=(x,z)=>{ghost={x,z};};f.ctx.world.position={x:1,z:2};f.ctx.world.facing=Math.PI/2;f.run(60,.1);assert.ok(Math.abs(ghost.x-3.2)<1e-9&&Math.abs(ghost.z-2)<1e-9);
+ f.ctx.placement.follow=false;f.ctx.world.position.x=3;f.run(60,.1);assert.ok(Math.abs(ghost.x-3.2)<1e-9,'manual precision point stays put during a ground path');f.ctx.world.stickAngle=()=>0;f.run(60,.1);assert.equal(f.ctx.placement.follow,true);assert.ok(Math.abs(ghost.x-5.2)<1e-9);
+});

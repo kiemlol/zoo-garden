@@ -177,6 +177,8 @@ export async function createGameServer(options = {}) {
       for(const visitor of peers.values())if(visitor.visit===account.id)send(visitor.socket,{type:'home',home:publicHome(account)});
     }
     const result=committed.reply.result;
+    if(intent.type==='showFish'){const peer=peers.get(intent.actorId),room=peer&&rooms.get(peer.room);if(room&&result?.until>Date.now()){peer.pose={...peer.pose,visual:{...peer.pose.visual,fishShow:result}};broadcastPose(room,peer);}}
+
     if(['rest','reset','die','returnHome','travel'].includes(intent.type)||result?.died){const peer=peers.get(intent.actorId);if(peer)combatAuthority.resetPeer?.(peer,{newLife:['reset','die'].includes(intent.type)||result?.died===true,reason:intent.type});}
     if(intent.type==='claimGift'&&result?.kind==='bomb'){const peer=peers.get(intent.actorId);if(peer)combatAuthority.bomb(peer,result.radius,result.damageMultiplier);}
     if(result?.died){const peer=peers.get(intent.actorId);if(peer){respawn(peer);send(peer.socket,{type:'healthResult',delta:-result.damage,died:true});}}
@@ -245,7 +247,7 @@ export async function createGameServer(options = {}) {
     const room = existing || { id: key, members: new Set(), host: null, enemies: [], environment:null, requests:new Map(), epoch: 0, killed: new Set(), contributors: new Map(), lastSnapshot: 0 };
     rooms.set(key, room); room.members.add(peer.account.id);
     if (peer.planet && peer.planet !== 'home' || peer.visit) peer.tripAt = Date.now(); // leaving a trip: delivery.ts catch-ups go to the chest
-    peer.planet = planet; peer.room = key; peer.visit = visitId; peer.pose = { ...peer.pose, x: 0, z: planet === 'home' ? 0 : 9, ...(peer.pose.visual?{visual:{...peer.pose.visual,carriage:null,fishing:null},...(peer.pose.visual.carriage?{y:0,moving:false}:{})}:{}) }; arrived(peer);
+    peer.planet = planet; peer.room = key; peer.visit = visitId; peer.pose = { ...peer.pose, x: 0, z: planet === 'home' ? 0 : 9, ...(peer.pose.visual?{visual:{...peer.pose.visual,carriage:null,fishing:null,fishShow:null},...(peer.pose.visual.carriage?{y:0,moving:false}:{})}:{}) }; arrived(peer);
     elect(room);
     send(peer.socket, { type: 'joined', id: peer.account.id, room: key, host: room.host, planet, visiting:visitId, players: roster(room), enemies: room.enemies, environment:room.environment, epoch: room.epoch });
     broadcast(room, { type: 'enter', player: presence(peer) }, peer.account.id);
@@ -442,7 +444,7 @@ export async function createGameServer(options = {}) {
           if(fishing?.bobber&&!waterNodes(peer.planet).some(w=>Math.hypot(fishing.bobber.x-w.x,fishing.bobber.z-w.z)<=w.r+3.05&&Math.abs(fishing.bobber.y)<8))delete fishing.bobber;
           peer.poseAt = now; if (peer.planet !== 'home' || peer.visit) peer.tripAt = now; const y = number(message.y, 0, -30, 50), dog = !peer.visit && dogWorn(account.profile.gear) && account.profile.farm?.animals?.find(a => a.kind === 'dog'); // only a dog worn as a pet comes along (pet-slots.ts)
           // A guard dog follows its explorer only away from the safe village (guard-dog.ts); its breed is all others need.
-          peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,hidden:combat.portalHidden||combat.inkDashing,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0,carriage,fishing},block:combat.statuses.block>0,decoys:combatAuthority.decoys(peer) };
+          peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,hidden:combat.portalHidden||combat.inkDashing,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0,carriage,fishing,fishShow:!carriage&&!fishing&&account.profile.hp>0&&account.fishShow?.until>now&&account.profile.bag[account.fishShow.id]>0?account.fishShow:null},block:combat.statuses.block>0,decoys:combatAuthority.decoys(peer) };
           broadcastPose(room, peer);
         } else if (message.type === 'dm') {
           if(!requestId)throw failure(400,'This message needs a valid request ID.');

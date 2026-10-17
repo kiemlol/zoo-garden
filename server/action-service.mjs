@@ -23,7 +23,7 @@ export const commandHash=value=>createHash('sha256').update(JSON.stringify(canon
 const validId=value=>typeof value==='string'&&/^[a-zA-Z0-9:_-]{1,100}$/.test(value)&&!['constructor','prototype','__proto__'].includes(value);
 const point=value=>value&&Number.isFinite(value.x)&&Number.isFinite(value.z);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
-const farmActions=new Set(['plant','plantAll','harvest','harvestAll','fertilize','expandGarden','buyBedKit','storeBed','upgradeBed','moveBed','placeDecoration','moveDecoration','removeDecoration','buildPen','buyAnimal','feedAnimal','feedAll','collectProducts','expandPen','buildSpeciesPen','buyHelper','setHelperPaused','setHelperSeed','setAutoPlant','clearBedChoices','helperHarvest','helperPlant','rest','houseUse','cook','cookDish','cookSellProduce','friendsArrive','callHelper','callFriend','friendOutfit','welcomeStart','setFriendPaused','setFriendAutoFeed','friendWork','friendsCatchUp','helperCatchUp','giveFriendGear','takeFriendGear','friendLook','ackStored']);
+const farmActions=new Set(['plant','plantAll','harvest','harvestAll','fertilize','expandGarden','buyBedKit','storeBed','upgradeBed','moveBed','placeDecoration','moveDecoration','removeDecoration','putAquariumFish','takeAquariumFish','buildPen','buyAnimal','feedAnimal','feedAll','collectProducts','expandPen','buildSpeciesPen','buyHelper','setHelperPaused','setHelperSeed','setAutoPlant','clearBedChoices','helperHarvest','helperPlant','rest','houseUse','cook','cookDish','cookSellProduce','friendsArrive','callHelper','callFriend','friendOutfit','welcomeStart','setFriendPaused','setFriendAutoFeed','friendWork','friendsCatchUp','helperCatchUp','giveFriendGear','takeFriendGear','friendLook','ackStored']);
 const farmHelperActions=new Set(['buyFarmHelper','setFarmHelperPaused','setFarmHelperAutoFeed','farmHelperCollect','farmHelperFeed','farmHelperCatchUp','upgradeFarmRestock','setFarmRestock','farmHelperRestock']);
 export function waterNodes(planet){
   return huntingPonds(planet).map(pond=>({x:pond.x,z:pond.z,r:pond.rx,water:pond.waterId}));
@@ -231,7 +231,10 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         // Workers' harvest goes to the chest while the server sees the explorer outside the home circle (delivery.ts).
         // The server's own pose decides; without a game socket the explorer is not away (a bare HTTP client cannot choose the chest).
         if((WORK_ACTIONS.has(data.type)||CATCH_UP_ACTIONS.has(data.type))&&p&&typeof p==='object')p.away=peer&&!peer.visit?explorerAway(peer.planet,peer.pose.x,peer.pose.z)||CATCH_UP_ACTIONS.has(data.type)&&now-(peer.tripAt||0)<120000:false;
+        if(['putAquariumFish','takeAquariumFish'].includes(data.type)){const tank=state.decorations.find(d=>d.uid===p.uid);requireNear(peer,tank);}
+        if(data.type==='showFish'&&(!peer?.active||peer.visit||account.journeyPaid||state.hp<=0||peer.pose.visual?.carriage||peer.pose.visual?.fishing))fail(409,'Stand on the ground to show your fish.');
         result=applyGameAction(state,intent,{now,random});
+        if(data.type==='showFish')account.fishShow=result;
         if(data.type==='rest'||data.type==='houseUse')account.healthBoundaryAt=now;
         if(data.type==='reset'){account.adventureEpoch=(account.adventureEpoch||0)+1;account.lifeEpoch=(account.lifeEpoch||0)+1;clearJourney(account);for(const key of ['resourceHits','drops','mysteryReadyAt','mysteryCaller'])delete account[key];}
         if(data.type==='die'){account.lifeEpoch=(account.lifeEpoch||0)+1;clearJourney(account);}

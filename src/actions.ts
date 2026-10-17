@@ -101,6 +101,9 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
     case 'placeDecoration': result = Game.placeDecoration(state, id(), number(p.x), number(p.z), p.rotation === undefined ? 0 : number(p.rotation)); break;
     case 'moveDecoration': result = Game.moveDecoration(state, string(p.uid), number(p.x), number(p.z), p.rotation === undefined ? undefined : number(p.rotation)); break;
     case 'removeDecoration': result = Game.removeDecoration(state, string(p.uid)); break;
+    case 'putAquariumFish': result=Game.putAquariumFish(state,string(p.uid),id(),random);break;
+    case 'takeAquariumFish': result=Game.takeAquariumFish(state,string(p.uid),index());break;
+    case 'showFish': result=Game.showFish(state,id(),now,random);break;
     case 'buildPen': result = Game.buildPen(state); break;
     case 'buyAnimal': result = Game.buyAnimal(state, kind() as Game.AnimalKind, now); break;
     case 'feedAnimal': result = Game.feedAnimal(state, integer(p.uid), now, p.id === undefined ? undefined : id()); break;

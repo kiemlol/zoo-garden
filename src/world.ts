@@ -1,3 +1,7 @@
+import {AquariumView} from './aquarium-view.ts';
+import {aquarium,type FishShow} from './aquarium.ts';
+import {drawFishShow} from './fish-show-view.ts';
+import {fishKit} from './assets.ts';
 import {INK,inInkDomain,inkDamageFactor,inkBoundary,type InkDomain} from './ink-skills.ts';
 import {inBlizzard,blizzardDamageFactor,blizzardDashContact,isCreatureDash,interruptBlizzardDash,type BlizzardField} from './blizzard.ts';
 import {fitBirdDisguise} from './bird-disguise-fit.ts';
@@ -92,7 +96,7 @@ export interface Enemy { windupTotal?:number;enraged?:boolean;lastHitAt?:number;
 /** A boss attacks faster as it weakens, like the reference (bundle @837714): ×0.7 below half health, ×0.6 once enraged.
  * Applies to its skills and its basic attacks and charges alike. */
 export const bossCooldownScale=(e:{boss:boolean;hp:number;maxHp:number;enraged?:boolean})=>e.boss?(e.hp<e.maxHp*.5?.7:1)*(e.enraged?.6:1):1;
-export interface AvatarVisual {hidden?:boolean;size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean;carriage?:CarriagePose|null;fishing?:FishingPose|null}
+export interface AvatarVisual {hidden?:boolean;size:number;stealth:boolean;shield:boolean;flight:number;bat:boolean;carriage?:CarriagePose|null;fishing?:FishingPose|null;fishShow?:FishShow|null}
 export interface Enemy {wildCooldown?:number;titanAttacks?:TitanAttack[];titanLift?:number}
 /** An enemy run by its own module (colossus.ts): no generic AI or drawing here; `incoming` may scale a blow before it lands. */
 export interface Enemy {driver?:{incoming(e:Enemy,amount:number,hazard:boolean):number}}
@@ -1008,13 +1012,27 @@ export class World {
     }
     return null;
   }
+  private aquariumViews:AquariumView[]=[];
+  private aquariumArtPending=false;
+  private aquariumFrustum=new T.Frustum();
+  private aquariumMatrix=new T.Matrix4();
+  private aquariumSphere=new T.Sphere(new T.Vector3(),3);
+  fishShow:FishShow|null=null;
+  private updateAquariums(){
+    if(!this.aquariumViews?.length||this.interior)return;
+    this.camera.updateMatrixWorld();this.aquariumMatrix.multiplyMatrices(this.camera.projectionMatrix,this.camera.matrixWorldInverse);this.aquariumFrustum.setFromProjectionMatrix(this.aquariumMatrix);
+    const time=performance.now()/1000;
+    for(const view of this.aquariumViews){this.aquariumSphere.center.copy(view.root.position);this.aquariumSphere.center.y+=1;if(view.root.position.distanceToSquared(this.position)<32*32&&this.aquariumFrustum.intersectsSphere(this.aquariumSphere))view.update(time);}
+  }
   syncDecorations(){
+    this.aquariumViews=[];
+    if(!fishKit.ready&&!this.aquariumArtPending&&this.state.decorations?.some(d=>d.fish?.length)){this.aquariumArtPending=true;void fishKit.load().then(()=>{this.aquariumArtPending=false;if(fishKit.ready&&this.planet==='home')this.syncDecorations();});}
     if(this.state.decorations?.some(d=>d.id==='deco_ghost_carriage')&&!festivalKit.requested)void festivalKit.load().then(()=>{if(festivalKit.ready&&this.planet==='home')this.syncDecorations();});
     for(const e of this.entities.filter(e=>e.kind==='decoration')){this.root.remove(e.mesh);this.disposeTree(e.mesh);}
     this.entities=this.entities.filter(e=>e.kind!=='decoration');this.obstacles=this.obstacles.filter(o=>!o.tag?.startsWith('decor:'));
     if(this.planet!=='home'){this.carriage?.leave();return;}
     for(const d of this.state.decorations??[]){const item=M.ITEMS[d.id];if(!item)continue;const g=buildDecoration(d.id);
-      g.rotation.y=d.rotation;const e=this.addEntity('decoration',item.name,item.icon??'🏡',g,d.x,d.z,item.collider??.9);e.id=`home:decoration:${d.uid}`;g.userData.decorationUid=d.uid;this.obstacles.push({x:d.x,z:d.z,r:item.collider??.65,tag:'decor:'+d.uid});
+      g.rotation.y=d.rotation;const e=this.addEntity('decoration',item.name,item.icon??'🏡',g,d.x,d.z,item.collider??.9);e.id=`home:decoration:${d.uid}`;g.userData.decorationUid=d.uid;if(aquarium(d.id)&&d.fish?.length)this.aquariumViews.push(new AquariumView(g,d.id,d.fish));this.obstacles.push({x:d.x,z:d.z,r:item.collider??.65,tag:'decor:'+d.uid});
     }
     this.carriage?.rebind();
   }
@@ -1079,6 +1097,7 @@ export class World {
       if(passenger){if(body)body.position.y=0;g.blend=0;drawCarriagePassenger(m,passenger);}
       else if(u.wasPassenger){m.rotation.x=m.rotation.z=0;for(const name of ['leg-left','leg-right','arm-left','arm-right','head'])part(m,name)?.rotation.set(0,0,0);m.scale.setScalar(HERO_SCALE*Math.max(.2,Math.min(4,remote.pose.visual?.size??1)));}
       u.wasPassenger=!!passenger;
+      drawFishShow(m,!fishing&&!passenger?remote.pose.visual?.fishShow:null,this.time);
       animateKeyRod(m,this.keyRodTime??this.time);drawRemoteKeyBobber(m,fishing,this.keyRodTime??this.time);
       // Their pet waits at their own pen while they are in the safe village (pet-pen.ts): it is drawn beside them only away from it.
       const pets=(u.pets??=m.children.filter(o=>o.name==='remote-pet')) as T.Object3D[],follows=pets.length>0&&petFollows(remote.pose.planet??this.planet,remote.pose);for(const pet of pets)pet.visible=follows;
@@ -1093,7 +1112,7 @@ export class World {
       {const air=indoor||!this.environment?0:poseAir(ty,terrainHeight(this.environment.layout,current),current.visual?.flight?1.7:0),now=this.time??0;if(air>0){u.airSince??=now;u.air=now-u.airSince<=MAX_AIR_SECONDS?air:0;}else{u.airSince=undefined;u.air=0;}}
       if(!u.placed||Math.hypot(p.x-current.x,p.z-current.z)>8||Math.abs(p.y-ty)>3){p.set(current.x,ty,current.z);remote.mesh.rotation.y=u.target.f;u.placed=true;}}
     this.applyAvatarVisual(remote.mesh,current.visual);remote.mesh.scale.setScalar(current.visual?.carriage?.scale??HERO_SCALE*Math.max(.2,Math.min(4,current.visual?.size??1)));if(current.visual?.carriage)drawCarriagePassenger(remote.mesh,current.visual.carriage);remote.mesh.visible=!current.visual?.hidden&&(!current.planet||current.planet===this.planet)&&indoor===!!this.interior;}
-  visualSnapshot():AvatarVisual{return {hidden:this.playerHidden,size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat,carriage:this.carriage?.snapshot()??null,fishing:this.fishing&&this.fishing!=='idle'?{phase:this.fishing,cast:this.castT,tension:this.fishTension||0,rod:this.state.gear.weapon??'rod',...(isKeyRod(this.state.gear.weapon)?{bobber:this.fishingBobber?.()}:{} )}:null};}
+  visualSnapshot():AvatarVisual{return {fishShow:this.fishShow&&this.fishShow.until>Date.now()?this.fishShow:null,hidden:this.playerHidden,size:this.playerSizeScale>1?this.playerSizeScale:M.activeStats(this.state).sizeScale,stealth:this.playerStealth,shield:this.playerShield,flight:this.playerFlying?1.7:0,bat:this.playerBat,carriage:this.carriage?.snapshot()??null,fishing:this.fishing&&this.fishing!=='idle'?{phase:this.fishing,cast:this.castT,tension:this.fishTension||0,rod:this.state.gear.weapon??'rod',...(isKeyRod(this.state.gear.weapon)?{bobber:this.fishingBobber?.()}:{} )}:null};}
   private applyAvatarVisual(mesh:T.Group,visual?:Partial<AvatarVisual>){
     // Nothing to change until stealth first fades the explorer: a new avatar starts fully opaque, so it is never copied for opacity 1
     // (the copy used to replace the flash materials and the ink outlines' push-out shader, which Material.clone does not carry).
@@ -1979,7 +1998,7 @@ export class World {
     this.updateScenery(dt);this.updateEyeGlints();this.updateHeroLight();
     this.followSun();this.updateSky();
     for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.life-=dt;p.velocity.y-=dt*7;p.mesh.position.addScaledVector(p.velocity,dt);p.mesh.scale.setScalar(Math.max(0,p.life/p.max));if(p.life<=0){this.scene.remove(p.mesh);p.mesh.geometry.dispose();this.particles.splice(i,1);}}
-    this.animateCrops(dt);
+    this.animateCrops(dt);this.updateAquariums();
     if(this.farmView&&this.planet==='home'){this.farmView.setSpeciesPens(this.state.farm?.speciesPens);if((this.penKeepClock=(this.penKeepClock??0)-dt)<=0){this.penKeepClock=1;this.roamKeep=this.penKeepOut();}this.farmView.update(this.state.farm?.animals??[],dt,this.time,Date.now(),this.position);}
     (this.guardDogs??=new GuardDogs()).update(this,dt);
     this.updateTarget(dt);
@@ -2124,6 +2143,8 @@ export class World {
     const flash=this.hurtT>0?'hurt':this.invulnerable&&Math.sin(this.time*30)>0?'blink':'';
     for(const m of this.playerMaterials??[])if(m.userData.flash!==flash){m.userData.flash=flash;m.userData.baseEmissive??=m.emissive.getHex();m.userData.baseGlow??=m.emissiveIntensity;
       if(flash==='hurt'){m.emissive.setRGB(...HURT_TINT);m.emissiveIntensity=1;}else if(flash==='blink'){m.emissive.setRGB(.4,.4,.4);m.emissiveIntensity=1;}else{m.emissive.setHex(m.userData.baseEmissive);m.emissiveIntensity=m.userData.baseGlow??1;}}
+    if(this.fishShow&&(this.state.hp<=0||air||this.pose||this.punchT>0||this.fishing&&this.fishing!=='idle'||this.carriage?.active))this.fishShow=null;
+    drawFishShow(p,this.fishShow,this.time);
     animateKeyRod(p,this.keyRodTime??this.time);
   }
 

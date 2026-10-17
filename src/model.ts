@@ -1,4 +1,5 @@
 import { ITEMS, CROPS, PLANETS, RECIPES, DISGUISES, FISH, FISH_WEIGHTS, LOOT_TABLES, UPGRADES, STARTING_PLOTS, MAX_EXTRA_PLOTS, LEGACY_MAX_PLOTS, MAX_DECORATIONS, STORY_STEPS, canonicalItem, type ItemId, type Inventory, type GearSlot, type CropId, type PlanetId, type BuffKey, type BuffDef, type WeaponDef } from './content.ts';
+import {aquarium,aquariumRefusal,fishSize,readAquariumFish,isDisplayFish,FISH_SHOW_SECONDS} from './aquarium.ts';
 import { createProgression, normalizeProgression, recordEvent, progressEntries, claimProgress, type ProgressionState } from './progression.ts';
 import { parseHelper, type HelperState } from './helper-state.ts';
 import { parseFriends, parseBosses, noteBossDefeat, type Friend } from './friends-state.ts';
@@ -61,6 +62,7 @@ export interface Decoration {
     x: number;
     z: number;
     rotation: number;
+    fish?: import('./aquarium.ts').AquariumFish[];
 }
 export interface WorldRewards {
     mineReadyAt: Partial<Record<PlanetId, number[]>>;
@@ -536,7 +538,7 @@ export function ripeNearby(s: SaveState, index: number, now = Date.now(), reach 
 /** Whether a new bed may go here: clear of the cottage, pen, trails and fence (bedClear) and of other beds and decorations. */
 export function bedSpotOk(s: SaveState, x: number, z: number, rotation = 0) { return s.planet === 'home' && bedClear(x, z, rotation) && bedRoom(s, x, z, rotation); }
 /** Whether a decoration may stand here (clear of beds, other decorations and the animal pen, inside the fence); obstacles are the world's. */
-export function decorSpotOk(s: SaveState, x: number, z: number) { return s.planet === 'home' && placementFree(s, x, z, 1.9) && clearOfPen(x, z, .3, .2) && !inYard(x, z, .5); }
+export function decorSpotOk(s: SaveState, x: number, z: number, id='', omit?:string) { const radius=aquarium(id)?Math.max(1.9,(ITEMS[id].collider??.8)*2):1.9;return s.planet === 'home' && Math.hypot(x,z)+Math.max(0,radius/2-.95)<=16.6 && placementFree(s, x, z, radius,omit) && clearOfPen(x, z, Math.max(.3,radius/2-.65), .2) && !inYard(x, z, Math.max(.5,radius/2-.45)); }
 /**
  * "Expand garden" (reference buyPlot): at the cap nothing happens; with a garden bed kit already in the bag the player
  * just places it; otherwise 60 + 20 x extra beds of energy buys one. The kit is spent only when the bed is placed.
@@ -722,13 +724,22 @@ export function grantMysteryCatch(s: SaveState, raw: ItemId, size?: number, supe
     return true;
 }
 export function placeDecoration(s: SaveState, raw: ItemId, x: number, z: number, rotation = 0) { const id = canonicalItem(raw), item = Object.hasOwn(ITEMS, id) ? ITEMS[id] : undefined; if (item?.type === 'placeable')
-    return expandGarden(s, x, z, rotation); if (s.planet !== 'home' || item?.type !== 'decor' || s.decorations.length >= MAX_DECORATIONS || !Number.isFinite(rotation) || !placementFree(s, x, z, 1.9) || !removeItem(s.bag, id))
-    return false; s.decorations.push({ uid: `decor-${s.nextDecorationId++}`, id, x, z, rotation }); recordEvent(s, 'decorate'); return true; }
+    return expandGarden(s, x, z, rotation); if (s.planet !== 'home' || item?.type !== 'decor' || s.decorations.length >= MAX_DECORATIONS || !Number.isFinite(rotation) || !placementFree(s, x, z, 1.9) || aquarium(id)&&!decorSpotOk(s,x,z,id) || !removeItem(s.bag, id))
+    return false;s.decorations.push({ uid: `decor-${s.nextDecorationId++}`, id, x, z, rotation }); recordEvent(s, 'decorate'); return true; }
 export function moveDecoration(s: SaveState, uid: string, x: number, z: number, rotation?: number) { const d = s.decorations.find(d => d.uid === uid); if (!d || s.planet !== 'home' || !placementFree(s, x, z, 1.9, uid) || rotation !== undefined && !Number.isFinite(rotation))
-    return false; d.x = x; d.z = z; if (rotation !== undefined)
+    return false; if(aquarium(d.id)&&!decorSpotOk(s,x,z,d.id,uid))return false;d.x = x; d.z = z; if (rotation !== undefined)
     d.rotation = rotation; return true; }
 export function removeDecoration(s: SaveState, uid: string) { const index = s.decorations.findIndex(d => d.uid === uid); if (index < 0 || s.planet !== 'home')
-    return false; if (!addItem(s, s.decorations[index].id)) return false; s.decorations.splice(index, 1); return true; }
+    return false; if(s.decorations[index].fish?.length)return false;if (!addItem(s, s.decorations[index].id)) return false; s.decorations.splice(index, 1); return true; }
+export function putAquariumFish(s:SaveState,uid:string,id:string,random:()=>number=Math.random){
+ const d=s.decorations.find(d=>d.uid===uid);if(s.planet!=='home'||!d||aquariumRefusal(d.id,d.fish,id)||!((s.bag[id]??0)>0))return false;
+ const size=fishSize(id,s.fishRecords,random);if(!removeItem(s.bag,id))return false;(d.fish??=[]).push({id,size});return true;
+}
+export function takeAquariumFish(s:SaveState,uid:string,index:number){
+ const d=s.decorations.find(d=>d.uid===uid),fish=d?.fish?.[index];if(s.planet!=='home'||!d||!aquarium(d.id)||!Number.isSafeInteger(index)||index<0||!fish||!addItem(s,fish.id))return false;
+ d.fish!.splice(index,1);return true;
+}
+export function showFish(s:SaveState,id:string,now=Date.now(),random:()=>number=Math.random){return s.hp>0&&isDisplayFish(id)&&(s.bag[id]??0)>0?{id,size:fishSize(id,s.fishRecords,random),until:now+FISH_SHOW_SECONDS*1000}:false;}
 export const MINE_REGROW_MS = 20000;
 export function mineAvailable(s: SaveState, planet: PlanetId, index: number, now = Date.now()) { return Object.hasOwn(PLANETS, planet) && planet !== 'home' && Number.isInteger(index) && index >= 0 && index < 2 && Number.isFinite(now) && now >= 0 && now <= Number.MAX_SAFE_INTEGER - MINE_REGROW_MS && now >= (s.worldRewards.mineReadyAt[planet]?.[index] || 0); }
 export function claimMine(s: SaveState, index: number, now = Date.now()) { if (!mineAvailable(s, s.planet, index, now))
@@ -962,7 +973,7 @@ export function parseSave(raw: string | null): SaveState | null {
                     continue;
                 const id = canonicalItem(d.id);
                 if (ITEMS[id]?.type === 'decor' && Number.isFinite(d.x) && Number.isFinite(d.z) && Math.hypot(d.x, d.z) <= 16.6)
-                    s.decorations.push({ uid: typeof d.uid === 'string' ? d.uid.slice(0, 80) : `decor-${s.nextDecorationId++}`, id, x: d.x, z: d.z, rotation: Number.isFinite(d.rotation) ? d.rotation : 0 });
+                    s.decorations.push({ uid: typeof d.uid === 'string' ? d.uid.slice(0, 80) : `decor-${s.nextDecorationId++}`, id, x: d.x, z: d.z, rotation: Number.isFinite(d.rotation) ? d.rotation : 0,...(readAquariumFish(id,d.fish)!==undefined?{fish:readAquariumFish(id,d.fish)}:{}) });
             }
         // Layout 4 (24-bed cap): older saves are trimmed to 24 and their beds moved onto the 6 x 4 grid (shrinkGarden).
         const bedKey = (i: number) => { const p = bedPosition(s, i); return `${p.x.toFixed(2)},${p.z.toFixed(2)}`; }, oldKeys = new Map(s.plots.map((p, i) => [p, bedKey(i)]));

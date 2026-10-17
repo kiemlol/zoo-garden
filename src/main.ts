@@ -1,3 +1,5 @@
+import {aquarium,type FishShow} from './aquarium.ts';
+import {aquariumPanel} from './aquarium-ui.ts';
 import {inkDomainRadius,type InkDomain} from './ink-skills.ts';
 import {InkSkillView} from './ink-skill-view.ts';
 import {InkDomainView} from './ink-domain-view.ts';
@@ -201,7 +203,7 @@ let fishingEpoch=0;
 let lastCast:{id:string;x:number;z:number}|null=null;
 let fishingWater='home';
 let wildArmed:{kind:string;until:number}|null=null,shopTab='Weapons',journalTab:ProgressKind='story',craftStation:'craft'|'forge'='craft',craftTab='All';
-let placement:{id:string;rotation:number;x:number;z:number;ok:boolean}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
+let placement:{id:string;rotation:number;x:number;z:number;ok:boolean;follow:boolean}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
 let persistence:((state:M.SaveState)=>void)|null=null,network:NetworkHooks={role:null};
 let actionHandler:((intent:GameIntent)=>Promise<ActionReply>)|null=null;
 /** The Delvers' Vault (dungeon.ts), set up at the end of this file: its creatures are fought locally, also online. */
@@ -315,7 +317,7 @@ const combatHud=new CombatHud($('#world-labels'),(x,y,z)=>world.screen(x,y,z));l
 const minimap=new Minimap($<HTMLCanvasElement>('#minimap'),$('#map-caption'),()=>started?{planet:world.planet,layout:world.environment.layout,position:world.position,facing:world.facing,entities:world.entities,enemies:world.enemies,
   penBuilt:M.penBuilt(world.state),ready:[...world.entities.filter(e=>e.kind==='plot'&&!!world.state.plots[e.index!]?.crop&&M.cropProgress(world.state.plots[e.index!])>=1),...(world.planet==='home'?M.readyAnimals(world.state).flatMap(a=>world.farmView?.positionOf(a.uid)??[]):[])],remotes:[...world.remotePlayers.values()].filter(r=>r.mesh.visible).map(r=>r.mesh.position)}:null);
 const movement = new MovementControls(world.keys);
-const joystick=mountJoystick($('#hud'),()=>started&&!uiBlocked()&&!placement&&!flight,direction=>{world.joystickInput=direction;});
+const joystick=mountJoystick($('#hud'),()=>started&&!uiBlocked()&&!flight,direction=>{world.joystickInput=direction;});
 const combatView=new CombatView(world.scene);
 const remoteBlizzards=new Map<string,{x:number;z:number;radius:number;until:number}>();
 const inkFx=new InkSkillView(world.scene,(x,z)=>world.interior?0:Math.max(0,terrainHeight(world.environment.layout,{x,z})),owner=>owner==='self'?world.player:world.remotePlayers?.get(owner)?.mesh??null,true,()=>world.enemies);
@@ -353,7 +355,7 @@ const combat=new CombatSimulation({
 world.inkDomains=()=>{const own=combat.inkDomain,fields:InkDomain[]=own?[own]:[];for(const [owner,f]of remoteInkDomains){if(f.until<=world.time)remoteInkDomains.delete(owner);else fields.push({...f,radius:inkDomainRadius(world.time-f.started,f.radius)});}return fields;};
 world.blizzardFields=()=>{const own=combat.blizzardField,fields:{x:number;z:number;radius:number}[]=own?[own]:[];for(const [owner,f]of remoteBlizzards){if(f.until<=world.time)remoteBlizzards.delete(owner);else fields.push(f);}return fields;};
 combatHud.isMarked=id=>combat.marked.has(id);
-const gestures=new GroundGestures({tap:(x,y)=>{if(placement)placeAt(x,y);else world.pointer(x,y);},walk:(x,y)=>{if(!placement)world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
+const gestures=new GroundGestures({tap:(x,y)=>{if(placement){placeAt(x,y);world.steer(x,y);}else world.pointer(x,y);},walk:(x,y)=>{if(placement)placement.follow=true;world.steer(x,y);},zoom:ratio=>{world.zoom=clampZoom(world.zoom*ratio,'pinch');world.resize();},stop:()=>{world.destination=null;world.route=[];world.selected=null;}});
 // Swings become additive slash trails and area skills become expanding rings with sparks.
 function showEffect(effect:CombatEffect,owner='self'){
   if(owner!=='self'&&effect.look==='ink-domain')remoteInkDomains.set(owner,{x:effect.x,z:effect.z,radius:effect.radius,started:world.time,until:world.time+(effect.duration??10)});
@@ -735,7 +737,7 @@ function inventory() {
   const item=selectedItem?M.ITEMS[selectedItem]:null,stats=M.activeStats(state),slot=item?.slot;
   // Two pet slots (pet-slots.ts): a pet counts as worn when every copy of it is in a slot; with both slots taken the player picks which pet stays home.
   const worn=!!selectedItem&&(slot==='pet'?M.wornCount(state.gear,selectedItem)>0&&M.looseQuantity(state,selectedItem)<1:!!slot&&state.gear[slot]===selectedItem),petSlot=slot==='pet'&&selectedItem?M.slotWearing(state.gear,selectedItem):null,petSwap=slot==='pet'&&!worn&&!M.freePetSlot(state.gear)&&M.gearLevel(selectedItem!)<=state.level;
-  const detail=item?`<div class="item-detail"><span class="item-hero">${art(selectedItem!,item.icon)}</span><div><h3>${esc(t(item.name))}${M.levelTag(state,selectedItem!)}</h3>${M.powerChip(selectedItem!,state)}${M.gearProgressHtml(state,selectedItem!)}<p>${esc(item.desc)}</p><div class="button-row">${slot&&autoHeld(selectedItem!)?'<span class="chip">Used automatically near ponds</span>':petSwap?M.PET_SLOTS.map(key=>`<button class="primary" data-action="equip" data-item="${selectedItem}" data-slot="${key}">${esc(t('Replace {name}',{name:t(M.ITEMS[state.gear[key]!].name)}))}</button>`).join(''):slot?`<button class="primary" data-action="equip" data-item="${selectedItem}" ${worn||M.gearLevel(selectedItem!)>state.level?'disabled':''}>${worn?'Equipped':'Equip'}</button>${petSlot?`<button class="soft-button" data-action="unequip" data-slot="${petSlot}">${esc(t('Leave at home'))}</button>`:''}${M.gearLevel(selectedItem!)>state.level?`<span class="chip chip-gate">🔒 ${esc(t('Needs level {level}',{level:M.gearLevel(selectedItem!)}))}</span>`:''}`:''}${slot&&!worn&&!M.isPenned(selectedItem!)?tryOnButton(selectedItem!):''}${item.heal||item.buff?`<button class="primary" data-action="eat" data-item="${selectedItem}">Use${item.heal?` · +${item.heal} HP`:''}</button>`:''}${item.weapon&&item.weapon.kind!=='rod'?`<button class="soft-button" data-action="forge-menu" data-item="${selectedItem}">🔨 Forge +${M.forgeLevel(state,selectedItem!)}</button>`:''}${M.looseQuantity(state,selectedItem!)>0&&!M.isPenned(selectedItem!)?`<button class="soft-button" data-action="drop-item" data-item="${selectedItem}">Drop one</button>`:''}${item.type==='decor'||item.type==='placeable'?`<button class="primary" data-action="place-decor" data-item="${selectedItem}">Place</button>`:''}</div></div></div>`:'';
+  const detail=item?`<div class="item-detail"><span class="item-hero">${art(selectedItem!,item.icon)}</span><div><h3>${esc(t(item.name))}${M.levelTag(state,selectedItem!)}</h3>${M.powerChip(selectedItem!,state)}${M.gearProgressHtml(state,selectedItem!)}<p>${esc(item.desc)}</p><div class="button-row">${slot&&autoHeld(selectedItem!)?'<span class="chip">Used automatically near ponds</span>':petSwap?M.PET_SLOTS.map(key=>`<button class="primary" data-action="equip" data-item="${selectedItem}" data-slot="${key}">${esc(t('Replace {name}',{name:t(M.ITEMS[state.gear[key]!].name)}))}</button>`).join(''):slot?`<button class="primary" data-action="equip" data-item="${selectedItem}" ${worn||M.gearLevel(selectedItem!)>state.level?'disabled':''}>${worn?'Equipped':'Equip'}</button>${petSlot?`<button class="soft-button" data-action="unequip" data-slot="${petSlot}">${esc(t('Leave at home'))}</button>`:''}${M.gearLevel(selectedItem!)>state.level?`<span class="chip chip-gate">🔒 ${esc(t('Needs level {level}',{level:M.gearLevel(selectedItem!)}))}</span>`:''}`:''}${slot&&!worn&&!M.isPenned(selectedItem!)?tryOnButton(selectedItem!):''}${item.heal||item.buff?`<button class="primary" data-action="eat" data-item="${selectedItem}">Use${item.heal?` · +${item.heal} HP`:''}</button>`:''}${item.weapon&&item.weapon.kind!=='rod'?`<button class="soft-button" data-action="forge-menu" data-item="${selectedItem}">🔨 Forge +${M.forgeLevel(state,selectedItem!)}</button>`:''}${M.looseQuantity(state,selectedItem!)>0&&!M.isPenned(selectedItem!)?`<button class="soft-button" data-action="drop-item" data-item="${selectedItem}">Drop one</button>`:''}${item.type==='fish'?`<button class="primary" data-action="show-fish" data-item="${selectedItem}">🐟 Khoe cá</button>`:''}${item.type==='decor'||item.type==='placeable'?`<button class="primary" data-action="place-decor" data-item="${selectedItem}">Place</button>`:''}</div></div></div>`:'';
   openDialog('bag','Your explorer & backpack',`<div class="stat-strip"><span>❤️ <b>${Math.ceil(state.hp)}/${Math.round(stats.maxHp)}</b></span><span>⚔️ <b>${stats.attack.toFixed(1)}</b></span><span>🛡️ <b>${stats.defense}</b></span><span>💨 <b>${stats.speed.toFixed(1)}</b></span><span>✨ <b>${Math.round(stats.critChance*100)}% crit</b></span></div><div class="equipment">${slots.map(([key,icon,name])=>`<div><button data-action="inspect" data-item="${state.gear[key]||''}" ${!state.gear[key]?'disabled':''}><span>${state.gear[key]?art(state.gear[key]!,M.ITEMS[state.gear[key]!].icon):icon}</span><small>${state.gear[key]?esc(t(M.ITEMS[state.gear[key]!].name))+M.levelTag(state,state.gear[key]!):name}</small></button>${state.gear[key]&&!autoHeld(state.gear[key]!)?`<button class="unequip" data-action="unequip" data-slot="${key}" aria-label="Unequip ${name}">Remove</button>`:''}</div>`).join('')}</div><div class="section-label">${bagMode==='wardrobe'?'TO WEAR':'BACKPACK'} <span>${entries.reduce((n,[,q])=>n+q,0)} items${bagMode==='wardrobe'?'':' · '+slotMeterHtml(state,'bag',t)}</span></div>${IG.groupedHtml('bag',IG.groupItems(entries,([id])=>id,IG.BAG_ORDER,undefined,id=>M.ownedScore(state,id)),([id,count])=>`<button class="item-tile ${id===selectedItem?'selected':''}" data-action="inspect" data-item="${id}" aria-label="${esc(t(M.ITEMS[id].name))}, ${count}"><span>${art(id,M.ITEMS[id].icon)}</span><b>${count}</b><small>${esc(t(M.ITEMS[id].name))}${M.levelTag(state,id)}</small>${Object.values(state.gear).includes(id)?'<i>Equipped</i>':''}</button>`,'inventory-grid',selectedItem?{group:IG.groupOf(selectedItem),html:detail}:undefined)||'<div class="empty-state"><span>🎒</span><strong>Your first harvest belongs here.</strong></div>'}${bagMode==='wardrobe'?'':expandCardHtml(state,'bag',t,mini)}${bagMode==='wardrobe'?'':'<div class="button-row"><button class="soft-button" data-action="go" data-kind="cook">🔥 Kitchen</button><button class="soft-button" data-action="decorations">🏡 Decorate</button><button class="soft-button" data-action="journal-tab" data-kind="collection">🐟 Fish log</button></div>'}`,'CHARACTER');
 }
 // "36 energy · 6 XP · 15 stars" becomes three coloured chips.
@@ -884,7 +886,7 @@ function beginPlacement(id:string){if(visiting)return;if(state.planet!=='home'){
   if(!bed&&state.decorations.length>=M.MAX_DECORATIONS){toast(`Your garden already holds ${M.MAX_DECORATIONS} decorations.`,'🏡');return;}
   if(bed&&!state.settings.placeBeds){autoPlaceBed();return;}
   closeDialog();const step=Math.PI/4;
-  placement={id,rotation:Math.round(world.facing/step)*step+Math.PI,x:0,z:0,ok:false};
+  placement={id,rotation:Math.round(world.facing/step)*step+Math.PI,x:0,z:0,ok:false,follow:true};
   $('#placement-bar').hidden=false;document.body.classList.add('placing');$('#placement-name').innerHTML=localizeHtml(`Place <b>${esc(t(item.name))}</b>: tap the garden to choose a spot`);
   movePlacement(world.position.x+Math.sin(world.facing)*2.2,world.position.z+Math.cos(world.facing)*2.2);
   if(bed)toast('Tap an empty spot in the garden to choose where, then press ✔ Place.','👆');
@@ -892,7 +894,7 @@ function beginPlacement(id:string){if(visiting)return;if(state.planet!=='home'){
 function cancelPlacement(){placement=null;$('#placement-bar').hidden=true;document.body.classList.remove('placing');$('#placement-bar').classList.remove('bad');world.placementGhost(null);}
 function movePlacement(x:number,z:number){
   if(!placement)return;placement.x=Math.round(x*100)/100;placement.z=Math.round(z*100)/100;const {id,rotation}=placement;
-  placement.ok=M.ITEMS[id]?.type==='placeable'?M.bedSpotOk(state,placement.x,placement.z,rotation):M.decorSpotOk(state,placement.x,placement.z)&&!world.blocked(placement.x,placement.z);
+  placement.ok=M.ITEMS[id]?.type==='placeable'?M.bedSpotOk(state,placement.x,placement.z,rotation):M.decorSpotOk(state,placement.x,placement.z,id)&&!world.blocked(placement.x,placement.z);
   world.placementGhost(placement);$('#placement-bar').classList.toggle('bad',!placement.ok);
   $('#placement-hint').textContent=t(placement.ok?'':'Blocked here or outside the fence');
 }
@@ -907,7 +909,16 @@ async function confirmPlacement(){
   if(item.type==='placeable'){world.syncCrops();plantBurst(state.plots.length-1);tone('pop');toast('A new garden bed! Tap it to plant.','🌱');}
   else{world.syncDecorations();tone('success');toast(`${t(item.name)} placed.`,'🏡');}
 }
-function placeAt(x:number,y:number){const point=world.groundPoint(x,y);if(placement&&point)movePlacement(point.x,point.z);}
+function placeAt(x:number,y:number){const point=world.groundPoint(x,y);if(placement&&point){placement.follow=false;movePlacement(point.x,point.z);}}
+
+/** Direct controls resume following after a precision tap has pinned the preview. */
+function followPlacement(){if(!placement)return;if(world.stickAngle()!==null)placement.follow=true;if(placement.follow)movePlacement(world.position.x+Math.sin(world.facing)*2.2,world.position.z+Math.cos(world.facing)*2.2);}
+function openAquarium(uid:string){const tank=world.state.decorations.find(d=>d.uid===uid);if(!tank||!aquarium(tank.id))return;activeAquarium=uid;openDialog('aquarium',M.ITEMS[tank.id].name,aquariumPanel(state,uid,art),'AQUARIUM','🐠');}
+let activeAquarium:string|null=null;
+async function showBagFish(id:string){
+ if(!started||visiting||fishGame||placement||flight||world.carriage?.active||world.jump.airborne||combat.pose||combat.airborne>0||state.hp<=0){toast('Hãy đứng trên mặt đất để khoe cá.','🐟');return;}
+ const show=await perform<FishShow>('showFish',{id});if(!show)return;closeDialog();world.destination=null;world.route=[];world.selected=null;world.fishShow=show;void fishKit.load();
+}
 
 /** Star-map routes for the current save: easiest first, with locks and the recommended pick. */
 function starRoutes(){return planRoutes(starRouteInput());}
@@ -983,6 +994,13 @@ const farmHelperController=new FarmHelperController({state:()=>state,context:far
 // Rescued friends (friends.ts rules, friend-crew.ts cages/following/jobs, friend-view.ts looks, friend-ui.ts panel).
 setFriendDresser((color,gear,look)=>world.friendAvatar(color,gear,look));
 const helperChat=new ChatBubbles(world,()=>!started||modal!=='');
+const fishSpeeches=new Map<string,number>();
+frameListeners.add(()=>{
+ const say=(speaker:string,show:FishShow|null|undefined,mesh:World['player'])=>{if(!show||show.until<=Date.now()||fishSpeeches.get(speaker)===show.until||!M.FISH[show.id])return;fishSpeeches.set(speaker,show.until);const f=M.FISH[show.id],text=`Đây là con cá tên ${t(f.name)}, kích thước ${show.size}cm!${f.rarity==='rare'||f.rarity==='legendary'?' ✨ CÁ HIẾM ✨':''}`;helperChat.say('player:'+speaker,text,()=>{const current=speaker==='fish-self'?world.player:world.remotePlayers.get(speaker)?.mesh??mesh,held=current.getObjectByName('held-show-fish'),height=held?.parent===current?held.position.y+.7:2.7;return {x:current.position.x,z:current.position.z,y:current.position.y+height*current.scale.y};},Math.max(0,(show.until-Date.now())/1000),true);};
+ if(started)say('fish-self',world.fishShow,world.player);
+ for(const [id,remote] of world.remotePlayers??[])say(id,remote.pose.visual?.fishShow,remote.mesh);
+ for(const [id,until] of fishSpeeches)if(until<=Date.now())fishSpeeches.delete(id);
+});
 const crew=new FriendCrew({world,chat:helperChat,own:()=>state,visiting:()=>!!visiting,flying:()=>!!flight||world.boarded,started:()=>started,
   robotBed:()=>helperView.task?.index,robotAnimal:()=>farmHelperView.task?.uid,heldBed,animalAt:uid=>world.farmView?.positionOf(uid)??undefined,perform:(type,payload)=>type==='rescueFriend'?perform(type,payload):workPerform(type,payload), // a rescue is the player's own tap; the rest are the friends' own jobs
   rescued(id,at){const [hi,story]=RESCUE_LINES[id];tone('level');world.fx?.burst({x:at.x,z:at.z},{n:30,color:['#ffe66d','#ffffff',FRIENDS[id].tint],size:.14,speed:5,up:6,y:.8});floating(hi,at.x,at.z,'level',1.4);toast(t(story),'💖');},
@@ -1222,6 +1240,7 @@ world.onInteract=async(e)=>{
   if(isGhostCarriage(e)&&started&&!uiBlocked()&&!visiting){if(placement||combat.pose||combat.airborne>0)return;endFishing();if(world.boardCarriage(e)){clearHeldInput();tone('jump');}return;}
   if(!started||uiBlocked())return;tone();if(house.interact(e))return;if(visiting&&e.kind!=='travel'&&e.kind!=='plot'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
   if(e.kind==='plot')plotDialog(e.index!);else if(e.kind==='sell')market();else if(e.kind==='shop')shop();else if(e.kind==='chest')storage();else if(e.kind==='upgrade')upgrades();else if(e.kind==='cook')cooking();else if(e.kind==='well')wellDialog();else if(e.kind==='craft'){craftStation='craft';crafting();}else if(e.kind==='travel')planets();else if(e.kind==='fish')fish(e);
+  else if(e.kind==='decoration'&&aquarium(e.mesh.userData.decorationId))openAquarium(e.mesh.userData.decorationUid);
   else if(e.kind==='pen')penTap();
   else if(e.kind==='cage')crew.tapCage(e);
   else if(e.kind==='friend'&&e.index!==undefined)friendDialog(FRIEND_IDS[e.index]);
@@ -1705,7 +1724,7 @@ combatView.extraAllies=()=>{
   if(remoteSummonIds.size>256)remoteSummonIds.clear();
   return remote.map(d=>{const key=d.owner+':'+d.id;let id=remoteSummonIds.get(key);if(id===undefined)remoteSummonIds.set(key,id=++remoteSummonSerial);return {id,kind:d.kind as CombatAlly['kind'],x:d.x,z:d.z,life:d.life,cooldown:0,orbit:0,hp:d.hp,maxHp:d.maxHp};});
 };
-function resetCombat(){remoteInkDomains.clear();remoteBlizzards.clear();venom.clear();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();birdFx.clear();sorcererFx.clear();inkFx.clear();inkWash.clear();world.playerHidden=false;world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
+function resetCombat(){world.fishShow=null;remoteInkDomains.clear();remoteBlizzards.clear();venom.clear();airCooldowns.fill(0);plungeCast=null;world.airCarry=0;world.castAirT=0;world.jump.cancel();jumpInput.clear();comboMeter.reset();sureLeft=0;showCombo();combat.reset();combatTimers.reset();combatView.clear();skillFx.clear();birdFx.clear();sorcererFx.clear();inkFx.clear();inkWash.clear();world.playerHidden=false;world.movementLocked=false;world.playerFlying=false;world.playerStealth=false;}
 
 function rebuildHomePresentation(planet:M.PlanetId){
   const shared=network.role&&world.planet===planet, enemies=shared?world.enemySnapshots():null,environment=shared?world.environmentSnapshot():null;
@@ -1724,7 +1743,7 @@ export const gameBridge:GameBridge={
   setActionHandler(handler){actionHandler=handler;world.authoritativeAction=handler?intent=>handler(intent).then(reply=>reply.result):undefined;},
   applyAuthoritativeState(next){
     const planetChanged=next.planet!==state.planet,wasDead=state.hp<=0;const heldRod=M.ITEMS[state.gear.weapon??'']?.weapon?.kind==='rod'?state.gear.weapon:undefined;const previousDisguise=state.gear.disguise,previousGear=JSON.stringify(state.gear),wasFishing=!!world.fishing&&world.fishing!=='idle',plotsChanged=next.plots.length!==state.plots.length,decorChanged=JSON.stringify(next.decorations)!==JSON.stringify(state.decorations);
-    const beforeLevel=state.level;const current=state as unknown as Record<string,unknown>;for(const key of Object.keys(current))if(!Object.hasOwn(next,key))delete current[key];Object.assign(state,next);if(wasFishing&&!planetChanged){const rod=contextGear.forFishing(state);if(rod)state.gear.weapon=rod;}else if(!planetChanged&&gearWater&&heldRod&&(state.bag[heldRod]??0)>0)state.gear.weapon=heldRod;const gearChanged=JSON.stringify(state.gear)!==previousGear;levelCheck(beforeLevel);if(planetChanged){visiting=null;visitHome=null;world.state=state;endFishing();resetCombat();world.build(state.planet);world.refreshPlayer();if(wasDead)toast('You are safe at home.','🏡');}if(!visiting){world.state=state;if(plotsChanged){const position=world.position.clone(),riding=!!world.carriage?.active;rebuildHomePresentation(state.planet);if(!riding)world.position.copy(position);}else{world.syncCrops();if(decorChanged)world.syncDecorations();}if(gearChanged){if(previousDisguise!==state.gear.disguise){combat.reset();birdFx.clear();sorcererFx.clear();inkFx.clear();inkWash.clear();world.playerHidden=false;world.spinT=0;}world.refreshPlayer();}world.syncDropped();}
+    const beforeLevel=state.level;const current=state as unknown as Record<string,unknown>;for(const key of Object.keys(current))if(!Object.hasOwn(next,key))delete current[key];Object.assign(state,next);if(wasFishing&&!planetChanged){const rod=contextGear.forFishing(state);if(rod)state.gear.weapon=rod;}else if(!planetChanged&&gearWater&&heldRod&&(state.bag[heldRod]??0)>0)state.gear.weapon=heldRod;if(modal==='aquarium'&&activeAquarium&&decorChanged)openAquarium(activeAquarium);const gearChanged=JSON.stringify(state.gear)!==previousGear;levelCheck(beforeLevel);if(planetChanged){visiting=null;visitHome=null;world.state=state;endFishing();resetCombat();world.build(state.planet);world.refreshPlayer();if(wasDead)toast('You are safe at home.','🏡');}if(!visiting){world.state=state;if(plotsChanged){const position=world.position.clone(),riding=!!world.carriage?.active;rebuildHomePresentation(state.planet);if(!riding)world.position.copy(position);}else{world.syncCrops();if(decorChanged)world.syncDecorations();}if(gearChanged){if(previousDisguise!==state.gear.disguise){combat.reset();birdFx.clear();sorcererFx.clear();inkFx.clear();inkWash.clear();world.playerHidden=false;world.spinT=0;}world.refreshPlayer();}world.syncDropped();}
     updateHud();updateLabels();
   },
   spawnNetworkDrop,removeNetworkDrop,releaseNetworkDrop(id){for(const meta of networkDrops.values())if(meta.drop.id===id)meta.drop.releaseAt=0;},clearNetworkDrops(){networkDrops.clear();drops.clear();},
@@ -1935,6 +1954,9 @@ app.addEventListener('click',async event=>{
     case 'place-decor':beginPlacement(id);break;
     case 'cancel-decor':cancelPlacement();break;
     case 'rotate-decor':rotatePlacement();break;
+    case 'put-aquarium-fish':{const uid=button.dataset.uid!;if(await perform('putAquariumFish',{uid,id})){world.syncDecorations();tone('success');}if(modal==='aquarium')openAquarium(uid);break;}
+    case 'take-aquarium-fish':{const uid=button.dataset.uid!;if(await perform('takeAquariumFish',{uid,index:Number(button.dataset.index)})){world.syncDecorations();tone('pop');}if(modal==='aquarium')openAquarium(uid);break;}
+    case 'show-fish':if(id)await showBagFish(id);break;
     case 'remove-decor':if(await perform('removeDecoration',{uid:button.dataset.id})){world.syncDecorations();decorations();}break;
     case 'buy':if(await perform('buy',{id})){
       // Gear goes straight onto the explorer, like picking up a fishing rod.
@@ -2092,7 +2114,7 @@ function frame(now:number){
   // Resizing the WebGL canvas clears its drawing buffer. Apply automatic quality changes
   // before drawing, so the browser never presents an empty frame during a quality transition.
   const graphicsChange=graphics.sample(realDt,started&&!document.hidden&&!uiBlocked()&&performance.now()>settledAt);if(graphicsChange)world.applyGraphics(graphics.profile,graphics.ratio);if(graphics.takeSave())saveGraphics(graphics);
-  world.render();positionLabels();minimap.frame(realDt);fx?.updateText(realDt,innerWidth,innerHeight);
+  followPlacement();world.render();positionLabels();minimap.frame(realDt);fx?.updateText(realDt,innerWidth,innerHeight);
   for(const listener of frameListeners)listener(dt);
   if(uiElapsed>.12){uiElapsed=0;world.syncCrops();updateHud();updateLabels();if(modal==='plot'||modal==='plant'){const p=state.plots[activePlot],seen=p?`${activePlot}|${p.crop??''}|${p.generation??''}|${state.plots.filter(q=>!q.crop).length}|${autoPlantRow(state,activePlot)}`:'';if(plotSeen&&seen&&seen!==plotSeen)refreshPlot();plotSeen=seen;}else plotSeen='';if(modal==='plot'){const p=state.plots[activePlot];if(p?.crop&&$('#grow-fill')){$('#grow-fill').style.width=`${M.cropProgress(p)*100}%`;$('#grow-time').textContent=t(growText(p));ripeHarvestButton(p);}}if(modal==='pen'){if(penSignature(state)!==penShown)penDialog();else tickPen($('#dialog-body'),state);}
     // Helpers keep working while the market, chest or kitchen is open: redraw it when the bag or chest changes, so no row offers what is gone.

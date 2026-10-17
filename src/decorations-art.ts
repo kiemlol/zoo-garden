@@ -32,6 +32,23 @@ class Sculptor {
   }
 }
 
+/** Empty tanks: the real saved fish are attached and animated by aquarium-view.ts. */
+function buildAquarium(s:Sculptor,scale:number){
+  s.box('#b59479',[1.2,.18,1.05],[0,.09,0],s.root,true);
+  s.box('#eadcc0',[1.08,.07,.93],[0,.215,0]);
+  s.mesh(new T.BoxGeometry(1.08,.92,.93),'#a7d8de',[0,.73,0],s.root,0,.12);
+  s.box('#d5c3a5',[1.2,.08,1.05],[0,1.23,0]);
+  for(const x of [-.56,.56])for(const z of [-.485,.485])s.rod('#a9bec0',[x,.25,z],[x,1.2,z],.023);
+  for(const [x,color] of [[-.35,'#75a790'],[.34,'#9ab27e']] as const)for(let j=-1;j<=1;j++){
+    s.rod(color,[x,.25,-.3],[x+j*.065,.55+Math.abs(j)*.12,-.3],.018);
+    const leaf=s.ball(color,.13,[x+j*.06,.48,-.3],[.25,1,.55]);leaf.rotation.z=-j*.4;
+  }
+  for(let i=0;i<4+Math.round(scale);i++)s.ball('#c9eced',.017+i*.003,[.4+Math.sin(i)*.025,.38+i*.12,.29],[1,1,1],s.root,.1);
+  for(let i=0;i<3;i++)s.ball('#e5b59e',.045+i*.01,[-.13+i*.1,.28,.3],[1,.6,1]);
+  // Bake the scale into dimensions; fish use the same scale without inheriting it twice.
+  for(const child of s.root.children){child.position.multiplyScalar(scale);child.scale.multiplyScalar(scale);}
+}
+
 const builders:Record<string,(s:Sculptor)=>void>={
   deco_ghost_carriage(s){
     s.box('#292631',[1.15,.18,1.8],[0,.5,-.2],s.root,true);s.box('#af2938',[1,.13,1],[0,.66,-.45],s.root,true);s.box('#b52d3a',[1.1,.9,.14],[0,1.08,-.92],s.root,true);
@@ -129,14 +146,9 @@ const builders:Record<string,(s:Sculptor)=>void>={
     for(let i=0;i<4;i++)s.star('#fff36b',.07+i*.012,[-.3+i*.2,.78+Math.sin(i*1.7)*.07,.1+(i%2)*.12]);
     for(const x of [-.58,.58])for(const z of [-.36,.36])s.ball('#5a3a68',.07,[x,.05,z],[1,.7,1]);
   },
-  deco_aquarium(s){
-    s.box('#b59479',[1.8,.2,1.15],[0,.13,0],s.root,true);s.box('#cdd5c4',[1.62,.09,1],[0,.28,0]);
-    s.mesh(new T.BoxGeometry(1.62,1.02,1),'#a7d8de',[0,.83,0],s.root,0,.15);s.box('#d5c3a5',[1.77,.09,1.12],[0,1.39,0]);
-    for(const x of [-.82,.82])for(const z of [-.51,.51])s.rod('#a9bec0',[x,.27,z],[x,1.38,z],.025);
-    for(const[x,color]of [[-.44,'#75a790'],[.52,'#9ab27e']] as const)for(let j=-1;j<=1;j++){s.rod(color,[x,.3,-.25],[x+j*.12,.68+Math.abs(j)*.12,-.24],.025);const leaf=s.ball(color,.19,[x+j*.1,.58,-.25],[.25,1,.55]);leaf.rotation.z=-j*.4;}
-    for(const[x,y,z,color,dir]of [[-.3,.91,.12,'#e9b664',1],[.38,.66,.16,'#d7a3b8',-1]] as const){const fish=s.group([x,y,z]);fish.rotation.y=dir<0?Math.PI:0;s.ball(color,.19,[0,0,0],[1.4,.7,.48],fish);const tail=s.mesh(new T.ConeGeometry(.14,.22,3),color,[-.3,0,0],fish);tail.rotation.z=-Math.PI/2;s.ball('#515360',.026,[.14,.035,.084],[1,1,.35],fish);}
-    for(let i=0;i<4;i++)s.ball('#c9eced',.027+i*.006,[.1+Math.sin(i)*.045,.6+i*.18,.27],[1,1,1],s.root,.1);
-  },
+  deco_aquarium(s){buildAquarium(s,1);},
+  deco_aquarium_m(s){buildAquarium(s,1.5);},
+  deco_aquarium_l(s){buildAquarium(s,2);},
   deco_shell(s){
     const shape=new T.Shape();shape.moveTo(0,.06);for(let i=0;i<=18;i++){const a=i*Math.PI/18,r=i%2?.86:.91;shape.lineTo(Math.cos(a)*r,.19+Math.sin(a)*r);}shape.closePath();
     s.mesh(new T.ExtrudeGeometry(shape,{depth:.16,bevelEnabled:true,bevelSegments:2,bevelSize:.04,bevelThickness:.04,steps:1}),'#e5c5bf',[0,0,-.1]);

@@ -1884,12 +1884,14 @@ const ITEM_FACTS: Record<string, any> = {
         "set": "jungle"
     },
     "deco_aquarium": {
-        "name": "Coral aquarium",
+        "name": "Small aquarium",
         "type": "decor",
         "sell": 90,
         "collider": 0.8,
         "set": "ocean"
     },
+    "deco_aquarium_m": {"name":"Medium aquarium","type":"decor","sell":180,"collider":1.2,"set":"ocean"},
+    "deco_aquarium_l": {"name":"Large aquarium","type":"decor","sell":360,"collider":1.6,"set":"ocean"},
     "deco_shell": {
         "name": "Giant seashell",
         "type": "decor",
@@ -4057,7 +4059,7 @@ const englishNames: Record<string, string> = {
     fish_perch: 'Perch', fish_clown: 'Clownfish', fish_puffer: 'Pufferfish', fish_carp: 'Carp', fish_shark: 'Shark', fish_rainbow: 'Rainbow fish', fish_catfish: 'Catfish', fish_koi: 'Koi', fish_eel: 'Eel', fish_swordfish: 'Swordfish', fish_jelly: 'Jellyfish', fish_icepike: 'Ice pike', fish_whale: 'Whale', fish_kraken: 'Kraken', fish_golden: 'Golden fish', fish_sunfish: 'Sunfish', fish_angler: 'Anglerfish', fish_manta: 'Manta ray',
     armor_wings: 'Dragon wings', armor_tux: 'Tuxedo', armor_kimono: 'Kimono', armor_hawaii: 'Island shirt', armor_hoodie: 'Hoodie', armor_army: 'Army uniform', armor_navy: 'Navy uniform', armor_aodai: 'Vietnamese long dress', armor_aodai_man: 'Vietnamese long gown', armor_usa: 'Stars and stripes outfit', armor_vietnam: 'Vietnam flag outfit', hat_halo: 'Halo', hat_graduate: 'Graduation cap', boots_flipper: 'Swim flippers',
     dz_ninja: 'Shadow ninja', dz_mage: 'Archmage', dz_knight: 'Sun knight', dz_mecha: 'Battle robot', dz_dino: 'Tyrannosaur', dz_fairy: 'Flower fairy', dz_pirate: 'Pirate captain', dz_army: 'Army soldier', dz_navy: 'Navy sailor', dz_aodai: 'Ao dai lady', dz_aodai_man: 'Ao dai gentleman', dz_usa: 'Stars and stripes', dz_vietnam: 'Vietnam flag', dz_superhero: 'Superhero', dz_vampire: 'Vampire count', dz_snowman: 'Snowman',
-    deco_volcano: 'Little volcano', deco_lamp: 'Lava lamp', deco_table: 'Obsidian table', deco_statue: 'Golem statue', deco_nest: 'Dragon nest', deco_trophy: 'Dragon trophy', deco_teddy: 'Giant teddy', deco_musicbox: 'Music box', deco_traincar: 'Toy train', deco_totem: 'Forest totem', deco_rafflesia: 'Giant forest flower', deco_fruittree: 'Fruit tree', deco_aquarium: 'Coral aquarium', deco_shell: 'Giant seashell', deco_piratechest: 'Pirate treasure', deco_cloudsofa: 'Cloud sofa', deco_windchime: 'Crystal wind chime', deco_rainbow: 'Rainbow arch', deco_ghostlantern: 'Ghost lantern', deco_nightcrystal: 'Night crystal', deco_owlstatue: 'Owl statue',
+    deco_volcano: 'Little volcano', deco_lamp: 'Lava lamp', deco_table: 'Obsidian table', deco_statue: 'Golem statue', deco_nest: 'Dragon nest', deco_trophy: 'Dragon trophy', deco_teddy: 'Giant teddy', deco_musicbox: 'Music box', deco_traincar: 'Toy train', deco_totem: 'Forest totem', deco_rafflesia: 'Giant forest flower', deco_fruittree: 'Fruit tree', deco_aquarium: 'Small aquarium', deco_aquarium_m:'Medium aquarium', deco_aquarium_l:'Large aquarium', deco_shell: 'Giant seashell', deco_piratechest: 'Pirate treasure', deco_cloudsofa: 'Cloud sofa', deco_windchime: 'Crystal wind chime', deco_rainbow: 'Rainbow arch', deco_ghostlantern: 'Ghost lantern', deco_nightcrystal: 'Night crystal', deco_owlstatue: 'Owl statue',
 };
 function itemLabel(id: string) {
     if (englishNames[id])
@@ -4169,3 +4171,9 @@ RECIPES.push({result:'rod_key_test',energy:1,materials:{},category:'Weapons',sta
 SHOP_CATEGORIES.find(c=>c.tab==='Weapons')?.items.push({id:'rod_key_test',cost:1});
 // Dyes (dye-skins.ts): energy-priced recolours of existing gear, generated last so every base item exists.
 registerDyes(ITEMS);
+
+// Aquariums share the existing ocean workshop.
+for(const [id,cost,mats] of [['deco_aquarium_m',240,{coral:16,pearl:2}],['deco_aquarium_l',480,{coral:24,pearl:4}]] as const){
+ const category=WORKSHOP_CATEGORIES[3];category.items.push({id,cost,mats});
+ RECIPES.push({result:id,energy:cost,materials:{...mats},category:category.tab,station:'craft'});
+}
