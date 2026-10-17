@@ -1,3 +1,4 @@
+import {capFishSize} from './fish-size.ts';
 import { ITEMS, CROPS, PLANETS, RECIPES, DISGUISES, FISH, FISH_WEIGHTS, LOOT_TABLES, UPGRADES, STARTING_PLOTS, MAX_EXTRA_PLOTS, LEGACY_MAX_PLOTS, MAX_DECORATIONS, STORY_STEPS, canonicalItem, type ItemId, type Inventory, type GearSlot, type CropId, type PlanetId, type BuffKey, type BuffDef, type WeaponDef } from './content.ts';
 import {aquarium,aquariumRefusal,fishSize,readAquariumFish,isDisplayFish,FISH_SHOW_SECONDS} from './aquarium.ts';
 import { createProgression, normalizeProgression, recordEvent, progressEntries, claimProgress, type ProgressionState } from './progression.ts';
@@ -699,6 +700,7 @@ export function catchMultiplier(fish: { size: number[]; rarity: string }, size?:
     return Math.max(huge ? 1.6 : 1, Math.round(bySize * 100) / 100);
 }
 export function grantCatch(s: SaveState, raw: ItemId, size?: number, hugeCatch = false) {
+    if(size!==undefined)size=capFishSize(size);
     const id = canonicalItem(raw), fish = Object.hasOwn(FISH, id) ? FISH[id] : undefined; if (!fish)
         return false;
     const huge = hugeCatch && fish.rarity !== 'junk', multiplier = catchMultiplier(fish, size, huge), bonus = Math.round(fish.sell * (multiplier - 1));
@@ -714,6 +716,7 @@ export function grantCatch(s: SaveState, raw: ItemId, size?: number, hugeCatch =
 }
 /** Mystery catches are resolved once by the caller's authority, including unusual treasure. */
 export function grantMysteryCatch(s: SaveState, raw: ItemId, size?: number, supergiant = false) {
+    if(size!==undefined)size=capFishSize(size);
     const id = canonicalItem(raw), fish = FISH[id];
     if (!fish) return addItem(s,id);
     if (!supergiant) return grantCatch(s,id,size,false);

@@ -36,6 +36,7 @@ import { Effects } from './fx.ts';
 import { applyDye } from './dye-render.ts';
 import { baseOf } from './dye-skins.ts';
 import { deathBagModel, deathBagEntityId } from './death-bags-view.ts';
+import {FishShowCamera} from './fish-show-camera.ts';
 import { CAMERA, SHADOW, defaultCameraZoom, cameraOffset, followBlend, lightAxes, shadowBox, viewFootprint } from './camera-rig.ts';
 import { QUALITY, type QualityProfile } from './graphics.ts';
 import { CropCards, CROP_PRESENTATION_SCALE, SOIL_Y, cropStage, popScale, stageScale, type BedCrop } from './crop-cards.ts';
@@ -1018,6 +1019,7 @@ export class World {
   private aquariumMatrix=new T.Matrix4();
   private aquariumSphere=new T.Sphere(new T.Vector3(),3);
   fishShow:FishShow|null=null;
+  private fishShowCamera?:FishShowCamera;
   private updateAquariums(){
     if(!this.aquariumViews?.length||this.interior)return;
     this.camera.updateMatrixWorld();this.aquariumMatrix.multiplyMatrices(this.camera.projectionMatrix,this.camera.matrixWorldInverse);this.aquariumFrustum.setFromProjectionMatrix(this.aquariumMatrix);
@@ -1994,6 +1996,7 @@ export class World {
     this.player.visible=!this.boarded&&!this.playerHidden;this.companion.visible=!this.boarded&&this.petPen.shown;if(this.companion2)this.companion2.visible=!this.boarded&&this.petPen2.shown;
     // The reference's follow: 9/s on the explorer, 5/s on the starship in cut-scenes, always looking straight at the target.
     this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.camera.position.copy(this.cameraTarget).add(this.viewOffset??=cameraOffset(16/9));this.camera.lookAt(this.cameraTarget);
+    if(this.cameraFocus)this.fishShowCamera?.reset();else (this.fishShowCamera??=new FishShowCamera()).update(this.camera,this.cameraTarget,this.player,dt,this.scene.fog);
     if(this.fx)this.camera.position.add(this.fx.shakeOffset(dt,this.shakeOffset));
     this.updateScenery(dt);this.updateEyeGlints();this.updateHeroLight();
     this.followSun();this.updateSky();

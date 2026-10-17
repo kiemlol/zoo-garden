@@ -1,3 +1,4 @@
+import {MAX_FISH_SIZE_CM} from './fish-size.ts';
 import {INK_ITEM} from './ink-content.ts';
 import {INK_SKILLS} from './ink-skills.ts';
 import {SORCERER_ITEM} from './sorcerer-content.ts';
@@ -709,7 +710,7 @@ const ITEM_FACTS: Record<string, any> = {
         "power": 0.97,
         "size": [
             400,
-            1200
+            MAX_FISH_SIZE_CM
         ]
     },
     "fish_kraken": {
@@ -4177,3 +4178,6 @@ for(const [id,cost,mats] of [['deco_aquarium_m',240,{coral:16,pearl:2}],['deco_a
  const category=WORKSHOP_CATEGORIES[3];category.items.push({id,cost,mats});
  RECIPES.push({result:id,energy:cost,materials:{...mats},category:category.tab,station:'craft'});
 }
+
+// One shared ceiling for every species, including entries registered after the base catalog.
+for(const fish of Object.values(FISH)){fish.size=fish.size.map(cm=>Math.min(MAX_FISH_SIZE_CM,cm));if(ITEMS[fish.id]?.size)ITEMS[fish.id].size=[...fish.size];}

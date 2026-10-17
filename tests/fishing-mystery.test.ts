@@ -5,7 +5,7 @@ const sequence=(...values:number[])=>()=>values.shift()??.5;
 test('mystery fish has a strict sixty-percent supergiant boundary and bounded size',()=>{
   assert.deepEqual(resolveMysteryCatch({id:'fish_whale',max:500},sequence(.599999,0)),{id:'fish_whale',size:800,huge:true,supergiant:true,mystery:true});
   assert.equal(resolveMysteryCatch({id:'fish_whale',max:500},sequence(.6,0)).id,'starshard');
-  assert.equal(resolveMysteryCatch({id:'fish_whale',max:500},sequence(0,.999999)).size,1300);
+  assert.equal(resolveMysteryCatch({id:'fish_whale',max:500},sequence(0,.999999)).size,800);
 });
 test('every mystery treasure can be selected and cannot fall outside its catalog',()=>{
   const total=MYSTERY_TREASURE_WEIGHTS.reduce((n,[,w])=>n+w,0);let prefix=0;

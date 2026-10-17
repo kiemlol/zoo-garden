@@ -1,3 +1,4 @@
+import {capFishSize} from './fish-size.ts';
 /**
  * The reference's fishing rules (zoo-pet.store bundle, class `zh` @861404–@873700), as a pure,
  * seedable simulation. The view (fishing-view.ts) only draws what this decides.
@@ -291,7 +292,7 @@ export function parseMysteryCaller(raw:unknown):MysteryCaller{
 }
 /** Resolve only after landing the silhouette. Server actions use the same table with server-owned randomness. */
 export function resolveMysteryCatch(fish:Pick<CatchCandidate,'id'|'max'>,random:()=>number=Math.random){
-  if(random()<MYSTERY.chance)return {id:fish.id,size:Math.round(fish.max*(1.6+random())),huge:true,supergiant:true,mystery:true};
+  if(random()<MYSTERY.chance)return {id:fish.id,size:capFishSize(Math.round(fish.max*(1.6+random()))),huge:true,supergiant:true,mystery:true};
   let roll=random()*MYSTERY_TREASURE_WEIGHTS.reduce((sum,[,weight])=>sum+weight,0);
   const id=MYSTERY_TREASURE_WEIGHTS.find(([,weight])=>(roll-=weight)<=0)?.[0]??'starshard';
   return {id,size:0,huge:false,supergiant:false,mystery:true};
@@ -302,7 +303,7 @@ export function selectCatch(pool:CatchCandidate[],random:()=>number=Math.random)
   for(const candidate of available){roll-=candidate.weight;if(roll<=0){selected=candidate;break;}}
   // Sizes lean small (a fraction to the power 2.4); the top 18 % are "huge" (finish @866000).
   const fraction=Math.pow(random(),2.4);
-  return {id:selected.id,size:Math.round(selected.min+(selected.max-selected.min)*fraction),huge:!selected.junk&&fraction>.82};
+  return {id:selected.id,size:capFishSize(Math.round(selected.min+(selected.max-selected.min)*fraction)),huge:!selected.junk&&fraction>.82};
 }
 
 /** What the view reads from a simulation, whatever its pick type. */

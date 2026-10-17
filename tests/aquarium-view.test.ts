@@ -24,12 +24,15 @@ test('three distinct grounded tank sizes contain real fish swimming, turning and
  assert.ok(Math.abs(sizes[1]/sizes[0]-1.5)<1e-6&&Math.abs(sizes[2]/sizes[0]-2)<1e-6);
 });
 
-test('showing fish uses one left hand or both raised arms above the head, and restores gear and idle after expiry',()=>{
+test('showing fish uses one left hand or both hands forward below the head, and restores gear and idle after expiry',()=>{
  const w:any=Object.assign(Object.create(World.prototype),{state:newGame(),scene:new T.Scene(),position:new T.Vector3(),time:0,facing:0,walkClock:0,playerMaterials:[],castT:0});
  for(const disguise of [undefined,'dz_penguin','dz_explorer_duck','dz_sorcerer','dz_ink_painter','dz_superhero'])for(const id of ['fish_jelly','fish_icepike','fish_whale']){
-  w.state.gear={weapon:'sword_wood',disguise};w.player=w.lookAvatar('#fff',w.state.gear);const p=w.player,hand=p.getObjectByName('hand-right')!,weapon=hand.children[0];const right=p.getObjectByName('arm-right')!,left=p.getObjectByName('arm-left')!;w.animatePlayer(0);const idle=right.rotation.clone(),armScale=right.scale.clone();const until=Date.now()+6000;
-  drawFishShow(p,{id,size:id==='fish_whale'?800:30,until},1);p.updateMatrixWorld(true);const fish=p.getObjectByName('held-show-fish')!;assert.ok(fish);assert.equal(weapon.visible,false);
-  if(id==='fish_jelly'){assert.equal(fish.parent,p.getObjectByName('hand-left'));assert.equal(left.rotation.x,-1.55);assert.deepEqual(right.rotation.toArray(),idle.toArray());}else{assert.equal(fish.parent,p);const target=new T.Vector3(fish.position.x-.23*Math.max(.85,Math.min(1.35,.8+(id==='fish_whale'?800:30)/600)),fish.position.y-.06,fish.position.z);p.localToWorld(target);assert.ok(p.getObjectByName('hand-left')!.getWorldPosition(new T.Vector3()).distanceTo(target)<1e-5,'left palm supports the fish');const centre=new T.Box3().setFromObject(fish).getCenter(new T.Vector3()),head=new T.Box3().setFromObject(p.getObjectByName('head')!);assert.ok(centre.y>head.max.y,'held fish is above the head');assert.ok(fish.position.z>0,'fish clears the face forward');}
+  w.state.gear={weapon:'sword_wood',disguise};w.player=w.lookAvatar('#fff',w.state.gear);const p=w.player,hand=p.getObjectByName('hand-right')!,weapon=hand.children[0];const right=p.getObjectByName('arm-right')!,left=p.getObjectByName('arm-left')!;w.animatePlayer(0);const idle=right.rotation.clone(),armScale=right.scale.clone();const now=10000,until=now+3000;
+  drawFishShow(p,{id,size:id==='fish_whale'?800:id==='fish_icepike'?120:30,until},0,now);p.updateMatrixWorld(true);const fish=p.getObjectByName('held-show-fish')!;assert.ok(fish);assert.equal(weapon.visible,false);
+  assert.equal(fish.parent,p);const bounds=new T.Box3().setFromObject(fish),head=new T.Box3().setFromObject(p.getObjectByName('head')!);
+  for(const side of id==='fish_jelly'?['left']:['left','right']){const palm=p.getObjectByName('hand-'+side)!.getWorldPosition(new T.Vector3());assert.ok(palm.y<head.max.y,'hands are never raised over the head');p.worldToLocal(palm);assert.ok(side==='left'?palm.x<0:palm.x>0,'arms never cross');assert.ok(Math.abs(palm.z-(id==='fish_jelly'?.85:.95))<1e-5,'palms present the fish forward');const near=new T.Vector3(0,0,bounds.min.z);p.localToWorld(palm);assert.ok(near.z>palm.z,'fish floats just beyond the hands');}
+  if(id==='fish_jelly')assert.deepEqual(right.rotation.toArray(),idle.toArray());
+
   drawFishShow(p,{id,size:30,until},7,until+1);assert.equal(p.getObjectByName('held-show-fish'),undefined);assert.equal(weapon.visible,true);assert.deepEqual(right.scale,armScale);w.animatePlayer(0);assert.deepEqual(right.rotation.toArray(),idle.toArray());
  }
 });
