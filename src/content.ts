@@ -566,28 +566,44 @@ const ITEM_FACTS: Record<string, any> = {
         "type": "fish",
         "sell": 6,
         "heal": 15,
-        "power": 0.2
+        "power": 0.2,
+        "size": [
+            10,
+            40
+        ]
     },
     "fish_clown": {
         "name": "Clownfish",
         "type": "fish",
         "sell": 10,
         "heal": 20,
-        "power": 0.3
+        "power": 0.3,
+        "size": [
+            5,
+            15
+        ]
     },
     "fish_puffer": {
         "name": "Pufferfish",
         "type": "fish",
         "sell": 18,
         "heal": 10,
-        "power": 0.45
+        "power": 0.45,
+        "size": [
+            10,
+            45
+        ]
     },
     "fish_carp": {
         "name": "Carp",
         "type": "fish",
         "sell": 28,
         "heal": 35,
-        "power": 0.62
+        "power": 0.62,
+        "size": [
+            20,
+            75
+        ]
     },
     "fish_shark": {
         "name": "Shark",
@@ -595,7 +611,11 @@ const ITEM_FACTS: Record<string, any> = {
         "sell": 65,
         "heal": 60,
         "rare": true,
-        "power": 0.92
+        "power": 0.92,
+        "size": [
+            50,
+            150
+        ]
     },
     "fish_rainbow": {
         "name": "Rainbow fish",
@@ -608,7 +628,11 @@ const ITEM_FACTS: Record<string, any> = {
             "time": 120
         },
         "rare": true,
-        "power": 0.8
+        "power": 0.8,
+        "size": [
+            5,
+            15
+        ]
     },
     "fish_catfish": {
         "name": "Catfish",
@@ -617,7 +641,7 @@ const ITEM_FACTS: Record<string, any> = {
         "heal": 30,
         "power": 0.55,
         "size": [
-            30,
+            25,
             90
         ]
     },
@@ -633,8 +657,8 @@ const ITEM_FACTS: Record<string, any> = {
         "rare": true,
         "power": 0.6,
         "size": [
-            25,
-            70
+            20,
+            85
         ]
     },
     "fish_eel": {
@@ -649,8 +673,8 @@ const ITEM_FACTS: Record<string, any> = {
         "rare": true,
         "power": 0.78,
         "size": [
-            60,
-            180
+            50,
+            200
         ]
     },
     "fish_swordfish": {
@@ -665,8 +689,8 @@ const ITEM_FACTS: Record<string, any> = {
         "rare": true,
         "power": 0.85,
         "size": [
-            90,
-            300
+            100,
+            400
         ]
     },
     "fish_jelly": {
@@ -677,7 +701,7 @@ const ITEM_FACTS: Record<string, any> = {
         "power": 0.4,
         "size": [
             10,
-            40
+            45
         ]
     },
     "fish_icepike": {
@@ -691,8 +715,8 @@ const ITEM_FACTS: Record<string, any> = {
         },
         "power": 0.7,
         "size": [
-            50,
-            150
+            25,
+            95
         ]
     },
     "fish_whale": {
@@ -709,8 +733,8 @@ const ITEM_FACTS: Record<string, any> = {
         "legend": true,
         "power": 0.97,
         "size": [
-            400,
-            MAX_FISH_SIZE_CM
+            250,
+            800
         ]
     },
     "fish_kraken": {
@@ -726,8 +750,8 @@ const ITEM_FACTS: Record<string, any> = {
         "legend": true,
         "power": 0.96,
         "size": [
-            200,
-            800
+            150,
+            700
         ]
     },
     "fish_golden": {
@@ -746,8 +770,8 @@ const ITEM_FACTS: Record<string, any> = {
         "legend": true,
         "power": 0.92,
         "size": [
-            60,
-            160
+            30,
+            120
         ]
     },
     "fish_sunfish": {
@@ -762,7 +786,7 @@ const ITEM_FACTS: Record<string, any> = {
         "power": 0.72,
         "size": [
             80,
-            250
+            300
         ]
     },
     "fish_angler": {
@@ -777,8 +801,8 @@ const ITEM_FACTS: Record<string, any> = {
         "rare": true,
         "power": 0.8,
         "size": [
-            30,
-            90
+            15,
+            80
         ]
     },
     "fish_manta": {
@@ -795,8 +819,8 @@ const ITEM_FACTS: Record<string, any> = {
         "legend": true,
         "power": 0.95,
         "size": [
-            300,
-            700
+            150,
+            600
         ]
     },
     "boot": {

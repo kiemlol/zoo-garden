@@ -1009,10 +1009,11 @@ export function parseSave(raw: string | null): SaveState | null {
                     s.collection[canonicalItem(id)] = 1;
         for (const id of [...Object.keys(s.bag), ...Object.keys(s.chest), ...s.decorations.map(d => d.id)])
             s.collection[id] = 1;
+        // Persisted records follow each species' current range; leave bags and aquarium residents untouched.
         if (record(v.fishRecords))
             for (const [id, n] of Object.entries(v.fishRecords))
                 if (Object.hasOwn(FISH, id) && typeof n === 'number' && Number.isFinite(n) && n > 0)
-                    s.fishRecords[id] = n;
+                    s.fishRecords[id] = Math.max(FISH[id].size[0],Math.min(FISH[id].size[1],n));
         s.savedAt = integer(v.savedAt, s.savedAt);
         // Dropped bags (death-bags.ts); an older save's single `dropped` bag counts from its last save.
         { const bags = parseDeathBags(v.deathBags, v.dropped, s.savedAt, inventory); if (bags.length) s.deathBags = bags; }

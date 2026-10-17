@@ -25,6 +25,7 @@ test('every real species has a display measurement; actual caught cm select the 
  assert.equal(fishShowPlan('fish_whale',99.9)!.twoHands,false);assert.equal(fishShowPlan('fish_jelly',100)!.twoHands,false);
  assert.equal(fishShowPlan('fish_jelly',100.1)!.twoHands,true);assert.ok(fishShowPlan('fish_jelly',5)!.span>FISH_SHOW_MIN_SPAN);
  assert.equal(fishShowPlan('fish_manta',700)!.measure,'wingspan');assert.equal(fishShowPlan('fish_whale',3120)!.span,FISH_SHOW_MAX_SPAN);
+ for(const id of ids){assert.equal(fishShowPlan(id,100.1)!.pitch,0,id+' two-hand fish is horizontal');if(FISH_SHOW_SPECIES[id].axis==='z')assert.equal(fishShowPlan(id,100)!.pitch,-Math.PI/2,id+' one-hand fish is upright');}
  for(const size of [0,-1,NaN,Infinity])assert.equal(fishShowPlan('fish_jelly',size),null);for(const id of ['boot','carrot','__proto__'])assert.equal(fishShowPlan(id,20),null);
 });
 
@@ -35,7 +36,7 @@ test('all species follow the readable cm curve, independent of avatar size, incl
   const b=new T.Box3().setFromObject(fish),head=new T.Box3().setFromObject(p.getObjectByName('head')!),palm=p.getObjectByName('hand-left')!.getWorldPosition(new T.Vector3());
   assert.ok(palm.y<head.max.y,'hands stay forward below the head, never overhead');
   assert.ok(b.min.z-palm.z>FISH_SHOW_HAND_GAP*scale-.001,'visible surface stays clear of the palm');
-  for(const time of [.2,.65,1.1]){drawFishShow(p,show,time,now);const animated=new T.Box3().setFromObject(fish),hand=p.getObjectByName('hand-left')!.getWorldPosition(new T.Vector3());assert.ok(animated.min.z-hand.z>FISH_SHOW_HAND_GAP*scale-.002,`${id}: wagging never closes the palm gap`);}
+  for(const step of [125,375,625]){drawFishShow(p,show,0,now+step);const animated=new T.Box3().setFromObject(fish),hand=p.getObjectByName('hand-left')!.getWorldPosition(new T.Vector3());assert.ok(animated.min.z-hand.z>FISH_SHOW_HAND_GAP*scale-.002,`${id}: wagging never closes the palm gap`);assert.ok(animated.min.z-hand.z<FISH_SHOW_HAND_GAP*scale+.002,`${id}: wriggling never pushes the fish away from the palms`);}
 
   drawFishShow(p,null,0,now);
  }
@@ -73,4 +74,13 @@ test('display-only fog/material changes leave shared pond and aquarium fish inta
  const original=fishKit.instance('fish_whale')!;let source:T.Material|undefined;original.traverse(o=>{if(o instanceof T.Mesh)source=o.material as T.Material;});const fog=(source as T.MeshStandardMaterial).fog,p=avatar();
  drawFishShow(p,{id:'fish_whale',size:1200,until},0,now);p.getObjectByName('held-show-fish')!.traverse(o=>{if(o instanceof T.Mesh){assert.notEqual(o.material,source);assert.equal((o.material as T.MeshStandardMaterial).fog,false);}});
  drawFishShow(p,null,0,until);assert.equal((source as T.MeshStandardMaterial).fog,fog);assert.equal(source!.userData.sharedKit,true);
+});
+
+
+test('fish struggle moves body and tail smoothly at the same absolute phase for online observers',()=>{
+ const p=avatar(),show={id:'fish_whale',size:786,until};drawFishShow(p,show,0,now);const fish=p.getObjectByName('held-show-fish')!,before=fish.quaternion.clone(),y=fish.position.y;let tail:T.Object3D|undefined;fish.traverse(o=>{if(o.name.endsWith('_tail'))tail=o;});
+ const swings:number[]=[];for(const step of [125,375,625]){drawFishShow(p,show,999,now+step);swings.push(tail!.rotation.y);assert.ok(fish.quaternion.angleTo(before)>.01,'whole body wriggles');}
+ assert.ok(Math.max(...swings)-Math.min(...swings)>.4,'tail flaps clearly');drawFishShow(p,show,900,now+2000);assert.ok(fish.quaternion.angleTo(before)<1e-6);assert.ok(Math.abs(fish.position.y-y)<1e-5);
+ const remote=avatar(1.4);drawFishShow(p,show,900,now+125);drawFishShow(remote,show,-123,now+125);const remoteFish=remote.getObjectByName('held-show-fish')!;let remoteTail:T.Object3D|undefined;remoteFish.traverse(o=>{if(o.name.endsWith('_tail'))remoteTail=o;});
+ assert.ok(remoteFish.quaternion.angleTo(fish.quaternion)<1e-6,'a late observer with a different world clock sees the same body phase');assert.ok(Math.abs(remoteTail!.rotation.y-tail!.rotation.y)<1e-8,'tail phase is shared too');drawFishShow(p,null,0,until);drawFishShow(remote,null,0,until);
 });

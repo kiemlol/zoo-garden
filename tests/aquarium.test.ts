@@ -32,7 +32,7 @@ test('saved resident fish round-trip without altering old decorations; malformed
  const s=fixture('deco_aquarium_l');s.decorations.push({uid:'old',id:'deco_shell',x:10,z:2,rotation:.3});s.fishRecords.fish_whale=987.6;
  action(s,'putAquariumFish',{uid:'tank',id:'fish_whale'});assert.equal(s.decorations[0].fish![0].size,987.6);
  const loaded=M.parseSave(JSON.stringify(s))!;assert.deepEqual(loaded.decorations,s.decorations);assert.equal(Object.hasOwn(loaded.decorations[1],'fish'),false);
- assert.equal(fishSize('fish_jelly',{},()=>.25),17.5);assert.deepEqual(readAquariumFish('deco_shell',[{id:'fish_jelly',size:20}]),undefined);
+ assert.equal(fishSize('fish_jelly',{},()=>.25),18.8);assert.deepEqual(readAquariumFish('deco_shell',[{id:'fish_jelly',size:20}]),undefined);
  const fish=readAquariumFish('deco_aquarium',[null,{id:'fish_whale',size:600},{id:'fish_jelly',size:NaN},{id:'fish_jelly',size:-1},...Array.from({length:50},()=>({id:'fish_jelly',size:20,evil:true}))]);assert.deepEqual(fish,[{id:'fish_jelly',size:20},{id:'fish_jelly',size:20}]);
 });
 
@@ -49,6 +49,6 @@ test('the aquarium panel lists only eligible bag fish and exposes explicit capac
 });
 
 test('showing a fish is cosmetic, lasts six seconds, uses its record or a bounded roll and never spends the fish',()=>{
- const s=fixture();s.fishRecords.fish_icepike=123.4;const bag={...s.bag};assert.deepEqual(action(s,'showFish',{id:'fish_icepike'}),{id:'fish_icepike',size:123.4,until:16000});assert.deepEqual(s.bag,bag);assert.deepEqual(action(s,'showFish',{id:'fish_jelly'}),{id:'fish_jelly',size:17.5,until:16000});
+ const s=fixture();s.fishRecords.fish_icepike=123.4;const bag={...s.bag};assert.deepEqual(action(s,'showFish',{id:'fish_icepike'}),{id:'fish_icepike',size:123.4,until:16000});assert.deepEqual(s.bag,bag);assert.deepEqual(action(s,'showFish',{id:'fish_jelly'}),{id:'fish_jelly',size:18.8,until:16000});
  for(const id of ['boot','carrot','__proto__','fish_koi'])assert.throws(()=>action(s,'showFish',{id}),ActionError);
 });
