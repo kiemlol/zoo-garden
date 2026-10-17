@@ -60,12 +60,12 @@ test('all sixteen legacy costumes preserve the original hand anchors and held-ro
  }
 });
 
-test('every avatar and all authored rods lean forward another 20 degrees at wait, keep the grip fixed and restore idle',()=>{
+test('every avatar and all authored rods lean forward another 25 degrees at wait, keep the grip fixed and restore idle',()=>{
  const w=world();for(const id of ['',...Object.keys(DISGUISES)])for(const rod of ['rod','rod_gold','rod_steady','rod_key','rod_key_test']){
   w.state.gear={...(id?{disguise:id}:{}),weapon:rod};w.player=w.lookAvatar('#fff',w.state.gear,DEFAULT_LOOK);
   animate(w,'wait');const hand=w.player.getObjectByName('hand-right'),tip=w.player.getObjectByName('rod-tip'),grip=hand.getWorldPosition(new T.Vector3()),after=tip.getWorldPosition(new T.Vector3()).sub(grip).normalize();
   hand.rotation.x=0;w.player.updateMatrixWorld(true);const before=tip.getWorldPosition(new T.Vector3()).sub(hand.getWorldPosition(new T.Vector3())).normalize();
-  assert.ok(Math.abs(after.angleTo(before)-Math.PI/9)<1e-6,`${id} ${rod} 20 degree tilt`);assert.ok(after.z>before.z&&after.z>0,`${id} ${rod} toward water`);
+  assert.ok(Math.abs(after.angleTo(before)-25*Math.PI/180)<1e-6,`${id} ${rod} 25 degree tilt`);assert.ok(after.z>before.z&&after.z>0,`${id} ${rod} toward water`);
   animate(w,'fight',1);const fight=tip.getWorldPosition(new T.Vector3()).sub(hand.getWorldPosition(new T.Vector3()));assert.ok(fight.z>0,`${id} ${rod} tip forward while reeling`);
   animate(w,'idle');assert.equal(hand.rotation.x,0,`${id} ${rod} idle wrist restored`);
  }
@@ -86,8 +86,8 @@ test('moving the rod tip never shifts the cast point or disconnects either end o
 test('online observers keep the corrected pose and contextual rod through deltas, late art and cancellation',()=>{
  const w=world();for(const id of recent){w.state.gear={disguise:id,weapon:'rod_gold'};w.player=w.lookAvatar('#fff',w.state.gear,DEFAULT_LOOK);animate(w,'wait');
   const visual=w.visualSnapshot(),canonicalGear={disguise:id,weapon:'sword_wood'};w.addRemotePlayer('fisher',{x:0,z:0,y:0,facing:0,gear:canonicalGear,visual});w.animateRemotes(.025);
-  const remote=()=>w.remotePlayers.get('fisher').mesh;assert.ok(remote().getObjectByName('rod-tip'),'contextual rod visible despite canonical combat weapon');assert.equal(remote().getObjectByName('hand-right').rotation.x,Math.PI/9);
-  w.updateRemotePlayer('fisher',{x:0,z:0,hp:90});w.animateRemotes(.025);assert.equal(remote().getObjectByName('hand-right').rotation.x,Math.PI/9);
+  const remote=()=>w.remotePlayers.get('fisher').mesh;assert.ok(remote().getObjectByName('rod-tip'),'contextual rod visible despite canonical combat weapon');assert.equal(remote().getObjectByName('hand-right').rotation.x,25*Math.PI/180);
+  w.updateRemotePlayer('fisher',{x:0,z:0,hp:90});w.animateRemotes(.025);assert.equal(remote().getObjectByName('hand-right').rotation.x,25*Math.PI/180);
   w.removeRemotePlayer('fisher');w.addRemotePlayer('fisher',{x:0,z:0,gear:canonicalGear,visual});w.animateRemotes(.025);assert.ok(remote().getObjectByName('rod-tip'),'late model refresh keeps rod');
   animate(w,'fight',.7);w.updateRemotePlayer('fisher',{x:0,z:0,visual:w.visualSnapshot()});w.animateRemotes(.025);assert.ok(remote().rotation.x<0);
   animate(w,'idle');w.updateRemotePlayer('fisher',{x:0,z:0,visual:w.visualSnapshot()});w.animateRemotes(.025);assert.equal(remote().getObjectByName('rod-tip'),undefined);assert.ok(Math.abs(remote().getObjectByName('hand-right').rotation.x)<1e-8);assert.ok(Math.abs(remote().rotation.x)<1e-8);w.removeRemotePlayer('fisher');

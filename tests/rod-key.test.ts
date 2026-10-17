@@ -8,13 +8,33 @@ import {World} from '../src/world.ts';
 import * as M from '../src/model.ts';
 import {FishingView,type PondView} from '../src/fishing-view.ts';
 import {FishingSimulation} from '../src/fishing.ts';
-import {animateKeyRod,drawRemoteKeyBobber} from '../src/rod-key.ts';
+import {animateKeyRod,drawRemoteKeyBobber,makeStarBobber,pulseStarBobber} from '../src/rod-key.ts';
 import {readFishingPose} from '../src/fishing-pose.ts';
 import {mergeParts} from '../src/avatar-merge.ts';
 import {ContextGearSelection} from '../src/context-gear.ts';
 const disk=async(url:string)=>{const b=readFileSync(new URL('../public/assets/models/'+url.split('/').pop()!.split('?')[0],import.meta.url));return(await new GLTFLoader().parseAsync(b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength) as ArrayBuffer,'')).scene;};
 useHeroLoader(disk);for(const kit of [heroKit,disguiseKit,weaponKit]){(kit as any).loadScene=disk;await kit.load();}
 const fixture=(rodId='rod_key')=>{const w:any=Object.assign(Object.create(World.prototype),{state:M.newGame(),scene:new T.Scene(),position:new T.Vector3(),time:0,facing:0,walkClock:0,playerMaterials:[],castT:0,weaponKind:'rod'});w.state.bag[rodId]=1;w.state.gear.weapon=rodId;w.player=w.lookAvatar('#ffffff',w.state.gear);return w;};
+
+test('live crystal materials and local/remote stars breathe smoothly for three seconds, including through hurt flashes',()=>{
+ const w=fixture(),root=w.player,crystal=root.getObjectByName('crystal') as T.Group;
+ // Match refreshPlayer: the renderer receives new material instances after prepareKeyRod.
+ const surfaces=crystal.children.filter(o=>o instanceof T.Mesh&&o.material instanceof T.MeshToonMaterial) as T.Mesh[];assert.ok(surfaces.length>=2,'crystal and white glint are both covered');
+ for(const mesh of surfaces){mesh.material=(mesh.material as T.MeshToonMaterial).clone();w.playerMaterials.push(mesh.material);}
+ const star=makeStarBobber(),material=(star.children[0] as T.Mesh).material as T.MeshToonMaterial,remote=new T.Group();
+ const pose={phase:'wait' as const,cast:0,tension:0,rod:'rod_key',bobber:{x:1,y:.1,z:5}};
+ let previous:number|undefined,min=Infinity,max=-Infinity;
+ for(let i=0;i<=600;i++){
+  const time=i/100;w.time=time;w.hurtT=i%3===0?.1:0;w.invulnerable=true;w.player.position.set(0,0,0);w.player.scale.setScalar(1);w.animatePlayer(0);
+  pulseStarBobber(star,time);drawRemoteKeyBobber(remote,pose,time);
+  const expected=1.1+.5*Math.sin(time*Math.PI*2/3),remoteMaterial=(remote.getObjectByName('bobber-star-glow') as T.Mesh).material as T.MeshToonMaterial;
+  for(const mesh of surfaces){const m=mesh.material as T.MeshToonMaterial;assert.ok(Math.abs(m.emissiveIntensity-expected)<1e-12);assert.equal(m.emissive.getHex(),0xaa62ff);}
+  assert.ok(Math.abs(material.emissiveIntensity-(2.2-expected))<1e-12,'star is half a cycle behind');assert.equal(material.emissive.getHex(),0xffba23);assert.equal(remoteMaterial.emissiveIntensity,material.emissiveIntensity,'remote and local share the same absolute-time pulse');
+  if(previous!==undefined)assert.ok(Math.abs(expected-previous)<.011,'no intensity jump at frame or cycle boundaries');previous=expected;min=Math.min(min,expected);max=Math.max(max,expected);
+ }
+ assert.ok(Math.abs(min-.6)<1e-12&&Math.abs(max-1.6)<1e-12);
+ for(const time of [123.75,2.25,.75,30.75]){animateKeyRod(root,time);const m=surfaces[0].material as T.MeshToonMaterial;assert.ok(Math.abs(m.emissiveIntensity-(time===2.25?.6:1.6))<1e-12,'absolute time needs no intervening frames');}
+});
 
 test('key rod is obtainable through the rod shop and shares existing rod selection/equip rules',()=>{
  const s=M.newGame();s.energy=10000;for(const [id,n] of Object.entries(M.ITEMS.rod_key.materials!))s.bag[id]=n;

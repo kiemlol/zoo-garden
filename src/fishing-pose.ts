@@ -18,6 +18,6 @@ export function drawFishingPose(player:Object3D,pose:FishingPose,time:number){
  if(pose.phase==='cast'){const t=Math.min(1,1-pose.cast/.5);if(right)right.rotation.x=-2.4+t*1.7;if(left)left.rotation.x=-2.2+t*1.4;}
  if(pose.phase==='fight'){const n=pose.tension;lean=-.25-n*.2;if(right)right.rotation.x=-1+Math.sin(time*40)*n*.08;if(left)left.rotation.x=-.9+Math.sin(time*12)*.35;part(player,'leg-left')?.rotation.set(.3,0,0);}
  // Tilt around the palm, never translate the grip. Counter the reeling lean so the tip stays toward the water.
- const hand=part(player,'hand-right');if(hand)hand.rotation.x=Math.PI/9-lean;
+ const hand=part(player,'hand-right');if(hand)hand.rotation.x=25*Math.PI/180-lean;
  return lean;
 }
