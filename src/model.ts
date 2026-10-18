@@ -1,3 +1,4 @@
+import {parseHalloweenGacha,type HalloweenGachaSave} from './halloween-gacha-config.ts';
 import {capFishSize} from './fish-size.ts';
 import { ITEMS, CROPS, PLANETS, RECIPES, DISGUISES, FISH, FISH_WEIGHTS, LOOT_TABLES, UPGRADES, STARTING_PLOTS, MAX_EXTRA_PLOTS, LEGACY_MAX_PLOTS, MAX_DECORATIONS, STORY_STEPS, canonicalItem, type ItemId, type Inventory, type GearSlot, type CropId, type PlanetId, type BuffKey, type BuffDef, type WeaponDef } from './content.ts';
 import {aquarium,aquariumRefusal,fishSize,readAquariumFish,isDisplayFish,FISH_SHOW_SECONDS} from './aquarium.ts';
@@ -95,6 +96,8 @@ export interface SaveState {
     xp: number;
     hp: number;
     energy: number;
+    /** Optional banner progress; old saves keep all belongings and start at zero draws. */
+    halloweenGacha?: HalloweenGachaSave;
     /** A new game starts with the welcome (a cook helper and the 1M-energy offer); anything saved without it has had it. */
     welcome?: 'pending' | 'done';
     bag: Inventory;
@@ -873,6 +876,7 @@ export function parseSave(raw: string | null): SaveState | null {
         s.level = integer(v.level, 1, 1e9);
         s.xp = typeof v.xp === 'number' && Number.isFinite(v.xp) && v.xp >= 0 ? Math.min(v.xp, xpNeeded(s.level) * 2) : 0;
         s.energy = integer(v.energy);
+        { const gacha = parseHalloweenGacha(v.halloweenGacha); if (gacha) s.halloweenGacha = gacha; }
         s.welcome = v.welcome === 'pending' ? 'pending' : 'done';
         s.healthUp = integer(v.healthUp, 0, 1e9);
         s.attackUp = integer(v.attackUp, 0, 1e9);

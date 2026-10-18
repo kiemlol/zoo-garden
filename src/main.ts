@@ -1,3 +1,4 @@
+import {HalloweenGachaPanel} from './halloween-gacha-ui.ts';
 import {isRestFurniture} from './furniture-use.ts';
 import {aquarium,type FishShow} from './aquarium.ts';
 import {aquariumPanel} from './aquarium-ui.ts';
@@ -259,7 +260,7 @@ app.innerHTML = `
   <div id="darkness" hidden></div><div id="world-labels" aria-label="Nearby places"></div>
   <div id="hud" hidden>
     <header class="player-card"><div class="player-name"><strong id="player-name"></strong></div><div class="hero-face"><button class="avatar" data-action="bag" aria-label="Open character and backpack"><span>${hudIcon('sprout')}</span><img class="hero-pic" alt="" hidden draggable="false"></button><span class="level-badge" role="group" aria-label="Level"><b id="level-text">1</b></span></div><div class="player-details"><div class="hero-energy" role="group" aria-label="Energy"><span>${hudIcon('bolt')}</span><b id="energy">0</b></div><div class="meter health"><div id="hp-fill"></div><span id="hp-text">100 / 100</span></div><div class="meter experience"><div id="xp-fill"></div><span id="xp-text">EXP 0 / 32</span></div><div class="location"><span class="location-dot"></span><span id="zone-name">Clover Village</span></div></div></header>
-    <nav class="top-actions" aria-label="Game menu"><button class="icon-button" data-action="bag" title="Backpack · I" aria-label="Backpack">${hudIcon('bag')}</button><button class="icon-button" data-action="quests" title="Journal · J" aria-label="Quest journal">${hudIcon('journal')}<i id="quest-dot"></i></button><button class="icon-button" data-action="ranking" title="Ranking and news" aria-label="Ranking and news">${hudIcon('ranking')}<i id="news-count" class="news-count" hidden></i></button><div id="social-slot"></div><button class="icon-button secondary-icon" data-action="help" title="How to play" aria-label="How to play">${hudIcon('help')}</button><button class="icon-button" data-action="settings" title="Settings" aria-label="Settings">${hudIcon('settings')}</button><div id="platform-slot"></div></nav>
+    <nav class="top-actions" aria-label="Game menu"><button class="icon-button" data-action="bag" title="Backpack · I" aria-label="Backpack">${hudIcon('bag')}</button><button class="icon-button" data-action="quests" title="Journal · J" aria-label="Quest journal">${hudIcon('journal')}<i id="quest-dot"></i></button><button class="icon-button" data-action="ranking" title="Ranking and news" aria-label="Ranking and news">${hudIcon('ranking')}<i id="news-count" class="news-count" hidden></i></button><div id="social-slot"></div><button class="icon-button" data-action="halloween-gacha" title="Halloween chest" aria-label="Halloween chest">${hudIcon('pumpkin')}</button><button class="icon-button secondary-icon" data-action="help" title="How to play" aria-label="How to play">${hudIcon('help')}</button><button class="icon-button" data-action="settings" title="Settings" aria-label="Settings">${hudIcon('settings')}</button><div id="platform-slot"></div></nav>
     <div class="tracker-stack"><button id="tracker-chip" class="tracker-chip" data-action="trackers" aria-label="Show quest and bounty" hidden><span id="chip-quest">🥕 0/3</span><span id="chip-chal"></span><span id="chip-bounty">🎯</span><i>▸</i></button><div class="tracker-panels"><aside class="quest-tracker"><button class="tracker-fold" data-action="trackers" aria-label="Fold quest and bounty">▾ Fold</button><div class="eyebrow">ADVENTURE <span id="quest-chapter">1 / 9</span></div><button id="quest-summary" data-action="quests"><span class="quest-icon" id="quest-icon">🥕</span><span><strong id="quest-title">A little green beginning</strong><small id="quest-task">Harvest 3 crops · 0 / 3</small></span><b class="tracker-count" id="quest-count"></b><span class="chevron">›</span></button><div class="quest-progress"><i id="quest-fill"></i></div><button id="quick-claim" data-action="claim" hidden>Collect your reward ✨</button></aside>
     <button id="challenge-tracker" class="challenge-tracker" data-action="journal-tab" data-kind="challenges" hidden><span class="ch-ring" aria-hidden="true"><span class="ch-icon">⏱️</span></span><div><strong>Quick challenge</strong><small></small></div><b class="tracker-count"></b></button>
     <button id="bounty-tracker" class="bounty-tracker" data-action="journal-tab" data-kind="bounties"><span>🎯</span><div><strong id="bounty-title">A new bounty</strong><small id="bounty-task">Find your next adventure</small></div><b class="tracker-count" id="bounty-count"></b></button></div><div id="buff-bar" aria-label="Active effects"></div><div class="quick-eat"><button id="quick-eat" class="idle" data-action="quick-eat" title="Eat · H" aria-label="Eat"><span id="quick-eat-icon" aria-hidden="true">🍽️</span><b id="quick-eat-count">0</b></button><button class="quick-eat-pick" data-action="quick-eat-pick" aria-label="Choose food" aria-expanded="false">▾</button><div id="quick-eat-menu" hidden></div></div></div><button class="minimap" data-action="map" aria-label="Open village map"><canvas id="minimap" width="150" height="150"></canvas><span>N</span><small id="map-caption">CLOVER VILLAGE</small></button>
@@ -438,7 +439,7 @@ function effectText(item:M.ItemDef){
 }
 // Each place opens its panel with its own icon and colour band.
 const DIALOG_LOOK:Record<string,[string,string]>={
-  plant:['🌱','garden'],plot:['🌱','garden'],pen:['🐔','garden'],map:['🗺️','garden'],sell:['🧺','market'],shop:['🛍️','shop'],bag:['🎒','bag'],decor:['🏡','bag'],
+  'halloween-gacha':['🎃','crystal'],plant:['🌱','garden'],plot:['🌱','garden'],pen:['🐔','garden'],map:['🗺️','garden'],sell:['🧺','market'],shop:['🛍️','shop'],bag:['🎒','bag'],decor:['🏡','bag'],
   quests:['📖','journal'],upgrade:['💎','crystal'],chest:['📦','chest'],cook:['🍲','kitchen'],craft:['🔨','craft'],travel:['🚀','travel'],
   settings:['⚙️','calm'],help:['🧭','calm'],'fish-help':['🎣','water'],fishing:['🎣','water'],catch:['🐟','water'],death:['🌷','rose'],reset:['🌱','rose'],
 };
@@ -451,7 +452,10 @@ function uiBlocked(){return !!document.querySelector('[data-player-panel]:not([h
 function botActive(){return started&&!actionHandler&&!document.hidden&&!uiBlocked()&&!placement&&!world.interior&&world.planet==='home'&&state.hp>0;}
 /** 'wardrobe' while the bag was opened from the bedroom wardrobe: it then lists only things to wear (house-stores.ts). */
 let bagMode:'bag'|'wardrobe'='bag';
+const halloweenGachaPanel=new HalloweenGachaPanel({state:()=>state,draw:count=>perform('halloweenDraw',{count}),art});
+function halloweenGacha(){openDialog('halloween-gacha','Halloween chest','<div id="halloween-gacha-root"></div>','HALLOWEEN NIGHT DRAW','🎃');halloweenGachaPanel.mount($('#halloween-gacha-root'));}
 function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF AT HOME',icon?:string) {
+  halloweenGachaPanel.unmount();
   if(fishGame)endFishing();
   // Inside the cottage the stove, workbench, globe, wardrobe and mirror are their own places, not the village shops (house-stores.ts).
   const store=indoorStore(type,!!world.interior,bagMode==='wardrobe');if(store){title=store.title;kicker=store.kicker;icon=store.icon;body=purposeHtml(store)+body;}$('#dialog').dataset.station=store?type:'';setDock(type);
@@ -468,7 +472,7 @@ function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF A
 let shopFocus='';
 function focusShopRow(){const id=shopFocus;shopFocus='';const row=$('#dialog-body').querySelector(`[data-action="buy"][data-item="${id}"]`)?.closest<HTMLElement>('.shop-item');if(!row)return;row.scrollIntoView({block:'center'});row.classList.add('shop-focus');setTimeout(()=>row.classList.remove('shop-focus'),2600);}
 // The Mirror docks with 'trying-on' even before a preview (look-shop.ts), so closing always clears it: a later panel or confirmation must not inherit it.
-function closeDialog(){if(modal==='bag')selectedItem=null;endTryOn();$('#dialog-layer').classList.remove('trying-on');modal='';bagMode='bag';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();clearHeldInput();}
+function closeDialog(){halloweenGachaPanel.unmount();if(modal==='bag')selectedItem=null;endTryOn();$('#dialog-layer').classList.remove('trying-on');modal='';bagMode='bag';$('#dialog-layer').hidden=true;$('#hud').inert=false;$('#world-labels').inert=false;lastFocused?.focus();clearHeldInput();}
 /** The three save profiles on the title screen: name and level of each, or an empty slot for a new game. */
 function profilePicker(){
   const cur=activeSlot();
@@ -1908,6 +1912,7 @@ app.addEventListener('click',async event=>{
   if(tryingOn&&action!=='try-on')endTryOn();
   if(action!=='quick-eat-pick'&&action!=='quick-eat-choose')quickEatMenu(false);
   switch(action){
+    case 'halloween-gacha':halloweenGacha();break;
     case 'start':start();break;case 'discovery':planets();break;
     case 'color':await perform('settings',{color:button.dataset.color!});document.querySelectorAll<HTMLButtonElement>('.color-picker button').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});world.refreshPlayer();break;
     case 'forge-menu':forgeMenu(id);break;
@@ -2139,7 +2144,7 @@ onLanguageChange(()=>{
   updateHud();updateLabels();minimap.invalidate();
   if(started)showZone(world.lastZone||t(M.PLANETS[state.planet].name));
   if(modal==='settings'){settings();$<HTMLSelectElement>('#language-settings').focus({preventScroll:true});}
-  else if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal==='shop')shop();else if(modal==='sell')market();else if(modal==='chest')storage();else if(modal==='upgrade')upgrades();else if(modal==='cook')cooking();else if(modal==='craft')crafting();else if(modal==='forge')forgeMenu();else if(modal==='decor')decorations();else if(modal==='map')map();else if(modal==='travel')planets();else if(modal==='help')help();else if(modal==='pen')penDialog();else if(modal==='helper')helperDialog();else if(modal==='farm-helper')farmHelperDialog();
+  else if(modal==='halloween-gacha')halloweenGacha();else if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal==='shop')shop();else if(modal==='sell')market();else if(modal==='chest')storage();else if(modal==='upgrade')upgrades();else if(modal==='cook')cooking();else if(modal==='craft')crafting();else if(modal==='forge')forgeMenu();else if(modal==='decor')decorations();else if(modal==='map')map();else if(modal==='travel')planets();else if(modal==='help')help();else if(modal==='pen')penDialog();else if(modal==='helper')helperDialog();else if(modal==='farm-helper')farmHelperDialog();
 });
 initOnline(gameBridge);
 publishHudIcons();initHudLayout();

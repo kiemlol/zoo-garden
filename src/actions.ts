@@ -1,3 +1,4 @@
+import {drawHalloween,HalloweenDrawError} from './halloween-gacha.ts';
 import * as Game from './model.ts';
 import * as Helper from './helper.ts';
 import * as AutoPlant from './auto-plant.ts';
@@ -58,6 +59,7 @@ function reduceAction(state: Game.SaveState, intent: GameIntent, context: Action
   const before = deliversToChest(intent.type, p, now - state.savedAt) ? { ...state.bag } : null, potBefore = before ? potItems(state) : {};
   let result: unknown;
   switch (intent.type) {
+    case 'halloweenDraw': { const count = integer(p.count); if (count !== 1 && count !== 10) return invalid(); try { result = drawHalloween(state, count, random, now); } catch (error) { if (error instanceof HalloweenDrawError) throw new ActionError(error.status, error.message); throw error; } break; }
     case 'buy': result = Game.buy(state, id()); break;
     case 'sell': result = Game.sell(state, id(), integer(p.count, 1)); if (!result) return refuse(); break;
     // The same crop, fish and junk stacks (item-views.ts PRODUCE_TYPES) whose total the button shows.

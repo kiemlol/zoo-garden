@@ -1,3 +1,4 @@
+import {GACHA_ENERGY_ERROR} from './halloween-gacha.ts';
 import * as M from './model.ts';
 import {aquariumRefusal} from './aquarium.ts';
 import { HELPER_COST } from './helper-state.ts';
@@ -156,6 +157,7 @@ function houseReason(s: M.SaveState, p: Payload, now: number) {
 }
 
 export const REFUSALS: Record<string, Reason> = {
+  halloweenDraw: GACHA_ENERGY_ERROR,
   buy: buyReason,
   sell: (s, p) => (s.bag[id(p)] ?? 0) > 0 && !M.looseQuantity(s, id(p)) ? 'Take it off before selling it.' : item(p)?.sell ? 'You have none of that left to sell.' : 'That cannot be sold.',
   sellProduce: 'You have no crops or fish to sell.',

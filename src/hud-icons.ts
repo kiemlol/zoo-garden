@@ -12,6 +12,8 @@ const ATTRS = `viewBox="0 0 24 24" fill="none" stroke="${INK}" stroke-width="1.7
 const wrap = (body: string) => `<svg class="hi" ${ATTRS} aria-hidden="true" focusable="false">${body}</svg>`;
 
 const BODIES = {
+  /** Halloween draw entry, in the same outlined icon family. */
+  pumpkin: `<path d="M11 6q-1-3 2-4l2 1q-2 1-2 3" fill="#7ed957"/><ellipse cx="12" cy="14" rx="9" ry="7.5" fill="#ff8a2a"/><ellipse cx="12" cy="14" rx="5" ry="7.5"/><path d="m6 12 3-2 1 3zm12 0-3-2-1 3zM7 16l2 3h6l2-3-3 1-2-1-2 1z" fill="#ffe08a" stroke-width="1.1"/>`,
   /** A satchel with a flap and a brass clasp. */
   bag: `<path d="M8 8.6V7a4 4 0 0 1 8 0v1.6"/><path d="M4.8 8.6h14.4l1 9.6a2 2 0 0 1-2 2.3H5.8a2 2 0 0 1-2-2.3z" fill="#ff8a2a"/><path d="M4.4 12.4c2.4 1.7 5 2.4 7.6 2.4s5.200-.7 7.600-2.400" fill="none"/><rect x="10.200" y="12.600" width="3.600" height="4" rx="1" fill="#ffe08a"/>`,
   /** An open journal with a ribbon. */
