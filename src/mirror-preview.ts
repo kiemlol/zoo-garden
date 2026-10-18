@@ -26,6 +26,8 @@ function makeRenderer(): PreviewRenderer {
   r.setPixelRatio(1); r.outputColorSpace = T.SRGBColorSpace; r.toneMapping = T.NoToneMapping; r.setClearColor(0x000000, 0);
   return r;
 }
+/** Shared by animated model previews too; callers copy the pixels before returning. */
+export const previewRenderer = (): PreviewRenderer => shared ??= makeRenderer();
 const box = new T.Box3(), part = new T.Box3(), size = new T.Vector3(), centre = new T.Vector3();
 /** The explorer's idle stance (world.ts: arms a little out), so a portrait does not stand stiff. */
 export function restPose<O extends T.Object3D>(model: O): O {
@@ -72,7 +74,7 @@ export class MirrorPreview {
     let model: T.Object3D | null = null;
     try {
       model = build(); if (!model) return false;
-      const r = this.opts.renderer ?? (shared ??= makeRenderer()), pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+      const r = this.opts.renderer ?? previewRenderer(), pw = Math.round(w * dpr), ph = Math.round(h * dpr);
       this.holder.add(model); model.rotation.y += this.opts.yaw ?? -.42; this.frame(model, w / h);
       r.setSize(pw, ph, false); r.render(this.scene, this.camera);
       // Copied at once, in the same task as the render, so the GL canvas needs no preserved drawing buffer.

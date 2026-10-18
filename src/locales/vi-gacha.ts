@@ -1,4 +1,9 @@
 export const VI_GACHA: Record<string, string> = {
+ 'Tap the screen to open the box!':'Nhấn vào màn hình để mở hộp!',
+ 'Tap the screen to go to the next part.':'Nhấn vào màn hình để sang phần tiếp theo.',
+ 'DRAW RESULTS':'KẾT QUẢ',
+ 'Drop rate info':'Thông tin xác suất',
+ 'Confirming draw…':'Đang xác nhận lượt quay…',
  'Halloween chest':'Hòm Halloween',
  'HALLOWEEN NIGHT DRAW':'BỐC THĂM LỄ HỘI ĐÊM',
  'PURPLE · RARE':'TÍM · HIẾM',

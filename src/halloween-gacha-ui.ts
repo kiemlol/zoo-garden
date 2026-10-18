@@ -2,16 +2,24 @@ import type { SaveState } from './model.ts';
 import { ITEMS } from './content.ts';
 import { t } from './i18n.ts';
 import { HALLOWEEN_GACHA, HALLOWEEN_PRIZES, HALLOWEEN_WEIGHT, type HalloweenPrize, type HalloweenDraw, type HalloweenReward } from './halloween-gacha-config.ts';
+import { GachaPumpkinView } from './gacha-pumpkin-view.ts';
+import { PUMPKIN_OPEN_SECONDS } from './gacha-pumpkin.ts';
 import './halloween-gacha.css';
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const text = (s: string, params?: Record<string, string | number>) => esc(t(s, params));
 const name = (id: string) => id === 'energy' ? t('Energy') : t(ITEMS[id].name);
 const prizeOf = (id: string) => HALLOWEEN_PRIZES.find(p => p.id === id)!;
 const percent = (p: HalloweenPrize) => `${Number((p.weight / HALLOWEEN_WEIGHT * 100).toFixed(2))}%`;
-/** Lightweight vector pumpkin, with a separate lid: no additional WebGL context or per-frame allocations. */
-export const gachaPumpkin = `<svg class="gacha-pumpkin" viewBox="0 0 300 280" aria-hidden="true"><defs><linearGradient id="gacha-orange" x2=".3" y2="1"><stop stop-color="#ffcb57"/><stop offset=".5" stop-color="#f78924"/><stop offset="1" stop-color="#bc401b"/></linearGradient><radialGradient id="gacha-magic"><stop stop-color="#fff2b2"/><stop offset="1" stop-color="#d69aff" stop-opacity="0"/></radialGradient></defs><ellipse cx="150" cy="254" rx="101" ry="13" fill="#190d32" opacity=".3"/><ellipse class="gacha-pumpkin-glow" cx="150" cy="151" rx="143" ry="120" fill="url(#gacha-magic)"/><g class="gacha-pumpkin-body" fill="url(#gacha-orange)" stroke="#c85b24" stroke-width="2"><ellipse cx="150" cy="172" rx="113" ry="78"/><ellipse cx="150" cy="172" rx="83" ry="79"/><ellipse cx="150" cy="172" rx="43" ry="79"/><path d="m76 159 37-23 8 29z m148 0-37-23-8 29z M96 190l20 7 5-9 18 13 12-8 13 9 18-15 4 10 19-7-12 29-21-5-14 9-19-9-15 7-20-7z" fill="#ffed8e" stroke="#aa481e" stroke-width="4"/></g><g class="gacha-pumpkin-lid"><path d="M53 113Q150 65 247 113l-20 20-18-8-20 13-20-10-19 11-20-11-22 9-19-13-20 7z" fill="url(#gacha-orange)" stroke="#b95523" stroke-width="3"/><path d="M138 89q-4-35 15-50l21 8q-21 15-17 43" fill="#617b49" stroke="#334d39" stroke-width="4"/><path d="M165 63q29-32 48-13-13 28-46 21" fill="#91ae57" stroke="#516e3d" stroke-width="3"/><path d="m100 104 32-10m38 0 29 10" stroke="#ffe094" stroke-width="5" stroke-linecap="round"/></g><g fill="#fff4ba"><path d="m37 79 4 11 11 4-11 4-4 11-4-11-11-4 11-4z"/><path d="m258 163 3 9 9 3-9 3-3 9-3-9-9-3 9-3z"/></g></svg>`;
-interface Options { state: () => SaveState; draw: (count: 1 | 10) => Promise<HalloweenDraw | undefined>; art: (id: string, icon: string) => string }
-/** Presentation only. The shared action/server commits the whole batch before any pumpkin opens. */
+interface PumpkinPreview { show(slot: HTMLElement, opening: boolean): void; dispose(): void }
+interface Options {
+  state: () => SaveState;
+  draw: (count: 1 | 10) => Promise<HalloweenDraw | undefined>;
+  art: (id: string, icon: string) => string;
+  close: () => void;
+  /** Injectable without WebGL for lifecycle tests. */
+  pumpkin?: () => PumpkinPreview;
+}
+/** Presentation only: shared rules/server still commit the entire batch before any opening animation. */
 export class HalloweenGachaPanel {
   private host: HTMLElement | null = null;
   private owner: SaveState | null = null;
@@ -20,66 +28,100 @@ export class HalloweenGachaPanel {
   private selected: HalloweenPrize | null = null;
   private receipt: HalloweenDraw | null = null;
   private index = 0;
+  private rates = false;
+  private advanceAfter = 0;
+  private pumpkin: PumpkinPreview | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
   constructor(private options: Options) {}
   mount(host: HTMLElement) {
     this.unmount();
     const state = this.options.state(), last = state.halloweenGacha?.last;
-    if (this.owner !== state || this.receipt && (this.receipt.total !== last?.total || this.receipt.at !== last?.at)) { this.owner = state; this.phase = 'shop'; this.receipt = null; }
-    this.host = host; host.addEventListener('click', this.click); this.render();
+    if (this.owner !== state || this.receipt && (this.receipt.total !== last?.total || this.receipt.at !== last?.at)) { this.owner = state; this.phase = 'shop'; this.receipt = null; this.selected = null; }
+    this.host = host; host.hidden = false; host.addEventListener('click', this.click); host.addEventListener('keydown', this.key); this.render(); this.host.querySelector<HTMLButtonElement>('[data-gacha=close]')?.focus({preventScroll:true});
   }
   unmount() {
-    this.host?.removeEventListener('click', this.click); this.host = null;
+    if (this.host) { this.host.removeEventListener('click', this.click); this.host.removeEventListener('keydown', this.key); this.host.hidden = true; this.host.innerHTML = ''; }
+    this.host = null; this.rates = false;
     clearTimeout(this.timer); this.timer = undefined;
+    this.pumpkin?.dispose(); this.pumpkin = null;
     if (this.phase === 'opening') this.phase = 'ready';
   }
   private icon(id: string) { return id === 'energy' ? '⚡' : this.options.art(id, ITEMS[id].icon); }
   private rarity(p: HalloweenPrize) { return text(p.rarity === 'purple' ? 'PURPLE · RARE' : 'BLUE'); }
+  private header() { return `<header class="gacha-heading"><span>${text('HALLOWEEN NIGHT DRAW')}</span><h2>${text('Halloween chest')}</h2></header>`; }
   private progress() {
-    const s = this.options.state().halloweenGacha, misses = s?.misses ?? 0;
-    return `<div class="gacha-guarantee"><div><b>🎣 ${text('Rod guarantee')}</b><span>${misses} / ${HALLOWEEN_GACHA.rodPity}</span></div><progress max="${HALLOWEEN_GACHA.rodPity}" value="${misses}" aria-label="${text('Rod guarantee')}"></progress><small>${text('At most {count} more draws for the sealed key rod.', { count: HALLOWEEN_GACHA.rodPity - misses })}</small></div>`;
+    const misses = this.options.state().halloweenGacha?.misses ?? 0;
+    return `<button class="gacha-pity" data-gacha="rates" aria-label="${text('Rod guarantee')}: ${misses}/${HALLOWEEN_GACHA.rodPity}"><span class="gacha-orb purple"><span class="gacha-art">${this.icon('rod_key')}</span></span><b>${misses}/${HALLOWEEN_GACHA.rodPity}</b></button>`;
   }
-  private card(r: HalloweenReward, i: number) {
+  private card(r: HalloweenReward) {
     const p = prizeOf(r.id);
-    return `<div class="gacha-result-card ${p.rarity}" data-reward="${r.id}"><span class="gacha-art">${this.icon(r.id)}</span><b>${esc(name(r.id))}</b><small>×${r.count.toLocaleString()}${r.fresh ? ` · ${text('NEW')}` : ''}</small>${r.guaranteed ? `<em>${text('GUARANTEED')}</em>` : ''}<small>${text(r.destination === 'chest' ? 'Sent to chest' : r.destination === 'energy' ? 'Energy added' : 'Added to backpack')}</small><span class="gacha-number">${i + 1}</span></div>`;
+    return `<div class="gacha-result-card gacha-orb ${p.rarity}" data-reward="${r.id}" role="img" aria-label="${esc(name(r.id))} ×${r.count}${r.guaranteed ? ` · ${text('GUARANTEED')}` : ''}"><span class="gacha-art">${this.icon(r.id)}</span>${r.fresh ? `<small class="gacha-new">${text('NEW')}</small>` : ''}</div>`;
+  }
+  private odds() {
+    return `<div class="gacha-odds-shade"><section class="gacha-odds" role="dialog" aria-modal="true" aria-label="${text('Rewards and drop rates')}"><button class="gacha-close" data-gacha="rates-close" aria-label="${text('Close')}">×</button><h3>${text('Rewards and drop rates')}</h3><div class="gacha-odds-list">${HALLOWEEN_PRIZES.map(p => `<div><span class="gacha-orb ${p.rarity}"><span class="gacha-art">${this.icon(p.id)}</span></span><span>${esc(name(p.id))}${p.id === 'energy' ? ' ×1.000' : ''}</span><b>${percent(p)}</b></div>`).join('')}</div><p>${text('Rates above total 100% on ordinary draws. Each draw is independent; duplicate rewards are kept.')}</p><p>${text('After 149 draws without the sealed key rod, the next draw guarantees it. Winning the rod resets only this counter; a ten-draw batch follows the same rule.')}</p><p>${text('Rewards are saved immediately. A full backpack sends items to your chest. Closing the screen does not cancel a paid draw.')}</p></section></div>`;
   }
   private render() {
     if (!this.host) return;
+    const focused = typeof document !== 'undefined' && this.host.contains(document.activeElement) ? (document.activeElement as HTMLElement)?.dataset : undefined;
     const s = this.options.state(), last = s.halloweenGacha?.last;
     let body: string;
     if (this.phase === 'shop' || !this.receipt) {
       const selected = this.selected;
-      const preview = selected ? `<div class="gacha-feature ${selected.rarity}"><span class="gacha-art">${this.icon(selected.id)}</span><strong>${esc(name(selected.id))}</strong><small>${this.rarity(selected)} · ${percent(selected)}${selected.id === 'energy' ? ' · ×1.000' : ''}</small><p>${selected.id === 'energy' ? text('A bundle of 1,000 energy.') : text(ITEMS[selected.id].desc ?? '')}</p><button class="gacha-link" data-gacha="pumpkin">${text('View pumpkin')}</button></div>` : `<div class="gacha-pumpkin-idle">${gachaPumpkin}<strong>${text('A little pumpkin. A big surprise.')}</strong><small>${text('Select any reward to preview it.')}</small></div>`;
-      body = `<div class="gacha-layout"><div class="gacha-stage">${preview}</div><section class="gacha-pool" aria-label="${text('Rewards and drop rates')}">${HALLOWEEN_PRIZES.map(p => `<button class="gacha-prize ${p.rarity}${selected?.id === p.id ? ' selected' : ''}" data-gacha="preview" data-prize="${p.id}" aria-pressed="${selected?.id === p.id}" aria-label="${esc(name(p.id))} · ${percent(p)}"><span class="gacha-art">${this.icon(p.id)}</span><b>${esc(name(p.id))}${p.id === 'energy' ? ' ×1.000' : ''}</b><small>${this.rarity(p)}</small><span class="gacha-rate">${percent(p)}</span></button>`).join('')}</section></div>${this.progress()}<div class="gacha-wallet">⚡ ${text('Energy')}: <b>${s.energy.toLocaleString()}</b> · ${text('Total draws')}: ${s.halloweenGacha?.total ?? 0}</div><div class="gacha-buy">${([1, 10] as const).map(n => `<button class="${n === 10 ? 'primary' : 'sky-button'}" data-gacha="draw" data-count="${n}" ${this.busy || s.energy < n * HALLOWEEN_GACHA.cost ? 'disabled' : ''}>${text(n === 1 ? 'Draw once' : 'Draw ten')}<span>⚡ ${(n * HALLOWEEN_GACHA.cost).toLocaleString()}</span></button>`).join('')}</div>${this.busy ? `<p class="gacha-note" role="status">${text('Confirming draw… Your result is saved before opening.')}</p>` : ''}<details class="gacha-rules"><summary>${text('Rates and guarantee rules')}</summary><p>${text('Rates above total 100% on ordinary draws. Each draw is independent; duplicate rewards are kept.')}</p><p>${text('After 149 draws without the sealed key rod, the next draw guarantees it. Winning the rod resets only this counter; a ten-draw batch follows the same rule.')}</p><p>${text('Rewards are saved immediately. A full backpack sends items to your chest. Closing the screen does not cancel a paid draw.')}</p></details>${last ? `<button class="gacha-link" data-gacha="history" ${this.busy ? 'disabled' : ''}>${text('View last result')} · ${text('Draws {from}–{to}', { from: last.total - last.rewards.length + 1, to: last.total })}</button>` : ''}`;
+      body = `${this.header()}${this.progress()}<div class="gacha-layout"><div class="gacha-showcase">${selected ? `<div class="gacha-feature ${selected.rarity}" aria-label="${esc(name(selected.id))}"><span class="gacha-art">${this.icon(selected.id)}</span></div>` : '<div class="gacha-pumpkin-slot"></div>'}</div><div class="gacha-selection"><section class="gacha-pool" aria-label="${text('Rewards and drop rates')}">${HALLOWEEN_PRIZES.map(p => `<button class="gacha-prize gacha-orb ${p.rarity}${selected?.id === p.id ? ' selected' : ''}" data-gacha="preview" data-prize="${p.id}" aria-pressed="${selected?.id === p.id}" aria-label="${esc(name(p.id))} · ${percent(p)}"><span class="gacha-art">${this.icon(p.id)}</span>${selected?.id === p.id ? `<span class="gacha-item-name" role="status">${esc(name(p.id))}</span>` : ''}</button>`).join('')}</section><div class="gacha-buy">${([1, 10] as const).map(n => `<button class="gacha-buy-button" data-gacha="draw" data-count="${n}" ${this.busy || s.energy < n * HALLOWEEN_GACHA.cost ? 'disabled' : ''}><span>${text(n === 1 ? 'Draw once' : 'Draw ten')}</span><b>⚡ ${(n * HALLOWEEN_GACHA.cost).toLocaleString()}</b></button>`).join('')}</div><small class="gacha-wallet">⚡ ${s.energy.toLocaleString()}</small></div></div><footer class="gacha-shop-footer"><button class="gacha-info" data-gacha="rates">ⓘ ${text('Drop rate info')}</button>${last ? `<button class="gacha-history" data-gacha="history" ${this.busy ? 'disabled' : ''}>${text('View last result')}</button>` : ''}</footer>${this.busy ? `<p class="gacha-pending" role="status">${text('Confirming draw…')}</p>` : ''}`;
     } else if (this.phase === 'ready' || this.phase === 'opening') {
-      const opening = this.phase === 'opening';
-      body = `<div class="gacha-open-stage${opening ? ' opening' : ''}"><span class="gacha-count">🎃 ${this.receipt.rewards.length - this.index}</span><button class="gacha-open-button" data-gacha="open" ${opening ? 'disabled' : ''} aria-label="${text('Tap to open')}">${gachaPumpkin}</button><h3>${text(opening ? 'Opening pumpkin…' : 'Tap to open')}</h3><p>${text('Your rewards are already saved.')}</p></div><button class="sky-button gacha-all" data-gacha="all">${text('Open all')}</button>`;
+      body = `<button class="gacha-tap-area" data-gacha="advance" ${this.phase === 'opening' ? 'disabled' : ''} aria-label="${text('Tap the screen to open the box!')}">${this.header()}<div class="gacha-gift"><div class="gacha-pumpkin-slot"></div><span class="gacha-gift-count">${this.receipt.rewards.length}</span></div><p class="gacha-tap-prompt">${text('Tap the screen to open the box!')}</p></button>`;
     } else if (this.phase === 'reward') {
       const reward = this.receipt.rewards[this.index], p = prizeOf(reward.id);
-      body = `<div class="gacha-reveal ${p.rarity}"><div class="gacha-rays"></div><div class="gacha-confetti" aria-hidden="true">${Array.from({ length: 14 }, (_, i) => `<i style="--i:${i}">✦</i>`).join('')}</div><span class="gacha-count">${this.index + 1} / ${this.receipt.rewards.length}</span><div class="gacha-reward-content" role="status"><b class="gacha-rarity">${this.rarity(p)}</b><span class="gacha-art">${this.icon(reward.id)}</span><h3>${esc(name(reward.id))}</h3><strong>×${reward.count.toLocaleString()}${reward.fresh ? ` · ${text('NEW')}` : ''}</strong>${reward.guaranteed ? `<em>${text('GUARANTEED')}</em>` : ''}<p>${text(reward.destination === 'chest' ? 'Sent to chest' : reward.destination === 'energy' ? 'Energy added' : 'Added to backpack')}</p></div></div><div class="gacha-next"><button class="soft-button" data-gacha="all">${text('Open all')}</button><button class="sky-button" data-gacha="next">${text(this.index + 1 < this.receipt.rewards.length ? 'Next reward' : 'View results')}</button></div>`;
+      body = `<button class="gacha-tap-area gacha-reveal ${p.rarity}" data-gacha="advance" aria-label="${text('Tap the screen to go to the next part.')}" aria-live="polite"><div class="gacha-rays"></div><span class="gacha-remaining">🎃 ${this.receipt.rewards.length - this.index - 1}</span><div class="gacha-reward-content"><b class="gacha-rarity">${this.rarity(p)}</b><span class="gacha-art">${this.icon(reward.id)}</span><h3>${esc(name(reward.id))}</h3>${reward.fresh ? `<strong class="gacha-new">${text('NEW')}</strong>` : ''}${reward.guaranteed ? `<em>${text('GUARANTEED')}</em>` : ''}<small>${text(reward.destination === 'chest' ? 'Sent to chest' : reward.destination === 'energy' ? 'A bundle of 1,000 energy.' : 'Added to backpack')}</small></div><p class="gacha-tap-prompt">${text('Tap the screen to go to the next part.')}</p></button><button class="gacha-small-button gacha-all" data-gacha="all">${text('Open all')}</button>`;
     } else {
-      body = `<div class="gacha-summary"><h3>${text('YOUR REWARDS')}</h3><p>${text('Draws {from}–{to}', { from: this.receipt.total - this.receipt.rewards.length + 1, to: this.receipt.total })} · ⚡ −${this.receipt.cost.toLocaleString()}</p><div class="gacha-results">${this.receipt.rewards.map((r, i) => this.card(r, i)).join('')}</div>${this.progress()}<button class="sky-button" data-gacha="back">${text('Back to Halloween chest')}</button></div>`;
+      body = `<div class="gacha-summary"><h2>${text('DRAW RESULTS')}</h2><div class="gacha-results">${this.receipt.rewards.map(r => this.card(r)).join('')}</div><button class="gacha-ok gacha-buy-button" data-gacha="back">OK</button></div>`;
     }
-    this.host.innerHTML = `<section class="gacha-screen" data-gacha-phase="${this.phase}" aria-label="${text('Halloween chest')}">${body}</section>`;
+    // Keep the live canvas/model between ready and opening; render() never creates a WebGL context.
+    const phase = this.phase, usesPumpkin = phase === 'ready' || phase === 'opening' || phase === 'shop' && !this.selected;
+    if (!usesPumpkin) { this.pumpkin?.dispose(); this.pumpkin = null; }
+    this.host.innerHTML = `<section class="gacha-screen ${phase === 'reward' ? prizeOf(this.receipt!.rewards[this.index].id).rarity : ''}" data-gacha-phase="${phase}" aria-label="${text('Halloween chest')}">${body}<button class="gacha-close" data-gacha="close" aria-label="${text('Close')}">×</button>${this.rates ? this.odds() : ''}</section>`;
+    const slot = this.host.querySelector<HTMLElement>('.gacha-pumpkin-slot');
+    const focusAction = this.rates ? 'rates-close' : phase === 'ready' || phase === 'reward' ? 'advance' : phase === 'summary' ? 'back' : focused?.gacha;
+    if (focusAction) this.host.querySelector<HTMLButtonElement>(focusAction === 'preview' && focused?.prize ? `[data-prize="${focused.prize}"]` : `[data-gacha="${focusAction}"]`)?.focus({preventScroll:true});
+    if (slot) { this.pumpkin ??= this.options.pumpkin?.() ?? new GachaPumpkinView(); this.pumpkin.show(slot, phase === 'opening'); }
   }
   private open() {
-    if (!this.receipt || this.phase === 'opening' || !this.host) return;
+    if (!this.receipt || this.phase !== 'ready' || !this.host) return;
     this.phase = 'opening'; this.render();
-    this.timer = setTimeout(() => { this.timer = undefined; this.phase = 'reward'; this.render(); }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 750);
+    this.timer = setTimeout(() => {
+      this.timer = undefined; this.phase = 'reward'; this.advanceAfter = performance.now() + 350; this.render();
+    }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : PUMPKIN_OPEN_SECONDS * 1000);
   }
+  private advance() {
+    if (this.rates || this.busy) return;
+    if (this.phase === 'ready') { this.open(); return; }
+    if (this.phase !== 'reward' || !this.receipt || performance.now() < this.advanceAfter) return;
+    // Only the FIRST tap opens a pumpkin. Subsequent taps reveal the next committed reward directly.
+    if (this.index + 1 < this.receipt.rewards.length) { this.index++; this.advanceAfter = performance.now() + 350; }
+    else this.phase = 'summary';
+    this.render();
+  }
+  private key = (event: KeyboardEvent) => {
+    if (event.repeat && (event.key === 'Enter' || event.key === ' ')) event.preventDefault();
+    if (!this.rates) return;
+    if (event.key === 'Tab') { event.preventDefault(); event.stopPropagation(); this.host?.querySelector<HTMLButtonElement>('[data-gacha=rates-close]')?.focus(); }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this.rates = false; this.render(); }
+  };
   private click = (event: MouseEvent) => {
     const button = (event.target as Element).closest<HTMLButtonElement>('button[data-gacha]');
-    if (!button || button.disabled) return;
     event.stopPropagation();
+    if (!button) { this.advance(); return; }
+    if (button.disabled || this.rates && button.dataset.gacha !== 'rates-close' && button.dataset.gacha !== 'close') return;
     switch (button.dataset.gacha) {
       case 'preview': this.selected = prizeOf(button.dataset.prize!); this.render(); break;
-      case 'pumpkin': this.selected = null; this.render(); break;
       case 'draw': void this.draw(Number(button.dataset.count) as 1 | 10); break;
-      case 'open': this.open(); break;
-      case 'all': clearTimeout(this.timer); this.phase = 'summary'; this.render(); break;
-      case 'next': if (this.receipt && this.index + 1 < this.receipt.rewards.length) { this.index++; this.phase = 'ready'; this.open(); } else { this.phase = 'summary'; this.render(); } break;
+      case 'advance': this.advance(); break;
+      case 'all': clearTimeout(this.timer); this.timer = undefined; this.phase = 'summary'; this.render(); break;
       case 'back': this.phase = 'shop'; this.render(); break;
       case 'history': this.receipt = this.options.state().halloweenGacha?.last ?? null; this.phase = 'summary'; this.render(); break;
+      case 'rates': this.rates = true; this.render(); break;
+      case 'rates-close': this.rates = false; this.render(); break;
+      case 'close': this.options.close(); break;
     }
   };
   private async draw(count: 1 | 10) {
@@ -87,7 +129,7 @@ export class HalloweenGachaPanel {
     const owner = this.options.state(); this.busy = true; this.render();
     try {
       const receipt = await this.options.draw(count);
-      if (receipt && owner === this.options.state()) { this.receipt = receipt; this.index = 0; this.phase = 'ready'; }
+      if (receipt && owner === this.options.state()) { this.receipt = receipt; this.index = 0; this.rates = false; this.phase = 'ready'; }
     } finally { this.busy = false; this.render(); }
   }
 }

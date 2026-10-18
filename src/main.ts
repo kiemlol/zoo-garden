@@ -452,8 +452,9 @@ function uiBlocked(){return !!document.querySelector('[data-player-panel]:not([h
 function botActive(){return started&&!actionHandler&&!document.hidden&&!uiBlocked()&&!placement&&!world.interior&&world.planet==='home'&&state.hp>0;}
 /** 'wardrobe' while the bag was opened from the bedroom wardrobe: it then lists only things to wear (house-stores.ts). */
 let bagMode:'bag'|'wardrobe'='bag';
-const halloweenGachaPanel=new HalloweenGachaPanel({state:()=>state,draw:count=>perform('halloweenDraw',{count}),art});
-function halloweenGacha(){openDialog('halloween-gacha','Halloween chest','<div id="halloween-gacha-root"></div>','HALLOWEEN NIGHT DRAW','🎃');halloweenGachaPanel.mount($('#halloween-gacha-root'));}
+const halloweenGachaRoot=document.createElement('div');halloweenGachaRoot.id='halloween-gacha-root';halloweenGachaRoot.hidden=true;halloweenGachaRoot.setAttribute('role','dialog');halloweenGachaRoot.setAttribute('aria-modal','true');document.body.append(halloweenGachaRoot);
+const halloweenGachaPanel=new HalloweenGachaPanel({state:()=>state,draw:count=>perform('halloweenDraw',{count}),art,close:()=>closeDialog()});
+function halloweenGacha(){openDialog('halloween-gacha','Halloween chest','','HALLOWEEN NIGHT DRAW','🎃');$('#dialog-layer').hidden=true;halloweenGachaPanel.mount(halloweenGachaRoot);}
 function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF AT HOME',icon?:string) {
   halloweenGachaPanel.unmount();
   if(fishGame)endFishing();
@@ -2061,7 +2062,7 @@ document.addEventListener('keydown',event=>{
   const typing=(event.target as HTMLElement).matches('input,textarea,select')||(event.target as HTMLElement).isContentEditable;
   if(flight){if(typing)return;const key=pressed.toLowerCase();if(key===' '||key.startsWith('arrow'))event.preventDefault();if(!event.repeat&&['l','enter','f'].includes(key))tryLanding();else spaceKeys.add(key);return;}
   if(event.key==='Escape'){if(placement)cancelPlacement();else closeDialog();return;}if(placement&&event.key==='Enter'){confirmPlacement();return;}
-  if(modal&&event.key==='Tab'){const controls=Array.from($('#dialog').querySelectorAll<HTMLElement>('button:not(:disabled),input,select,a,[tabindex="0"]'));const first=controls[0],last=controls[controls.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}return;}
+  if(modal&&event.key==='Tab'){const controls=Array.from((modal==='halloween-gacha'?halloweenGachaRoot:$('#dialog')).querySelectorAll<HTMLElement>('button:not(:disabled),input,select,a,[tabindex="0"]'));const first=controls[0],last=controls[controls.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}return;}
   if(typing){if(pressed==='Enter'&&!started)start();return;}
   if(fishGame&&event.code==='Space'){event.preventDefault();fishGame.input.holdSpace();return;}
   if(!started||uiBlocked())return;

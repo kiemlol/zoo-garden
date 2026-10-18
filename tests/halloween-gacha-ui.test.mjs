@@ -6,36 +6,63 @@ import vm from 'node:vm';
 import * as M from '../src/model.ts';
 import { applyGameAction } from '../src/actions.ts';
 import * as Config from '../src/halloween-gacha-config.ts';
+import { PUMPKIN_OPEN_SECONDS } from '../src/gacha-pumpkin.ts';
 const source = readFileSync(new URL('../src/halloween-gacha-ui.ts', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
 function fixture() {
-  let state = M.newGame('UI'), release, calls = 0; state.energy = 100000; state.halloweenGacha = { total: 149, misses: 149 };
+  let state = M.newGame('UI'), release, calls = 0, clock = 0, openings = 0, disposed = 0; state.energy = 100000; state.halloweenGacha = { total: 149, misses: 149 };
   const tasks = new Map(); let timer = 0;
-  const context = { ...Config, ITEMS: M.ITEMS, t: (s, params = {}) => s.replace(/\{(\w+)\}/g, (_, k) => String(params[k])), setTimeout: callback => { tasks.set(++timer, callback); return timer; }, clearTimeout: id => tasks.delete(id), matchMedia: () => ({ matches: false }) };
+  const context = { ...Config, PUMPKIN_OPEN_SECONDS, performance: { now: () => clock }, ITEMS: M.ITEMS, t: (s, params = {}) => s.replace(/\{(\w+)\}/g, (_, k) => String(params[k])), setTimeout: callback => { tasks.set(++timer, callback); return timer; }, clearTimeout: id => tasks.delete(id), matchMedia: () => ({ matches: false }) };
   vm.createContext(context); vm.runInContext(stripTypeScriptTypes(source, { mode: 'transform' }) + '\nglobalThis.Panel = HalloweenGachaPanel;', context);
-  const panel = new context.Panel({ state: () => state, art: id => `<img src="${id}.webp">`, draw: async count => { calls++; await new Promise(r => release = r); return applyGameAction(state, { type: 'halloweenDraw', payload: { count } }, { now: 100, random: () => .999 }); } });
-  function host() { return { innerHTML: '', addEventListener() {}, removeEventListener() {} }; }
-  const click = action => panel.click({ target: { closest: () => ({ dataset: { gacha: action }, disabled: false }) }, stopPropagation() {} });
-  return { panel, host, click, tasks, flush() { for (const cb of tasks.values()) cb(); tasks.clear(); }, get state() { return state; }, replaceState() { state = M.newGame('Other'); }, get calls() { return calls; }, release() { release(); } };
+  const panel = new context.Panel({ state: () => state, art: id => `<img src="${id}.webp">`, close: () => panel.unmount(), pumpkin: () => ({ show(slot, opening) { if (opening) openings++; }, dispose() { disposed++; } }), draw: async count => { const original = state; calls++; await new Promise(r => release = r); return applyGameAction(original, { type: 'halloweenDraw', payload: { count } }, { now: 100, random: () => .999 }); } });
+  function host() { return { hidden: true, innerHTML: '', addEventListener() {}, removeEventListener() {}, querySelector(selector) { return selector === '.gacha-pumpkin-slot' && this.innerHTML.includes('gacha-pumpkin-slot') ? {} : null; } }; }
+  const click = action => panel.click({ target: { closest: () => action ? ({ dataset: { gacha: action }, disabled: false }) : null }, stopPropagation() {} });
+  return { panel, host, click, tasks, tick() { clock += 400; }, flush() { clock += 2000; for (const cb of tasks.values()) cb(); tasks.clear(); }, get state() { return state; }, replaceState() { state = M.newGame('Other'); }, get calls() { return calls; }, get openings() { return openings; }, get disposed() { return disposed; }, release() { release(); } };
 }
 
 test('pending UI closes/reopens safely, prevents double purchase, and reveals already saved rewards', async () => {
   const f = fixture(), first = f.host(); f.panel.mount(first);
   const pending = f.panel.draw(1); await f.panel.draw(1); assert.equal(f.calls, 1);
-  f.panel.unmount(); const second = f.host(); f.panel.mount(second); assert.match(second.innerHTML, /Confirming draw/);
+  f.panel.unmount(); assert.equal(first.hidden, true); const second = f.host(); f.panel.mount(second); assert.match(second.innerHTML, /Confirming draw/);
   f.release(); await pending; assert.equal(f.state.bag.rod_key, 1); assert.equal(f.state.energy, 98000); assert.match(second.innerHTML, /data-gacha-phase="ready"/);
-  f.click('open'); assert.match(second.innerHTML, /data-gacha-phase="opening"/);
-  f.click('all'); f.flush(); assert.match(second.innerHTML, /data-gacha-phase="summary"/); assert.equal(f.calls, 1);
+  f.click('advance'); assert.match(second.innerHTML, /data-gacha-phase="opening"/);
+  f.flush(); f.click('all'); assert.match(second.innerHTML, /data-gacha-phase="summary"/); assert.equal(f.calls, 1);
 });
 
-test('closing during a pumpkin animation cancels its timer and reopening allows completion without another payment', async () => {
+test('closing during the first pumpkin animation cancels its timer and disposes the model; reopening completes without another payment', async () => {
   const f = fixture(); f.panel.mount(f.host()); const pending = f.panel.draw(1); f.release(); await pending;
-  f.click('open'); assert.equal(f.tasks.size, 1); f.panel.unmount(); assert.equal(f.tasks.size, 0);
+  f.click('advance'); assert.equal(f.tasks.size, 1); const before = f.disposed; f.panel.unmount(); assert.equal(f.tasks.size, 0); assert.equal(f.disposed, before + 1);
   const next = f.host(); f.panel.mount(next); assert.match(next.innerHTML, /data-gacha-phase="ready"/);
-  f.click('open'); f.flush(); assert.match(next.innerHTML, /data-gacha-phase="reward"/); assert.match(next.innerHTML, /GUARANTEED/); assert.equal(f.calls, 1);
+  f.click('advance'); f.flush(); assert.match(next.innerHTML, /data-gacha-phase="reward"/); assert.match(next.innerHTML, /GUARANTEED/); assert.equal(f.calls, 1);
 });
 
-test('switching save profiles cannot display the former account receipt, and resetting clears old presentation', async () => {
-  const f = fixture(); f.panel.mount(f.host()); const pending = f.panel.draw(1); f.release(); await pending;
-  f.panel.unmount(); f.replaceState(); const other = f.host(); f.panel.mount(other); assert.match(other.innerHTML, /data-gacha-phase="shop"/); assert.doesNotMatch(other.innerHTML, /data-gacha="history"/);
-  assert.equal(f.state.halloweenGacha, undefined);
+test('switching saves cannot show the former account receipt or finish a pending draw in the new save', async () => {
+  const f = fixture(); f.panel.mount(f.host()); const pending = f.panel.draw(1);
+  f.panel.unmount(); f.replaceState(); const other = f.host(); f.panel.mount(other); f.release(); await pending;
+  assert.match(other.innerHTML, /data-gacha-phase="shop"/); assert.doesNotMatch(other.innerHTML, /data-gacha="history"/); assert.equal(f.state.halloweenGacha, undefined);
+});
+
+test('ten draws open only one pumpkin, then screen taps advance all rewards and the final result; OK returns to shop', async () => {
+  const f = fixture(), host = f.host(); f.panel.mount(host); const pending = f.panel.draw(10); f.release(); await pending;
+  assert.match(host.innerHTML, /Tap the screen to open the box!/); assert.match(host.innerHTML, /HALLOWEEN NIGHT DRAW/);
+  f.click('advance'); f.click('advance'); assert.equal(f.openings, 1); f.flush();
+  f.click('advance'); assert.equal(f.panel.index, 0, 'rapid double taps cannot skip a fresh reward');
+  for (let i = 1; i <= 10; i++) {
+    f.tick(); f.click(i % 2 ? 'advance' : null); // both the large tap target and surrounding screen work
+    assert.equal(f.openings, 1); assert.equal(f.calls, 1); assert.equal(f.tasks.size, 0);
+    if (i < 10) { assert.equal(f.panel.index, i); assert.match(host.innerHTML, /data-gacha-phase="reward"/); assert.doesNotMatch(host.innerHTML, /gacha-pumpkin-slot/); }
+  }
+  assert.match(host.innerHTML, /data-gacha-phase="summary"/);
+  assert.equal((host.innerHTML.match(/class="gacha-result-card /g) || []).length, 10);
+  assert.doesNotMatch(host.innerHTML, /gacha-number|<progress|data-gacha="next"|View results|<small>×/);
+  assert.match(host.innerHTML, /data-gacha="back">OK/);
+  f.click('back'); assert.match(host.innerHTML, /data-gacha-phase="shop"/); assert.equal(f.calls, 1);
+});
+
+test('shop shows icon-only prizes and a compact pity badge, names appear on selection, odds remain public', () => {
+  const f = fixture(), host = f.host(); f.panel.mount(host);
+  assert.match(host.innerHTML, /149\/150/); assert.doesNotMatch(host.innerHTML, /<progress|gacha-rate|gacha-item-name/);
+  assert.equal((host.innerHTML.match(/class="gacha-prize /g) || []).length, 10);
+  f.panel.selected = Config.HALLOWEEN_PRIZES[0]; f.panel.render(); assert.match(host.innerHTML, /gacha-item-name/);
+  f.click('rates'); for (const p of Config.HALLOWEEN_PRIZES) assert.ok(host.innerHTML.includes(`${p.weight / 100}%`));
+  f.click('rates-close'); assert.doesNotMatch(host.innerHTML, /gacha-odds-shade/);
 });
