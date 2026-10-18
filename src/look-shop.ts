@@ -1,88 +1,66 @@
 import { t } from './i18n.ts';
-import { heroKit, heroKitFor, wearKit } from './assets.ts';
-import { OPTIONS, lookOf, lookPrice, missingOptions, swapOption, type LookId } from './looks.ts';
-import { centreChosen, headline, lookName, lookRowsHtml, mirrorHtml } from './look-tiles.ts';
-import { MirrorPreview, restPose } from './mirror-preview.ts';
+import { heroKit, heroKitFor, wearKit, disguiseKit } from './assets.ts';
+import { onArtLoaded } from './art-retry.ts';
+import { lookOf, swapOption, type LookId } from './looks.ts';
+import { lookName } from './look-tiles.ts';
+import { WardrobePreview } from './wardrobe-preview.ts';
+import { wardrobeHtml, wardrobeDraft, wardrobeGear, WARDROBE_TABS, type WardrobeTab } from './wardrobe-ui.ts';
+import { isHair, isFace } from './appearance.ts';
+import { type WardrobeDraft } from './wardrobe-rules.ts';
+import { previewGear } from './try-on.ts';
 import type { SaveState } from './model.ts';
 import type { World } from './world.ts';
 import './look-shop.css';
 
-/**
- * The bedroom mirror's character builder: four rows of option tiles (body, height, ears, head decoration), each a
- * Blender portrait of the explorer with that option (assets/icons/looks, build_hero_styles.py render_option_icons),
- * beside a framed mirror that shows the whole combination on your own avatar (mirror-preview.ts: a small offscreen
- * render, redrawn only when the combination changes). A row wider than its column scrolls sideways and keeps the
- * chosen tile in view. Every tap also previews the combination on the explorer in the world (World.tryOnLook, local
- * only; the dialog steps aside so the explorer stays in view), and one button buys what the combination still needs
- * (actions buyLook) or wears it (wearLook). Owned options combine freely. A friend's Looks tab (friend-looks-ui.ts)
- * uses the same rows and mirror.
- */
 export interface LookShopDeps {
   world: World;
   perform(type: string, payload?: Record<string, unknown>): Promise<unknown>;
   openDialog(type: string, title: string, body: string, kicker?: string, icon?: string): void;
   modal(): string | null;
   toast(message: string, icon?: string): void; tone(kind?: string): void;
-  /** Leaves the item try-on (main.ts endTryOn) so the two previews never mix. */
   endGearTryOn(): void;
 }
-const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 export { lookName };
-
-export function lookShopHtml(s: SaveState, draft: LookId) {
-  const worn = lookOf(s), price = lookPrice(s, draft), missing = missingOptions(s, draft);
-  const main = draft === worn ? `<span class="chip chip-seed">✓ ${esc(t('Wearing'))}</span>`
-    : missing.length ? `<button class="primary" data-look-action="buy" ${s.energy < price ? 'disabled' : ''}>${esc(t('Buy'))} ϟ ${price}</button>`
-    : `<button class="primary" data-look-action="wear">${esc(t('Wear'))}</button>`;
-  const back = draft === worn ? '' : `<button class="soft-button" data-look-action="reset">${esc(t('Back to mine'))}</button>`;
-  return `<p class="intro">${esc(t('Mix a body, a height, ears and an animal hood. Owned options combine freely; a hood brings its own ears and a hat covers it. Gear fits every look, and stats stay the same.'))}</p>`
-    + `<div class="look-studio">${mirrorHtml('explorer')}<div class="look-builder">${lookRowsHtml(s, draft, { attr: 'data-look-option', worn })}</div></div>`
-    + `<div class="look-footer"><strong class="look-name">${esc(lookName(draft))}</strong><div class="look-buttons">${back}${main}</div></div>`;
-}
-
-/** Everything the explorer's mirror picture depends on (mirror-preview.ts redraws only when this changes). */
+export function lookShopHtml(s:SaveState,id:LookId){return wardrobeHtml(s,{...wardrobeDraft(s),look:id});}
+/** Legacy mirror cache key, also used by friends' existing look previews. */
 export function mirrorKey(id: LookId, color: string, gear: SaveState['gear']) {
   return [id, color, gear.outfit ?? '', gear.boots ?? '', heroKit.ready, heroKitFor(id).ready, wearKit.ready].join('|');
 }
-
-export function initLookShop(d: LookShopDeps) {
-  const w = d.world, draft = (): LookId => w.tryOnLook ?? lookOf(w.state); // the preview lives on the world, so closing any dialog ends it (main.ts endTryOn)
-  // The glass shows the look in your outfit and boots, bare-headed: a hat would cover the hood or ears being tried.
-  const mirror = new MirrorPreview({ reach: 3.6, width: 190, height: 270 });
-  const render = () => { if (d.modal() === 'looks') open(); };
-  const paint = () => {
-    const id = draft(), gear = { outfit: w.state.gear.outfit, boots: w.state.gear.boots }, kit = heroKitFor(id);
-    mirror.show(document.querySelector('[data-mirror-slot="explorer"]'), mirrorKey(id, w.state.color, gear), () => restPose(w.lookAvatar(w.state.color, gear, id)));
-    // A body file still on its way: the default explorer stands in, and the glass redraws once it lands.
-    if (!kit.ready) void kit.load().then(() => { if (d.modal() === 'looks' && draft() === id) paint(); });
-  };
-  const preview = (id: LookId) => {
-    w.tryOnLook = id === lookOf(w.state) ? null : id; w.refreshPlayer();
-    const kit = heroKitFor(id); if (!kit.ready && !kit.requested) void kit.load().then(() => { if (w.tryOnLook === id) w.refreshPlayer(); });
-  };
-  function open() {
-    d.openDialog('looks', t('Mirror, mirror'), lookShopHtml(w.state, draft()), t('LOOKS'), '🪞');
-    document.querySelector('#dialog-layer')?.classList.add('trying-on'); // the explorer stays in view beside (or above) the builder
-    centreChosen(); paint();
+/** Local draft only; one validated action applies all visible choices together offline and online. */
+export function initLookShop(d:LookShopDeps){
+  const w=d.world;let draft:WardrobeDraft|null=null,tab:WardrobeTab='hair',zoom=false,busy=false,viewer:WardrobePreview|null=null,epoch=0;
+  const shown=()=>draft??=wardrobeDraft(w.state);
+  function paint(){if(d.modal()!=='looks'||!draft)return;const current=shown(),id=current.look,kit=heroKitFor(id),slot=document.querySelector<HTMLElement>('[data-wardrobe-preview]');if(!slot)return;
+    const gear={...current.gear,weapon:undefined,pet:undefined,pet2:undefined};viewer??=new WardrobePreview();
+    const key=JSON.stringify([id,current.appearance,gear,w.state.color,w.equipmentArt(gear,id)]);
+    viewer.show(slot,key,()=>w.lookAvatar(w.state.color,gear,id,current.appearance),zoom);
+    const version=epoch;if(!kit.ready)void kit.load().then(()=>{if(kit.ready&&version===epoch&&d.modal()==='looks'&&draft?.look===id)paint();});
+    if(current.gear.disguise&&!disguiseKit.ready)void disguiseKit.load().then(()=>{if(disguiseKit.ready&&version===epoch&&d.modal()==='looks')paint();});
   }
-  document.addEventListener('click', async event => {
-    const chip = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-look-option]');
-    if (chip && d.modal() === 'looks') {
-      d.endGearTryOn(); const next = swapOption(draft(), chip.dataset.lookOption as Parameters<typeof swapOption>[1]);
-      if (next !== draft()) { preview(next); w.fx?.burst(w.position, { n: 8, color: ['#ffe66d', '#ffffff'], glow: true, speed: 2.2, up: 4 }); d.tone('click'); }
-      render(); return;
+  function preview(id:LookId){shown().look=id;syncPreview();}
+  function syncPreview(){const next=shown();w.tryOnLook=next.look;w.tryOnGear={...next.gear};w.tryOnAppearance={...next.appearance};w.refreshPlayer();}
+  function render(){if(d.modal()!=='looks')return;const scroll=document.querySelector('.wardrobe-tabs')?.scrollLeft??0,choices=document.querySelector('.wardrobe-choices')?.scrollTop??0;d.openDialog('looks',t('Dressing studio'),wardrobeHtml(w.state,shown(),tab,zoom,busy),t('MAKE IT YOURS'),'👗');const nav=document.querySelector('.wardrobe-tabs'),grid=document.querySelector('.wardrobe-choices');if(nav)nav.scrollLeft=scroll;if(grid)grid.scrollTop=choices;paint();}
+  function open(){if(d.modal()!=='looks'){clear();d.endGearTryOn();draft=wardrobeDraft(w.state);}d.openDialog('looks',t('Dressing studio'),wardrobeHtml(w.state,shown(),tab,zoom,busy),t('MAKE IT YOURS'),'👗');paint();void Promise.all([heroKit.load(),wearKit.load()]).then(()=>{if(d.modal()==='looks')paint();});}
+  function clear(){epoch++;const active=!!draft;draft=null;viewer?.dispose();viewer=null;if(active){w.tryOnLook=null;w.tryOnGear=null;w.tryOnAppearance=null;}return active;}
+  onArtLoaded(()=>{if(d.modal()==='looks')paint();});
+  document.addEventListener('click',async event=>{
+    if(d.modal()!=='looks')return;const target=(event.target as HTMLElement).closest<HTMLButtonElement>('button');if(!target||target.disabled)return;
+    const category=target.dataset.wardrobeTab,tool=target.dataset.wardrobeAction,action=target.dataset.lookAction;
+    if(category&&WARDROBE_TABS.some(([id])=>id===category)){tab=category as WardrobeTab;d.tone('click');render();document.querySelector('[data-wardrobe-tab].active')?.scrollIntoView({block:'nearest',inline:'nearest'});return;}
+    if(tool){if(tool==='zoom'){zoom=!zoom;render();}else viewer?.turn(tool==='left'?-.45:.45);d.tone('click');return;}
+    if(busy)return;
+    if(target.hasAttribute('data-look-option')){preview(swapOption(shown().look,target.dataset.lookOption as Parameters<typeof swapOption>[1]));d.tone('click');render();return;}
+    if(target.hasAttribute('data-wardrobe-cosmetic')){const id=target.dataset.wardrobeCosmetic;if(tab==='hair'&&isHair(id))shown().appearance.hair=id;else if(tab==='face'&&isFace(id))shown().appearance.face=id;else return;
+      // Trying a face/hair must show it: keep clothes under a costume, but take the costume off in the draft only.
+      delete shown().gear.disguise;if(tab==='hair'){delete shown().gear.hat;shown().look=swapOption(shown().look,'bare');}syncPreview();d.tone('click');render();return;}
+    if(target.hasAttribute('data-wardrobe-item')&&['hat','glasses','outfit','boots','disguise'].includes(tab)){
+      const id=target.dataset.wardrobeItem;if(id)shown().gear=previewGear(shown().gear,id);else delete shown().gear[tab as keyof SaveState['gear']];syncPreview();d.tone('click');render();return;
     }
-    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-look-action]'); if (!button || button.disabled) return;
-    const action = button.dataset.lookAction, id = draft();
-    if (action === 'reset') { preview(lookOf(w.state)); render(); return; }
-    button.disabled = true;
-    const ok = await d.perform(action === 'buy' ? 'buyLook' : 'wearLook', { id });
-    if (ok) {
-      d.tone('success'); w.tryOnLook = null; w.refreshPlayer();
-      w.fx?.burst(w.position, { n: 18, color: ['#ffe66d', '#ffffff', '#ff9ec7'], glow: true, speed: 3, up: 6 });
-      d.toast(t(action === 'buy' ? 'New look: {name}!' : 'Now wearing: {name}', { name: lookName(id) }), OPTIONS[headline(id)].icon);
-    }
-    render();
+    if(action==='reset'){draft=wardrobeDraft(w.state);syncPreview();d.tone('click');render();return;}
+    if(action!=='apply')return;const current=shown(),owner=w.state,version=epoch;busy=true;render();
+    try{const ok=await d.perform('dressAvatar',{look:current.look,appearance:{...current.appearance},gear:wardrobeGear(current)});
+      if(ok&&w.state===owner){if(version===epoch){draft=wardrobeDraft(w.state);w.tryOnLook=null;w.tryOnGear=null;w.tryOnAppearance=null;}w.refreshPlayer();d.tone('success');d.toast(t('Outfit saved!'),'👗');}
+    }finally{busy=false;if(version===epoch&&d.modal()==='looks')render();}
   });
-  return { open, preview, mirror };
+  return {open,preview,paint,clear,get mirror(){return viewer;}};
 }

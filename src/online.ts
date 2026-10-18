@@ -1,3 +1,4 @@
+import type { Appearance } from './appearance.ts';
 import type {FurniturePose} from './furniture-rules.ts';
 import {PlayerChat} from './chat-ui.ts';
 import type {SocialState,SocialPlayer} from './social-rules.ts';
@@ -10,7 +11,7 @@ import {gameplayKey} from './gameplay-controls.ts';
 import type {GameIntent,ActionReply} from './actions.ts';
 
 interface GuestEntry { at:number;by:string;name:string;kind:'visit'|'water'|'gift'|'steal'|'message';what?:string;count?:number;text?:string }
-interface Explorer { id:string;username?:string;name:string;color:string;level:number;gear:SaveState['gear'];look?:LookId;online?:boolean;x?:number;z?:number;y?:number;facing?:number;moving?:boolean;space?:string;planet?:string;difficulty?:string;likes?:number;stats?:SocialPlayer['stats'] }
+interface Explorer { id:string;username?:string;name:string;color:string;level:number;gear:SaveState['gear'];look?:LookId;appearance?:Appearance;online?:boolean;x?:number;z?:number;y?:number;facing?:number;moving?:boolean;space?:string;planet?:string;difficulty?:string;likes?:number;stats?:SocialPlayer['stats'] }
 interface Home extends Explorer { discovered?:PlanetId[]; plots:SaveState['plots'];farm?:SaveState['farm'];placed?:unknown[];decorations?:unknown[];helper?:unknown;friends?:unknown[] }
 interface EnemyState { id:string;x:number;z:number;hp:number;maxHp:number;[key:string]:unknown }
 interface NetworkWorld {

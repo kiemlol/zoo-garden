@@ -1,3 +1,4 @@
+import type { Appearance } from './appearance.ts';
 import * as T from 'three';
 import { modelShot } from './icons.ts';
 import { restPose } from './mirror-preview.ts';
@@ -20,9 +21,10 @@ import { dropTree } from './dispose-tree.ts';
  * same way, should the online list want faces later.
  */
 export interface PortraitSpec {
+  appearance?: Appearance;
   color: string;
   look: string;
-  gear: { hat?: string; outfit?: string; disguise?: string };
+  gear: { glasses?:string; hat?: string; outfit?: string; disguise?: string };
 }
 
 /**
@@ -32,7 +34,7 @@ export interface PortraitSpec {
  */
 export function portraitKey(spec: PortraitSpec, art = ''): string {
   const g = spec.gear, worn = g.disguise ? `d:${g.disguise}` : `h:${g.hat ?? ''}|o:${g.outfit ?? ''}`;
-  return `${spec.look}|${spec.color}|${worn}|${art}`;
+  return `${spec.look}|${spec.color}|${worn}|${spec.gear.glasses??''}|${JSON.stringify(spec.appearance??null)}|${art}`;
 }
 
 /**
@@ -166,7 +168,7 @@ export class PortraitTile {
   want(spec: PortraitSpec | null, art = ''): void {
     if (!spec) { this.wanted = ''; this.spec = null; this.put(''); return; }
     const key = portraitKey(spec, art); if (key === this.wanted) return;
-    this.wanted = key; this.spec = { color: spec.color, look: spec.look, gear: { hat: spec.gear.hat, outfit: spec.gear.outfit, disguise: spec.gear.disguise } }; this.art = art;
+    this.wanted = key; this.spec = { appearance:spec.appearance?{...spec.appearance}:undefined, color: spec.color, look: spec.look, gear: { glasses:spec.gear.glasses, hat: spec.gear.hat, outfit: spec.gear.outfit, disguise: spec.gear.disguise } }; this.art = art;
     const known = this.o.portraits.peek(key);
     if (known !== undefined) { this.put(known); return; }
     if (!this.waiting) { this.waiting = true; this.waits = 0; (this.o.later ?? whenIdle)(this.turn, false); }

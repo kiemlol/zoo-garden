@@ -1,3 +1,6 @@
+import { splitLook } from './looks.ts';
+import { applyAppearance } from './appearance-art.ts';
+import { appearanceOf, type Appearance } from './appearance.ts';
 import {FurnitureUse,isRestFurniture,drawFurniture,drawFurnitureLids,resetFurniturePose} from './furniture-use.ts';
 import type {FurniturePose} from './furniture-rules.ts';
 import {buildPatchworkPet} from './halloween-art.ts';
@@ -105,7 +108,7 @@ export interface AvatarVisual {hidden?:boolean;size:number;stealth:boolean;shiel
 export interface Enemy {wildCooldown?:number;titanAttacks?:TitanAttack[];titanLift?:number}
 /** An enemy run by its own module (colossus.ts): no generic AI or drawing here; `incoming` may scale a blow before it lands. */
 export interface Enemy {driver?:{incoming(e:Enemy,amount:number,hazard:boolean):number}}
-export interface RemotePose {/** More pets that follow this explorer besides gear.pet (the AI neighbours' second pet). */pets?:string[];/** The breed of the guard dog following this explorer (server-set; absent when it stays at its pen). */dog?:number|null;visual?:Partial<AvatarVisual>;/** The knight's shield is up (server-set): shots from in front bounce back. */block?:boolean;/** Hittable summons (server-checked, combat.ts shareableDecoys). */decoys?:DecoyPose[];id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];look?:LookId;hp?:number;level?:number}
+export interface RemotePose {/** More pets that follow this explorer besides gear.pet (the AI neighbours' second pet). */pets?:string[];/** The breed of the guard dog following this explorer (server-set; absent when it stays at its pen). */dog?:number|null;visual?:Partial<AvatarVisual>;/** The knight's shield is up (server-set): shots from in front bounce back. */block?:boolean;/** Hittable summons (server-checked, combat.ts shareableDecoys). */decoys?:DecoyPose[];id?:string;x:number;z:number;y?:number;facing?:number;color?:string;name?:string;planet?:PlanetId;moving?:boolean;gear?:SaveState['gear'];look?:LookId;appearance?:Appearance;hp?:number;level?:number}
 export interface EnemyShotSnapshot {id:string;x:number;y:number;z:number;vx:number;vz:number;life:number;damage:number;targetEnemyId?:string}
 export interface EnemySnapshot {wildCooldown?:number;homeX?:number;homeZ?:number;titanAttacks?:TitanAttack[];titanLift?:number;chaseGrace?:number;id:string;type?:string;x:number;z:number;hp:number;maxHp:number;respawn:number;phase?:string;facing?:number;lift?:number;boss?:boolean;phaseTime?:number;stun?:number;statuses?:Record<string,number>;cooldown?:number;targetX?:number;targetZ?:number;bossStage?:number;skill?:BossSkill;attackCount?:number;skillCount?:number;telegraphs?:Enemy['telegraphs'];skillEffects?:Enemy['skillEffects'];spinTick?:number;damage?:number;shots?:EnemyShotSnapshot[]}
 export interface EnvironmentSnapshot {time:number;lamps:Array<[number,number]>;eclipseUntil?:number;weather?:LavaWeatherSnapshot;nestLevel?:number;fireRain?:EnvironmentSimulation['fireRain'];lightning?:LightningState}
@@ -764,13 +767,13 @@ export class World {
    * The explorer in its gear. Each slot uses its Blender model when the kit has it and
    * falls back to simple shapes otherwise, so a missing file never leaves a slot empty.
    */
-  private avatar(color:string,gear:SaveState['gear']={},look:LookId|string=DEFAULT_LOOK){
+  private avatar(color:string,gear:SaveState['gear']={},look:LookId|string=DEFAULT_LOOK,appearance?:Appearance){
     const disguise=gear.disguise?M.DISGUISES[gear.disguise]:undefined,id=gear.disguise??'';
     const kitDisguise=!!id&&!!this.kitFor(id)&&heroKit.ready,fullBodyDisguise=kitDisguise&&(Object.hasOwn(BIRD_SKILLS,id)||id==='dz_sorcerer'||id==='dz_ink_painter');
     // A body style downloads on first use; the default explorer stands in until it arrives.
     // Complete costumes keep a hidden base rig; their own geometry is fitted continuously to the selected look.
     const combo=toLook(look)??DEFAULT_LOOK,styled=heroKitFor(fullBodyDisguise?DEFAULT_LOOK:combo);if(styled!==heroKit&&!styled.requested)void styled.load().then(()=>{if(styled.ready)this.refreshAvatars();});
-    const base=styled.ready&&heroKit.ready?styled:heroKit,tint=disguise&&!kitDisguise?disguise.color:color,c=base.instance(tint)??this.chibi(tint);
+    const base=styled.ready&&heroKit.ready?styled:heroKit,tint=disguise&&!kitDisguise?disguise.color:color,c=base.instance(tint,!id&&!!appearance&&(appearance.hair!=='original'||appearance.face!=='original'))??this.chibi(tint);
     c.userData.look=fullBodyDisguise?combo:base===heroKit?DEFAULT_LOOK:combo;const fit=fitOf(combo);if(base!==heroKit&&Object.keys(fit).length)c.userData.fit=fit;
     // The sprout pokes through hats and most costumes; the fairy crown and hero mask leave it showing.
     // A hat kept under a costume is not drawn (below), so only the costume decides then.
@@ -788,6 +791,7 @@ export class World {
     if(fullBodyDisguise)c.traverse(o=>{if(o instanceof T.Mesh)o.visible=false;});
     if(kitDisguise)this.wearKit(c,id,'body');
     if(fullBodyDisguise)fitBirdDisguise(c,id,combo);
+    applyAppearance(c,appearance,base===heroKit?DEFAULT_LOOK:combo,{hat:!!gear.hat,hood:splitLook(combo).deco!=='bare'&&!gear.hat,disguise:!!id});
     if(gear.weapon&&!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);
     if(isKeyRod(baseOf(gear.weapon??'')))prepareKeyRod(c);
     // Up to two pets beside them (pet-slots.ts): the first on the left as ever, the second on the right; with their dog out (drawn by dog-world.ts on the left) the one pet takes the right.
@@ -836,15 +840,16 @@ export class World {
   /** A rescued friend's body (friend-view.ts buildFriend): the explorer's model and wear-kit path, in the friend's colour and look. */
   friendAvatar(color:string,gear:SaveState['gear'],look:LookId=DEFAULT_LOOK){return this.avatar(color,gear,look);}
   /** An explorer in a body style, for the mirror's portraits (look-shop.ts). */
-  lookAvatar(color:string,gear:SaveState['gear'],look:LookId){return this.avatar(color,gear,look);}
+  lookAvatar(color:string,gear:SaveState['gear'],look:LookId,appearance?:Appearance){return this.avatar(color,gear,look,appearance);}
   /** An explorer's head side for a face picture (hero-portrait.ts): the look, with the hat and outfit or the disguise over them; no weapon, boots or companion. */
-  portraitAvatar(color:string,gear:SaveState['gear'],look:string){return this.avatar(color,{hat:gear.hat,outfit:gear.outfit,disguise:gear.disguise},look);}
+  portraitAvatar(color:string,gear:SaveState['gear'],look:string,appearance?:Appearance){return this.avatar(color,{hat:gear.hat,glasses:gear.glasses,outfit:gear.outfit,disguise:gear.disguise},look,appearance);}
   /** Which of the files that picture is drawn from have arrived (body, body style, then each worn piece): its cache key, so a late file redraws it once. */
-  avatarArt(gear:SaveState['gear'],look:string){const worn=gear.disguise?[gear.disguise]:[gear.hat,gear.outfit];return `${+heroKit.ready}${+heroKitFor(toLook(look)??DEFAULT_LOOK).ready}${worn.map(id=>+(!!id&&!!this.kitFor(id))).join('')}`;}
+  avatarArt(gear:SaveState['gear'],look:string){const worn=gear.disguise?[gear.disguise]:[gear.hat,gear.glasses,gear.outfit];return `${+heroKit.ready}${+heroKitFor(toLook(look)??DEFAULT_LOOK).ready}${worn.map(id=>+(!!id&&!!this.kitFor(id))).join('')}`;}
   /** Full social preview also refreshes when a late weapon/boots/companion kit arrives. */
   equipmentArt(gear:SaveState['gear'],look:string){return this.avatarArt(gear,look)+Object.values(gear).map(id=>id?+(!!this.kitFor(id)):0).join('');}
   /** A body style shown while previewing at the mirror: local only, never saved or sent online. */
   tryOnLook?:LookId|null;
+  tryOnAppearance?:Appearance|null;
   /** The cottage interior while the explorer is inside (house-session.ts): its own scene, walkable plan, and hooks to re-home the explorer and to drop it on a rebuild. */
   interior?:{scene:T.Scene;root:T.Group;walkable:(p:Point)=>boolean;drop:()=>void;adopt:()=>void;outdoor?:Entity[];pick?:(clientX:number,clientY:number)=>Entity|null}|null;
   /** The outdoor entities, also while the interior's list stands in for them (late art must dress the real buildings). */
@@ -853,7 +858,7 @@ export class World {
   tryOnGear?:SaveState['gear']|null;
   refreshPlayer() {
     const gear=this.tryOnGear??this.state.gear;
-    this.disposeTree(this.player);this.player.removeFromParent();this.player=this.avatar(this.state.color,{...gear,pet:undefined,pet2:undefined},this.tryOnLook??lookOf(this.state));this.player.rotation.order='YXZ';
+    this.disposeTree(this.player);this.player.removeFromParent();this.player=this.avatar(this.state.color,{...gear,pet:undefined,pet2:undefined},this.tryOnLook??lookOf(this.state),this.tryOnAppearance??appearanceOf(this.state));this.player.rotation.order='YXZ';
     // These copies are the explorer's own (flash and blink edit them), so the stealth fade below reuses them instead of copying again.
     this.playerMaterials=[];this.player.traverse(o=>{if(o instanceof T.Mesh&&isLit(o.material)){o.material=o.material.clone();o.material.userData.sharedKit=false;o.userData.statusMaterials=true;this.playerMaterials.push(o.material);}});this.root.add(this.player);
     for(let i=0;i<2;i++){const pet=(i?this.companion2:this.companion)??new T.Group(),id=M.companionId(gear,i),next=id?this.petFor(id):new T.Group();this.disposeTree(pet);pet.removeFromParent();next.position.copy(pet.position);next.rotation.copy(pet.rotation);next.visible=pet.visible;if(perfFlags.mergeCompanions)mergeParts(next,{exact:true});/* same-look pieces of each rigid part drawn as one: a second pet costs about what one cost before */addOutlines(next,{merge:true});this.root.add(next);if(i)this.companion2=next;else this.companion=next;}
@@ -1121,8 +1126,8 @@ export class World {
   }
   receiveRemoteHit(id:string,amount:number,stun=0){const e=this.enemies.find(e=>e.id===id);if(!e||e.hp<=0||!Number.isFinite(amount)||amount<0)return false;this.damageEnemy(e,amount,stun);return true;}
   private remoteGear(pose:RemotePose){return {...pose.gear,...(pose.visual?.fishing?{weapon:pose.visual.fishing.rod}:{})};}
-  addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',this.remoteGear(pose),pose.look);if(perfFlags.mergeRemoteAvatars)mergeParts(avatar,{exact:true});avatar.userData.remoteId=id;this.remoteRoot.add(avatar);pose.pets?.slice(0,2).forEach((petId,i)=>{const pet=this.petFor(petId);pet.name='remote-pet';pet.position.set(1,0,-.6-i*.6);avatar.add(pet);addOutlines(pet,{merge:true});});this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
-  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||(pose.visual!==undefined&&(pose.visual.fishing?.rod??null)!==(remote.pose.visual?.fishing?.rod??null))||pose.color&&pose.color!==remote.pose.color||(pose.look??remote.pose.look)!==remote.pose.look){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',this.remoteGear({...remote.pose,...pose}),pose.look??remote.pose.look);if(perfFlags.mergeRemoteAvatars)mergeParts(avatar,{exact:true});this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;// Each pose is a target the avatar glides to (per frame, below): poses arrive about every 100 ms and a tunnel bunches them, so setting the position outright made others jump and blink. First sight, big jumps and rebuilds snap.
+  addRemotePlayer(id:string,pose:RemotePose){this.remotePlayers??=new Map();this.remoteRoot??=new T.Group();if(!this.remoteRoot.parent)this.scene.add(this.remoteRoot);this.removeRemotePlayer(id);const avatar=this.avatar(pose.color??'#6bafd0',this.remoteGear(pose),pose.look,pose.appearance);if(perfFlags.mergeRemoteAvatars)mergeParts(avatar,{exact:true});avatar.userData.remoteId=id;this.remoteRoot.add(avatar);pose.pets?.slice(0,2).forEach((petId,i)=>{const pet=this.petFor(petId);pet.name='remote-pet';pet.position.set(1,0,-.6-i*.6);avatar.add(pet);addOutlines(pet,{merge:true});});this.remotePlayers.set(id,{mesh:avatar,pose:{...pose}});this.updateRemotePlayer(id,pose);}
+  updateRemotePlayer(id:string,pose:RemotePose){if(!Number.isFinite(pose.x)||!Number.isFinite(pose.z))return;const remote=this.remotePlayers?.get(id);if(!remote){this.addRemotePlayer(id,pose);return;}if(JSON.stringify(pose.gear??remote.pose.gear)!==JSON.stringify(remote.pose.gear)||(pose.visual!==undefined&&(pose.visual.fishing?.rod??null)!==(remote.pose.visual?.fishing?.rod??null))||pose.color&&pose.color!==remote.pose.color||(pose.look??remote.pose.look)!==remote.pose.look||JSON.stringify(pose.appearance??remote.pose.appearance)!==JSON.stringify(remote.pose.appearance)){const avatar=this.avatar(pose.color??remote.pose.color??'#6bafd0',this.remoteGear({...remote.pose,...pose}),pose.look??remote.pose.look,pose.appearance??remote.pose.appearance);if(perfFlags.mergeRemoteAvatars)mergeParts(avatar,{exact:true});this.remoteRoot.remove(remote.mesh);this.disposeTree(remote.mesh);remote.mesh=avatar;avatar.userData.remoteId=id;this.remoteRoot.add(avatar);}remote.pose={...remote.pose,...pose};const current=remote.pose,indoor=(current.y??0)>=INDOOR_Y-10;// Each pose is a target the avatar glides to (per frame, below): poses arrive about every 100 ms and a tunnel bunches them, so setting the position outright made others jump and blink. First sight, big jumps and rebuilds snap.
     {const ty=(current.y??0)-(indoor?INDOOR_Y:0),u=remote.mesh.userData,p=remote.mesh.position;u.target={x:current.x,y:ty,z:current.z,f:current.facing??0};
       // Its jump height, for ground attacks (remoteDodges): read from the pose, and only for as long as a real jump can last.
       {const air=indoor||!this.environment?0:poseAir(ty,terrainHeight(this.environment.layout,current),current.visual?.flight?1.7:0),now=this.time??0;if(air>0){u.airSince??=now;u.air=now-u.airSince<=MAX_AIR_SECONDS?air:0;}else{u.airSince=undefined;u.air=0;}}

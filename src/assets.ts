@@ -1,3 +1,4 @@
+import { separateHeadCosmetics } from './avatar-components.ts';
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -403,6 +404,8 @@ export function tuckEars(model: T.Object3D, hide: boolean) {
 export class HeroLibrary {
   ready = false;
   private source: T.Object3D | null = null;
+  private componentSource: T.Object3D | null = null;
+  private makeComponents: (()=>T.Object3D) | null = null;
   private loading: Promise<void> | null = null;
   private url: string;
   private loadScene: SceneLoader;
@@ -414,20 +417,25 @@ export class HeroLibrary {
   load(): Promise<void> {
     // Until the file arrives (a retry may bring it later) the procedural explorer stands in.
     const keep = (scene: T.Group) => {
-      const hero = scene.getObjectByName('hero') ?? scene;
-      // Each posable part becomes one or two meshes; the shirt keeps its own material for recolouring.
-      const shirt = (mesh: T.Mesh) => /^Hero shirt/.test((mesh.material as T.Material).name);
-      for (const part of ['body', 'head', 'arm-left', 'arm-right', 'leg-left', 'leg-right', 'head-leaf']) { const node = hero.getObjectByName(part); if (node) bakeModel(node, { deep: false, keep: shirt }); }
-      this.dress?.(hero, scene); mergeEars(hero);
-      toonify(hero); hero.traverse(o => { if (o instanceof T.Mesh) o.geometry.userData.sharedKit = true; });
-      this.source = hero; this.ready = true;
+      const hero = scene.getObjectByName('hero') ?? scene, raw=hero.clone(true);
+      const prepare=(target:T.Object3D,components:boolean)=>{
+        if(components){separateHeadCosmetics(target);for(const name of ['base-hair','base-face']){const part=target.getObjectByName(name);if(part)bakeModel(part);}}
+        const shirt = (mesh: T.Mesh) => /^Hero shirt/.test((mesh.material as T.Material).name);
+        for (const part of ['body', 'head', 'arm-left', 'arm-right', 'leg-left', 'leg-right', 'head-leaf']) { const node = target.getObjectByName(part); if (node) bakeModel(node, { deep: false, keep: shirt }); }
+        this.dress?.(target, scene); mergeEars(target);
+        toonify(target); target.traverse(o => { if (o instanceof T.Mesh) o.geometry.userData.sharedKit = true; });return target;
+      };
+      // Preserve the original merged draw budget. Build the replaceable head once, only when a new cosmetic is used.
+      this.componentSource=null;this.makeComponents=()=>prepare(raw,true);
+      this.source=prepare(hero,false);this.ready=true;
     };
     this.loading ??= loadWithRetry(this.url, () => this.loadScene(this.url), keep, this.policy).then(scene => { if (scene) keep(scene); }).catch(() => { /* The procedural explorer remains. */ });
     return this.loading;
   }
-  instance(color: string): T.Group | null {
+  instance(color: string, components=false): T.Group | null {
     if (!this.source) return null;
-    const hero = new T.Group(), body = this.source.clone(true);
+    const source=components?(this.componentSource??=this.makeComponents?.()??this.source):this.source;
+    const hero = new T.Group(), body = source.clone(true);
     body.position.set(0, 0, 0); body.rotation.set(0, 0, 0); body.scale.set(1, 1, 1);
     hero.add(body); hero.name = 'hero';
     // Poses set x (swing) then z (splay) on the arms, the same order the procedural explorer uses.

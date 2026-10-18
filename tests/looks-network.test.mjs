@@ -53,4 +53,16 @@ test('the server validates look purchases and the whole combination reaches othe
   assert.equal((await ben.next(m => m.type === 'pose' && m.player.id === ann.id && m.player.x === 1.5)).player.look, 'boy-grown-none-bare');
   assert.equal((await action(ann, 'wearLook', { id: 'girl-grown-bunny' })).status, 200, 'a first-builder id still works');
   assert.notEqual((await action(ann, 'wearLook', { id: 'girl-grown-bunny-tiger' })).status, 200, 'an unbought hood cannot be worn');
+
+  // Studio choices are canonical account data, never the local draft or a client-supplied pose override.
+  const dressing={look:'girl-grown-bunny-bare',appearance:{hair:'rainbow',face:'wink'},gear:{hat:null,glasses:null,outfit:null,boots:null,disguise:null}};
+  const changed=await action(ann,'dressAvatar',dressing);assert.equal(changed.status,200);assert.deepEqual(changed.data.profile.appearance,dressing.appearance);
+  const balance=changed.data.profile.energy;
+  await new Promise(r=>setTimeout(r,120));ann.send({type:'pose',x:1.7,z:2,appearance:{hair:'buns',face:'tears'}});
+  const dressedPose=await ben.next(m=>m.type==='pose'&&m.player.id===ann.id&&m.player.x===1.7);
+  assert.deepEqual(dressedPose.player.appearance,dressing.appearance,'a spoofed local preview cannot leak to another explorer');
+  const invalid=await action(ann,'dressAvatar',{...dressing,look:'boy-tiny-none-bare',gear:{...dressing.gear,hat:'hat_wizard'}});assert.notEqual(invalid.status,200);
+  const after=await call(ann.cookie,'auth/session');assert.equal(after.data.profile.energy,balance);assert.deepEqual(after.data.profile.appearance,dressing.appearance);assert.equal(after.data.profile.looks.style,dressing.look);
+  const reconnect=connect(server.url,ann.cookie);clients.push(reconnect);const joined=await reconnect.next(m=>m.type==='joined');assert.deepEqual(joined.players.find(p=>p.id===ann.id)?.appearance??joined.self?.appearance,dressing.appearance);
+
 });
