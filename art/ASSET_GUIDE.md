@@ -9,7 +9,10 @@ Built with Blender 4.5 LTS by headless generators. All geometry and materials ar
 - `blender/kit/build_nature.py`: the scenery kit, the 19 crops and their interface icons.
 - `blender/kit/build_fish.py`: 18 fish and the old boot, pond dressing (bobber, lily pad and flower, reeds) and the fish icons.
 - `blender/kit/hero_spec.py`: the explorer's part pivots, hand grips and body envelope, shared by every gear generator so pieces fit the same body.
-- `blender/kit/build_hero.py`: the explorer (`hero.glb`) and the ten disguises.
+- `blender/kit/build_avatar_models.py`: the four replacement figure meshes (normal, long legs, baby, sturdy), compatible hero file paths and generated `src/avatar-shapes.ts`. `build_hero.py` and `build_hero_styles.py` delegate body generation here.
+- `src/hair-art.ts`: five sculpted, replaceable hairstyles; ordinary hats compress the crown while preserving fringe/nape/tails. Only enclosing hoods hide hair.
+- `render_avatar_icons.mjs`: install the actual runtime avatar/hair/face/looks icons (start Vite and Chromium with `--remote-debugging-port=9231`, then run `node art/render_avatar_icons.mjs`).
+- `blender/kit/build_hero.py`: legacy garment authoring helpers and disguise generation. `hero_spec.py` stays in the original authoring coordinates; `src/avatar-fit.ts` retargets garments onto the replacement anatomy.
 - `blender/kit/build_wear.py`: hats, outfits and boots.
 - `blender/kit/build_weapons.py`: swords, blasters, rods and other held weapons, plus the seven pets.
 - `blender/kit/build_items.py`: icons for materials, foods, seeds and farm supplies.
@@ -120,3 +123,9 @@ The Hunting harpoon aliases the already shipped `trident` held model and icon. I
 ## Festival wardrobe and carriage
 
 `blender/kit/build_festival_gear.py` builds the pumpkin witch and Flex wardrobe pieces plus the Halloween ghost carriage in `festival-gear.glb`. Eight 160 px icons and three previews use the same meshes. Part tags attach clothes, glasses and shoes to the existing hero pivots; `festival-gear-manifest.json` records triangle counts. The carriage's wheels use vertical cobweb geometry, and its red seat, bat emblem, cyan lanterns and ghost harness are all modeled. See [festival gear](../docs/festival-gear.md).
+
+### Replacement avatar (October 2026)
+
+Rebuild with `blender -b --factory-startup --python-exit-code 1 --python art/blender/kit/build_avatar_models.py`. Each body is below 6,000 triangles/350 KB. Legacy body/gender/height ids and purchased options remain valid: tiny → baby, chibi/teen → normal, tall/grown → long legs, sturdy → its own sculpted mesh. All head sizes match; no old embedded hair, skirt, sprout or backpack remains. Animated part and palm node names are unchanged.
+
+Hair templates are built once and shared across local, remote, wardrobe and portrait avatars. The two old short/bob ids alias the new fox styles. Sleeves and shins deform in cached garment geometry; palms, weapons and feet retain their proportions. Complete creature costumes use their own fitted silhouette and real palm locations. Save data and online authority continue through the existing `dressAvatar` action.

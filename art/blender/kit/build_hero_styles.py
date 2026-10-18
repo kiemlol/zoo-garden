@@ -1,39 +1,9 @@
-"""Zoo Garden character builder: body (boy/girl) x height (chibi/teen/tall) x ears (none/cat/bunny).
+"""Legacy authoring-space utilities for ears, tails, hoods and garments.
 
-Combinations must not multiply files, so the art is modular:
-
-- six BODY files, one per body x height: hero.glb (boy chibi, from build_hero.py), hero-teen.glb,
-  hero-tall.glb, hero-girl.glb, hero-girl-teen.glb, hero-girl-tall.glb. Each is built from the
-  default hero's own pieces (build_hero.hero_pieces), so it keeps the same part names, the same ten
-  `Hero ...` materials and the same draw structure: one mesh per part plus `head-leaf` (the sprout).
-- one PARTS file, hero-parts.glb: `ears-cat`, `ears-bunny`, `tail-cat`, `tail-bunny`, modelled on the
-  DEFAULT (chibi) hero in explorer space. The game (src/assets.ts heroKitFor) places them on any
-  height with the same FIT the gear uses (ears follow the head's fit, tails the body's), then merges
-  the ears into the head mesh and the tail into the body mesh at load: no extra draw.
-
-FIT is the per-part transform the game applies to a gear piece (and to ears/tails) after expressing
-it relative to the DEFAULT pivot (`piece' = fit.offset + fit.scale * piece`, in that part's space).
-It depends on height only; src/looks.ts mirrors it and tests/looks.test.ts checks it against the
-GLB pivots.
-
-The girl: twin tails with ribbons, a back bob, eyelashes and a short flared skirt in the shirt's
-shade (so it takes the player's colour). The boy keeps the default short hair cap.
-
-Heights (tall is the "human-like" shape: slimmer, longer legs, smaller head):
-  chibi  the default proportions, head about half the height
-  teen   shins +0.2, torso x1.08 tall, arms x1.22, head x0.9
-  tall   shins +0.46, torso x1.2 tall and x0.8 wide, arms x1.55, head x0.76 (about a third of the height)
-
-Ears replace the sprout in `head-leaf`, so they follow its rule: hidden under any hat and most
-disguises (nineteen hats are modelled tight over the hair cap; ears poking through would clash).
-
-Run from the repository root:
-
-    blender -b --factory-startup --python art/blender/kit/build_hero_styles.py -- [--install] [--render]
-
---render writes art/previews/kit/hero-styles.webp: every combination, bare-headed and in a hat.
---icons renders only the mirror's 25 option portraits (public/assets/icons/looks/<option>.webp with --install)
-and art/previews/kit/look-icons.webp, without exporting any GLB; --render renders them too.
+Production bodies are generated exclusively by build_avatar_models.py (main delegates there).
+The retired body helpers remain as the original coordinate reference of existing accessories;
+they are not installed as avatar geometry. Render installed hair/looks icons from the runtime
+avatar using art/render_avatar_icons.mjs, so previews use the same meshes as local/online play.
 """
 import bpy
 import json
@@ -681,62 +651,19 @@ def render_icon_sheet():
 
 
 def main():
-    argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
-    if '--icons' in argv:      # only the mirror's option portraits (no GLB export): -- --icons [--install]
-        reset_scene()
-        render_option_icons('--install' in argv)
-        render_icon_sheet()
-        print('Look icons OK')
-        return
-    out, failures = {'fit': {h: fit_table(h) for h in HEIGHTS}, 'bodies': {}}, []
-    for body in BODIES:
-        for height in HEIGHTS:
-            reset_scene()
-            objs, pivots, hands = make_combo(body, height, BH.hero_materials())
-            st = stats(objs)
-            if set(st['materials']) - set(BH.HERO_MATERIALS):
-                failures.append(f'{body}-{height}: extra materials {st["materials"]}')
-            name = body_file(body, height)
-            entry = dict(st, file=name, pivots={k: g3(v) for k, v in pivots.items()},
-                         hands={k: g3(v - pivots['arm-left' if k == 'hand-left' else 'arm-right']) for k, v in hands.items()})
-            if name != 'hero.glb':     # the boy chibi is build_hero.py's own file
-                path = os.path.join(BH.MODELS, name)
-                entry['bytes'] = export_glb(BH.tree(objs['hero']), path)
-                if '--install' in argv:
-                    os.makedirs(BH.PUBLIC_MODELS, exist_ok=True)
-                    shutil.copy2(path, os.path.join(BH.PUBLIC_MODELS, name))
-            out['bodies'][f'{body}-{height}'] = entry
-            print(f"{body}-{height:6s} {st['triangles']:5d} tris  height {st['height']}  heads {st['heads']}  {entry.get('bytes', '')}  {st['parts']}")
+    """Compatibility entry point. New bodies come exclusively from build_avatar_models.
+    The old shape helpers above remain the authoring reference for ears/hoods and legacy garments.
+    Hair and wardrobe icons are rendered from the real runtime avatar (render_avatar_icons.mjs).
+    """
+    import build_avatar_models
+    build_avatar_models.main()
     reset_scene()
-    parts = make_parts(BH.hero_materials())
-    tris = {o.name: BH.mesh_tris(o) for o in parts[1:]}
-    path = os.path.join(BH.MODELS, 'hero-parts.glb')
-    out['parts'] = dict(triangles=tris, bytes=export_glb(parts, path))
-    if '--install' in argv:
-        shutil.copy2(path, os.path.join(BH.PUBLIC_MODELS, 'hero-parts.glb'))
-    print('parts', out['parts'])
-    for key, b in out['bodies'].items():
-        tail = max(tris['tail-cat'], tris['tail-bunny'])
-        worst = b['triangles'] - b['parts']['head-leaf'] + max(tris['ears-cat'] + tris['tail-cat'], tris['ears-bunny'] + tris['tail-bunny'],
-                                                               max(tris['deco-' + d] for d in DECOS) + tail)
-        if worst > TRI_LIMIT:
-            failures.append(f'{key}: {worst} triangles with ears and tail (> {TRI_LIMIT})')
-    with open(os.path.join(BH.GEN, 'hero-styles.json'), 'w', encoding='utf-8') as fh:
-        json.dump(out, fh, indent=1)
-    if failures:
-        raise RuntimeError('Hero styles: ' + '; '.join(failures))
-    if '--render' in argv:
-        reset_scene()
-        render_option_icons('--install' in argv)
-        render_icon_sheet()
-        reset_scene()
-        render_decos()
-        reset_scene()
-        render_heights()
-        if '--sheet' in argv:
-            reset_scene()
-            render_sheet()
-    print('Hero styles OK')
+    parts=make_parts(BH.hero_materials())
+    path=os.path.join(BH.MODELS,'hero-parts.glb')
+    export_glb(parts,path)
+    if '--install' in sys.argv:
+        shutil.copy2(path,os.path.join(BH.PUBLIC_MODELS,'hero-parts.glb'))
+    print('Avatar bodies and compatible ears/hoods OK')
 
 
 if __name__ == '__main__':

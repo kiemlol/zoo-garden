@@ -2363,7 +2363,7 @@ def parse_args():
     return opts
 
 
-def run_hero(opts, manifest, failures):
+def run_legacy_hero(opts, manifest, failures):
     reset_scene()
     objs = make_hero(hero_materials())
     stats, fails = hero_stats(objs)
@@ -2389,6 +2389,13 @@ def run_hero(opts, manifest, failures):
         remove_tree(objs['hero'])
         preview_hero()
     return not fails
+
+
+def run_hero(opts, manifest, failures):
+    # The original geometry remains an authoring reference for legacy costumes only.
+    # Never reinstall the retired avatar when the old kit entry point is used.
+    import build_avatar_models
+    manifest['avatar'] = build_avatar_models.main()
 
 
 def run_disguises(opts, manifest, failures):
@@ -2460,7 +2467,7 @@ def main():
                 print('installed', name)
         if 'icons' in sections:
             os.makedirs(PUBLIC_ICONS, exist_ok=True)
-            for name in ['hero'] + DISGUISE_IDS:
+            for name in DISGUISE_IDS:  # hero icon now comes from the real runtime avatar renderer
                 shutil.copy2(os.path.join(ICONS, name + '.webp'), os.path.join(PUBLIC_ICONS, name + '.webp'))
             print('installed', 1 + len(DISGUISE_IDS), 'icons')
     print('\nHero kit OK')

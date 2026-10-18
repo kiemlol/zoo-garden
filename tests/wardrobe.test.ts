@@ -18,7 +18,7 @@ const loader=new GLTFLoader();if(!globalThis.ProgressEvent)globalThis.ProgressEv
 const disk=async(url:string)=>{const file=url.split('/').pop()!.split('?')[0],buf=readFileSync(new URL('../public/assets/models/'+file,import.meta.url));return(await loader.parseAsync(buf.buffer.slice(buf.byteOffset,buf.byteOffset+buf.byteLength),'/')).scene;};
 const triangles=(root:T.Object3D)=>{let n=0;root.traverse(o=>{if(o instanceof T.Mesh)n+=(o.geometry.index?.count??o.geometry.getAttribute('position').count)/3;});return n;};
 
-test('old saves keep the authored hair/face; new cosmetics round-trip and invalid persisted ids fall back safely',()=>{
+test('old saves keep their cosmetic choices; new cosmetics round-trip and invalid persisted ids fall back safely',()=>{
  const s=newGame();assert.deepEqual(appearanceOf(s),{hair:'original',face:'original'});assert.equal(parseSave(JSON.stringify(s))!.appearance,undefined);
  s.appearance={hair:'rainbow',face:'wink'};assert.deepEqual(parseSave(JSON.stringify(s))!.appearance,s.appearance);
  assert.deepEqual(readAppearance({hair:'constructor',face:'__proto__'}),{hair:'original',face:'original'});
@@ -52,7 +52,7 @@ test('all hairstyles replace old hair on every body/height; all faces replace ey
   for(const hair of Object.keys(HAIR_STYLES).filter(id=>id!=='original') as HairStyle[]){const hero=kit.instance('#4aa8ff',true)!;applyAppearance(hero,{hair,face:'wink'},id);assert.equal(hero.getObjectByName('base-hair')!.visible,false,id+' '+hair);assert.equal(hero.getObjectByName('base-face')!.visible,false);assert.deepEqual(hero.getObjectByName('custom-hair')!.scale.toArray(),fitOf(id).head?.scale??[1,1,1]);assert.ok(hero.getObjectByName('hand-right'));}
  }
  const kit=new HeroLibrary('hero.glb',disk);await kit.load();
- for(const face of Object.keys(FACE_STYLES).filter(id=>id!=='original') as FaceStyle[]){const hero=kit.instance('#fff',true)!;applyAppearance(hero,{hair:'original',face},DEFAULT_LOOK);assert.equal(hero.getObjectByName('base-hair')!.visible,true);assert.equal(hero.getObjectByName('base-face')!.visible,false);assert.ok(hero.getObjectByName('custom-face'));assert.ok(triangles(appearanceModel('face',face))<1600);}
+ for(const face of Object.keys(FACE_STYLES).filter(id=>id!=='original') as FaceStyle[]){const hero=kit.instance('#fff',true)!;applyAppearance(hero,{hair:'original',face},DEFAULT_LOOK);assert.equal(hero.getObjectByName('base-hair')!.visible,false);assert.ok(hero.getObjectByName('custom-hair'));assert.equal(hero.getObjectByName('base-face')!.visible,false);assert.ok(hero.getObjectByName('custom-face'));assert.ok(triangles(appearanceModel('face',face))<1600);}
  const hood=kit.instance('#fff',true)!;applyAppearance(hood,{hair:'waves',face:'happy'},DEFAULT_LOOK,{hood:true});assert.equal(hood.getObjectByName('base-hair')!.visible,false);assert.equal(hood.getObjectByName('custom-hair'),undefined,'hood covers hair without extra wig clipping');
  const costume=kit.instance('#fff',true)!;applyAppearance(costume,{hair:'rainbow',face:'tears'},DEFAULT_LOOK,{disguise:true});assert.equal(costume.getObjectByName('base-hair')!.visible,true);assert.equal(costume.getObjectByName('custom-face'),undefined,'authored costume face stays intact');
 });

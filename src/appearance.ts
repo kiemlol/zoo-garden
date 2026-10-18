@@ -1,12 +1,12 @@
-/** Independent cosmetics: old saves retain the body's original hair and face. No change to rig/look ids or stats. */
+/** Cosmetic choices retain their saved ids; short/bob are legacy aliases of the replacement hairstyles. */
 export const HAIR_STYLES = {
-  original: { name: 'Original hair', icon: '✂️' },
-  short: { name: 'Soft short hair', icon: '👦' },
-  bob: { name: 'Round bob', icon: '👩' },
-  ponytail: { name: 'Flowing ponytail', icon: '🎀' },
-  buns: { name: 'Twin buns', icon: '🍡' },
-  waves: { name: 'Long waves', icon: '〰️' },
-  rainbow: { name: 'Rainbow fringe', icon: '🌈' },
+  original: { name: 'Snow fox layers', icon: '✂️' },
+  short: { name: 'Snow fox layers', icon: '👦' },
+  bob: { name: 'Moonlit fox layers', icon: '👩' },
+  ponytail: { name: 'Midnight pumpkin tails', icon: '🎀' },
+  buns: { name: 'Blue braided buns', icon: '🍡' },
+  waves: { name: 'Moonlit fox layers', icon: '〰️' },
+  rainbow: { name: 'Rainbow swept hair', icon: '🌈' },
 } as const;
 export const FACE_STYLES = {
   original: { name: 'Original face', icon: '🙂' },

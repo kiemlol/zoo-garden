@@ -1,3 +1,5 @@
+import { avatarFallback } from './avatar-fallback.ts';
+import { fitAvatarPiece } from './avatar-fit.ts';
 import { splitLook } from './looks.ts';
 import { applyAppearance } from './appearance-art.ts';
 import { appearanceOf, type Appearance } from './appearance.ts';
@@ -705,26 +707,7 @@ export class World {
     // Solid up to the sandy lip: the explorer fishes from the shore, 0.6 m outside the water line.
     this.obstacle(x,z,r+.15);
   }
-  chibi(color: string) {
-    const c=group();
-    c.add(ball('#f3d5af',.59,0,1.59,0,2));
-    const hair=ball('#655046',.605,0,1.79,-.05,1);hair.scale.y=.62;c.add(hair);
-    c.add(ball('#655046',.23,-.42,1.61,.24),ball('#655046',.22,.4,1.7,.23),ball('#655046',.24,-.15,1.96,.25));
-    for(const x of [-.21,.21]){c.add(ball('#3e4542',.052,x,1.62,.551,1),ball('#e8ab9d',.095,x*1.65,1.44,.47));}
-    const smile=mesh(new T.TorusGeometry(.075,.015,4,8,Math.PI),'#8b6959',0,1.48,.578);smile.rotation.z=Math.PI;c.add(smile);
-    c.add(cyl(color,.32,.42,.65,0,.85,0,8));
-    // Arms hang from shoulder pivots so punches, swings and the fishing cast can animate.
-    for(const side of [-1,1]){
-      const arm=new T.Group();arm.name=side<0?'arm-left':'arm-right';arm.position.set(side*.37,1.08,.02);arm.rotation.order='YXZ';arm.rotation.z=side*.3;
-      const grip=new T.Object3D();grip.name=side<0?'hand-left':'hand-right';grip.position.set(0,-.36,.05);
-      arm.add(cyl(color,.12,.1,.3,0,-.12),ball('#f3d5af',.14,0,-.33,.02),grip);c.add(arm);
-    }
-    const left=group(cyl('#f0d4ad',.1,.1,.35,0,.35),ball('#775f46',.17,0,.16,.08));left.position.x=-.18;left.name='leg-left';c.add(left);
-    const right=left.clone();right.position.x=.18;right.name='leg-right';c.add(right);
-    c.add(box('#b38d5c',.4,.44,.22,0,.9,-.34),ball('#f8ecd0',.08,0,.93,.36));
-    c.add(cyl('#b4c478',.015,.02,.24,0,2.15),ball('#94b774',.16,-.1,2.24),ball('#b1ca82',.15,.1,2.31));
-    return c;
-  }
+  chibi(color: string) { return avatarFallback(color); }
   private petModel(id:string){
     const color=id.includes('dragon')?'#7ab876':id.includes('fire')?'#f5cc62':id.includes('parrot')?'#5bd7a5':'#fff0d8',pet=new T.Group();
     pet.add(ball(color,.36,0,.42),ball(color,.28,0,.77,.2));
@@ -740,7 +723,8 @@ export class World {
       const tag=piece.userData.tag??fallback,part=hero.getObjectByName(tag)??hero,fit=part!==hero?fits?.[tag]:undefined;
       // Pieces are modelled in explorer space; re-express them in the part's own space. A body style that moves its
       // pivots (looks.ts FIT) places the piece relative to the default pivot, then scales and shifts it to the new part.
-      if(fit){piece.applyMatrix4(new T.Matrix4().makeTranslation(-DEFAULT_PIVOTS[tag][0],-DEFAULT_PIVOTS[tag][1],-DEFAULT_PIVOTS[tag][2]));piece.applyMatrix4(new T.Matrix4().makeScale(...fit.scale).premultiply(new T.Matrix4().makeTranslation(...fit.offset)));}
+      if(fit&&fitAvatarPiece(piece,tag,hero.userData.look)){/* cached surface retarget, already in part space */}
+      else if(fit){piece.applyMatrix4(new T.Matrix4().makeTranslation(-DEFAULT_PIVOTS[tag][0],-DEFAULT_PIVOTS[tag][1],-DEFAULT_PIVOTS[tag][2]));piece.applyMatrix4(new T.Matrix4().makeScale(...fit.scale).premultiply(new T.Matrix4().makeTranslation(...fit.offset)));}
       else piece.applyMatrix4(toHero.clone().multiply(part.matrixWorld).invert());
       part.add(piece);
     }
@@ -773,8 +757,8 @@ export class World {
     // A body style downloads on first use; the default explorer stands in until it arrives.
     // Complete costumes keep a hidden base rig; their own geometry is fitted continuously to the selected look.
     const combo=toLook(look)??DEFAULT_LOOK,styled=heroKitFor(fullBodyDisguise?DEFAULT_LOOK:combo);if(styled!==heroKit&&!styled.requested)void styled.load().then(()=>{if(styled.ready)this.refreshAvatars();});
-    const base=styled.ready&&heroKit.ready?styled:heroKit,tint=disguise&&!kitDisguise?disguise.color:color,c=base.instance(tint,!id&&!!appearance&&(appearance.hair!=='original'||appearance.face!=='original'))??this.chibi(tint);
-    c.userData.look=fullBodyDisguise?combo:base===heroKit?DEFAULT_LOOK:combo;const fit=fitOf(combo);if(base!==heroKit&&Object.keys(fit).length)c.userData.fit=fit;
+    const base=styled.ready&&heroKit.ready?styled:heroKit,tint=disguise&&!kitDisguise?disguise.color:color,c=base.instance(tint,!id)??this.chibi(tint);
+    c.userData.look=fullBodyDisguise?combo:base===heroKit?DEFAULT_LOOK:combo;const fit=fitOf(base===heroKit?DEFAULT_LOOK:combo);if(!fullBodyDisguise)c.userData.fit=fit;
     // The sprout pokes through hats and most costumes; the fairy crown and hero mask leave it showing.
     // A hat kept under a costume is not drawn (below), so only the costume decides then.
     const top=id?kitDisguise&&['dz_fairy','dz_superhero'].includes(id):!gear.hat,leaf=c.getObjectByName('head-leaf');if(leaf)leaf.visible=top;tuckEars(c,!top);
@@ -791,7 +775,7 @@ export class World {
     if(fullBodyDisguise)c.traverse(o=>{if(o instanceof T.Mesh)o.visible=false;});
     if(kitDisguise)this.wearKit(c,id,'body');
     if(fullBodyDisguise)fitBirdDisguise(c,id,combo);
-    applyAppearance(c,appearance,base===heroKit?DEFAULT_LOOK:combo,{hat:!!gear.hat,hood:splitLook(combo).deco!=='bare'&&!gear.hat,disguise:!!id});
+    applyAppearance(c,appearance,base===heroKit?DEFAULT_LOOK:combo,{hat:!!gear.hat,hatId:gear.hat,hood:splitLook(combo).deco!=='bare'&&!gear.hat,disguise:!!id&&!['dz_fairy','dz_superhero'].includes(id)});
     if(gear.weapon&&!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);
     if(isKeyRod(baseOf(gear.weapon??'')))prepareKeyRod(c);
     // Up to two pets beside them (pet-slots.ts): the first on the left as ever, the second on the right; with their dog out (drawn by dog-world.ts on the left) the one pet takes the right.

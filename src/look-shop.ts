@@ -4,7 +4,7 @@ import { onArtLoaded } from './art-retry.ts';
 import { lookOf, swapOption, type LookId } from './looks.ts';
 import { lookName } from './look-tiles.ts';
 import { WardrobePreview } from './wardrobe-preview.ts';
-import { wardrobeHtml, wardrobeDraft, wardrobeGear, WARDROBE_TABS, type WardrobeTab } from './wardrobe-ui.ts';
+import { wardrobeHtml, wardrobeDraft, wardrobeGear, figureLook, WARDROBE_TABS, type WardrobeTab } from './wardrobe-ui.ts';
 import { isHair, isFace } from './appearance.ts';
 import { type WardrobeDraft } from './wardrobe-rules.ts';
 import { previewGear } from './try-on.ts';
@@ -49,10 +49,11 @@ export function initLookShop(d:LookShopDeps){
     if(category&&WARDROBE_TABS.some(([id])=>id===category)){tab=category as WardrobeTab;d.tone('click');render();document.querySelector('[data-wardrobe-tab].active')?.scrollIntoView({block:'nearest',inline:'nearest'});return;}
     if(tool){if(tool==='zoom'){zoom=!zoom;render();}else viewer?.turn(tool==='left'?-.45:.45);d.tone('click');return;}
     if(busy)return;
+    if(target.hasAttribute('data-wardrobe-figure')){preview(figureLook(shown().look,target.dataset.wardrobeFigure!));d.tone('click');render();return;}
     if(target.hasAttribute('data-look-option')){preview(swapOption(shown().look,target.dataset.lookOption as Parameters<typeof swapOption>[1]));d.tone('click');render();return;}
     if(target.hasAttribute('data-wardrobe-cosmetic')){const id=target.dataset.wardrobeCosmetic;if(tab==='hair'&&isHair(id))shown().appearance.hair=id;else if(tab==='face'&&isFace(id))shown().appearance.face=id;else return;
       // Trying a face/hair must show it: keep clothes under a costume, but take the costume off in the draft only.
-      delete shown().gear.disguise;if(tab==='hair'){delete shown().gear.hat;shown().look=swapOption(shown().look,'bare');}syncPreview();d.tone('click');render();return;}
+      delete shown().gear.disguise;syncPreview();d.tone('click');render();return;}
     if(target.hasAttribute('data-wardrobe-item')&&['hat','glasses','outfit','boots','disguise'].includes(tab)){
       const id=target.dataset.wardrobeItem;if(id)shown().gear=previewGear(shown().gear,id);else delete shown().gear[tab as keyof SaveState['gear']];syncPreview();d.tone('click');render();return;
     }

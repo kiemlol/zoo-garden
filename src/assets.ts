@@ -417,7 +417,15 @@ export class HeroLibrary {
   load(): Promise<void> {
     // Until the file arrives (a retry may bring it later) the procedural explorer stands in.
     const keep = (scene: T.Group) => {
-      const hero = scene.getObjectByName('hero') ?? scene, raw=hero.clone(true);
+      const hero = scene.getObjectByName('hero') ?? scene;
+      // Every animated part is a transform group, even when its new mesh has only one material.
+      // Hiding a base render mesh for a full costume must never hide the bone or its attached gear.
+      for(const name of ['body','head','arm-left','arm-right','leg-left','leg-right']){
+        const node=hero.getObjectByName(name);if(!(node instanceof T.Mesh)||!node.parent)continue;
+        const group=new T.Group();group.name=name;group.position.copy(node.position);group.quaternion.copy(node.quaternion);group.scale.copy(node.scale);node.parent.add(group);
+        for(const child of [...node.children])group.add(child);node.name=name+'-surface';group.add(node);node.position.set(0,0,0);node.quaternion.identity();node.scale.set(1,1,1);
+      }
+      const raw=hero.clone(true);
       const prepare=(target:T.Object3D,components:boolean)=>{
         if(components){separateHeadCosmetics(target);for(const name of ['base-hair','base-face']){const part=target.getObjectByName(name);if(part)bakeModel(part);}}
         const shirt = (mesh: T.Mesh) => /^Hero shirt/.test((mesh.material as T.Material).name);
@@ -539,7 +547,7 @@ export function heroKitFor(look: LookId): HeroLibrary {
   let kit = heroStyleKits.get(look);
   if (!kit) {
     const l = splitLook(look), file = bodyFile(l.body, l.height); let parts: T.Group | null = null;
-    const load: SceneLoader = async () => { const [scene, p] = await Promise.all([rawScene(file), l.ears === 'none' && l.deco === 'bare' ? null : rawScene('hero-parts.glb')]); parts = p; applyBuild(scene, l.body);
+    const load: SceneLoader = async () => { const [scene, p] = await Promise.all([rawScene(file), l.ears === 'none' && l.deco === 'bare' ? null : rawScene('hero-parts.glb')]); parts = p;
       if (p) scene.getObjectByName('head-leaf')?.removeFromParent(); // before baking, or the head bake would swallow the sprout beside the ears
       return scene; };
     kit = new HeroLibrary(modelUrl(file), load, DEFAULT_POLICY, hero => { if (parts) dressEars(hero, parts, l.ears, l.deco, fitOf(look)); });

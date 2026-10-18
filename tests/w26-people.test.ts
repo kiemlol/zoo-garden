@@ -88,7 +88,7 @@ test('a styled friend: the height option sets proportions and growth sets the he
   // HEIGHT_RATIO mirrors the files: each height's body over the chibi's.
   for (const h of ROWS.height as Height[]) {
     const id = `boy-${h}-none-bare` as LookId, kit = heroKitFor(id); await kit.load();
-    const ratio = standingHeight(kit.instance('#fff')!) / hero;
+    const ratio = standingHeight(w.lookAvatar('#fff',{},id)) / hero;
     assert.ok(Math.abs(ratio - HEIGHT_RATIO[h]) < .01, `${h}: file ratio ${ratio.toFixed(3)} vs HEIGHT_RATIO ${HEIGHT_RATIO[h]}`);
   }
   const explorer = w.lookAvatar(s.color, {}, DEFAULT_LOOK); explorer.scale.setScalar(HERO_SCALE); const heroScaled = standingHeight(explorer);
