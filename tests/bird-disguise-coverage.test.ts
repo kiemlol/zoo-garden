@@ -54,7 +54,7 @@ test('a costume awaiting its GLB keeps the visible fallback, then replaces it on
 
 test('costumes change height and build without exposing the base or mutating shared models',()=>{
  const w=world(),size=(id:string,look:LookId)=>{const c=w.lookAvatar('#ff00ff',{disguise:id},look),bounds=new T.Box3(),part=new T.Box3();c.updateMatrixWorld(true);c.traverseVisible((o:T.Object3D)=>{if(o instanceof T.Mesh&&!o.userData.outline){o.geometry.computeBoundingBox();bounds.union(part.copy(o.geometry.boundingBox!).applyMatrix4(o.matrixWorld));}});checkCostume(c,id);return bounds.getSize(new T.Vector3());};
- for(const id of ids){const heights=['tiny','chibi','tall'].map(h=>size(id,`boy-${h}-none-bare` as LookId).y);for(let i=1;i<heights.length;i++)assert.ok(heights[i]>heights[i-1],`${id}: ${heights}`);assert.ok(size(id,'sturdy-chibi-none-bare').x>size(id,'slim-chibi-none-bare').x);const before=size(id,DEFAULT_LOOK);size(id,'girl-grown-bunny-fox');assert.deepEqual(size(id,DEFAULT_LOOK),before,'shared kit geometry stays unchanged');}
+ for(const id of ids){const heights=ROWS.height.map(h=>size(id,`boy-${h}-none-bare` as LookId).y);for(let i=1;i<heights.length;i++)assert.ok(heights[i]>heights[i-1],`${id}: ${heights}`);assert.ok(size(id,'sturdy-chibi-none-bare').x>size(id,'slim-chibi-none-bare').x);const before=size(id,DEFAULT_LOOK);size(id,'girl-grown-bunny-fox');assert.deepEqual(size(id,DEFAULT_LOOK),before,'shared kit geometry stays unchanged');}
 });
 
 
@@ -66,7 +66,7 @@ test('tall costumes keep compact coats and separate shoes with their own visible
  const w=world();const bounds=(root:T.Object3D,predicate:(o:T.Mesh)=>boolean)=>{root.updateMatrixWorld(true);const b=new T.Box3(),part=new T.Box3();root.traverseVisible(o=>{if(o instanceof T.Mesh&&!o.userData.outline&&predicate(o)){o.geometry.computeBoundingBox();b.union(part.copy(o.geometry.boundingBox!).applyMatrix4(o.matrixWorld));}});return b;};
  for(const id of ids){const normal=w.lookAvatar('#fff',{disguise:id},DEFAULT_LOOK),tall=w.lookAvatar('#fff',{disguise:id},'girl-tall-none-bare');
  const isBody=(m:T.Mesh)=>m.userData.tag==='body',a=bounds(normal,isBody),b=bounds(tall,isBody),feet=bounds(tall,m=>m.userData.tag?.startsWith('leg-')),shin=tall.getObjectByName(id+'@shin') as T.Mesh;
- assert.ok(b.getSize(new T.Vector3()).y<=a.getSize(new T.Vector3()).y*(id==='dz_penguin'?1/.85+.001:1.09),'the upper costume keeps its proportions instead of stretching into a long coat');assert.ok(b.min.y>feet.min.y+.45,'raised hem and grounded footwear are separate');assert.ok(shin&&shin.parent?.name.startsWith('leg-'),'the visible leg belongs to its animated leg bone');assert.ok(bounds(tall,m=>m.name===id+'@shin').min.y<b.min.y,'costume legs fill the exposed gap');checkCostume(tall,id);
+ assert.ok(b.getSize(new T.Vector3()).y<=a.getSize(new T.Vector3()).y*(id==='dz_penguin'?1.12:1.09),'the upper costume keeps its proportions instead of stretching into a long coat');assert.ok(b.min.y>feet.min.y+.45,'raised hem and grounded footwear are separate');assert.ok(shin&&shin.parent?.name.startsWith('leg-'),'the visible leg belongs to its animated leg bone');assert.ok(bounds(tall,m=>m.name===id+'@shin').min.y<b.min.y,'costume legs fill the exposed gap');checkCostume(tall,id);
  }
 });
 

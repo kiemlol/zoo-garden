@@ -1,4 +1,3 @@
-import { readAppearance, type Appearance } from './appearance.ts';
 import {parseHalloweenGacha,type HalloweenGachaSave} from './halloween-gacha-config.ts';
 import {capFishSize} from './fish-size.ts';
 import { ITEMS, CROPS, PLANETS, RECIPES, DISGUISES, FISH, FISH_WEIGHTS, LOOT_TABLES, UPGRADES, STARTING_PLOTS, MAX_EXTRA_PLOTS, LEGACY_MAX_PLOTS, MAX_DECORATIONS, STORY_STEPS, canonicalItem, type ItemId, type Inventory, type GearSlot, type CropId, type PlanetId, type BuffKey, type BuffDef, type WeaponDef } from './content.ts';
@@ -194,7 +193,6 @@ export interface SaveState {
     rescue?: RescueSave;
     /** Explorer body styles bought at the mirror (looks.ts); missing in older saves = the default look only. */
     looks?: Looks;
-    appearance?: Appearance;
     /** Cottage activities (house-activities.ts): when each was last used, paintings made. */
     house?: HouseState;
 }
@@ -1006,7 +1004,6 @@ export function parseSave(raw: string | null): SaveState | null {
         const dungeon = parseDungeon(v.dungeon); if (dungeon) s.dungeon = dungeon;
         const ctf = parseCtf(v.ctf); if (ctf) s.ctf = ctf;
         const rescue = parseRescue(v.rescue); if (rescue) s.rescue = rescue;
-        if(v.appearance&&typeof v.appearance==='object')s.appearance=readAppearance(v.appearance);else delete s.appearance;
         const looks = parseLooks(v.looks); if (looks) s.looks = looks; else delete s.looks; // older saves keep the look they had: the default hero
         dropUnownedFriendLooks(s);
         s.nextDecorationId = Math.max(integer(v.nextDecorationId, 1), s.decorations.length + 1, ...s.decorations.map(d => Number(d.uid.replace('decor-', '')) + 1).filter(Number.isFinite));

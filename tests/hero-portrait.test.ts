@@ -124,7 +124,7 @@ test('the plate keeps its sprout as the stand-in, and nothing looks at the face 
   assert.doesNotMatch(css.slice(css.indexOf('.avatar.has-face {'), css.indexOf('}', css.indexOf('.avatar.has-face {'))), /overflow|width|height|border/, 'the tile keeps its size, its border and its 44 px tap area');
   // The one place it is looked at: after the explorer is rebuilt. Not updateHud, not a frame listener.
   const wiring = main.slice(main.indexOf('const heroFace=mountHeroFace('), main.indexOf('\n', main.indexOf('world.refreshPlayer=()=>{rebuild();heroFace.sync();}')));
-  assert.match(wiring, /spec:\(\)=>heroKit\.ready\?\{color:state\.color,look:lookOf\(state\),gear:state\.gear,appearance:appearanceOf\(state\)\}:null/); assert.match(wiring, /busy:\(\)=>world\.selected\?\.kind==='enemy'\|\|fightNear\(/);
+  assert.match(wiring, /spec:\(\)=>heroKit\.ready\?\{color:state\.color,look:lookOf\(state\),gear:state\.gear\}:null/); assert.match(wiring, /busy:\(\)=>world\.selected\?\.kind==='enemy'\|\|fightNear\(/);
   assert.equal(main.match(/heroFace\.sync\(\)/g)?.length, 2); assert.doesNotMatch(main, /frameListeners\.add\([^\n]*heroFace/);
   const hud = main.slice(main.indexOf('function updateHud('), main.indexOf('\nfunction ', main.indexOf('function updateHud(') + 10)); assert.doesNotMatch(hud, /heroFace|hero-pic/);
   // No further WebGL context: it draws on the item-icon renderer, and frees what it built (kit parts are shared and stay).
@@ -132,5 +132,5 @@ test('the plate keeps its sprout as the stand-in, and nothing looks at the face 
   assert.equal(icons.match(/new T\.WebGLRenderer/g)?.length, 1);
   // 360 px and narrower hide the tile: nothing is drawn for it.
   assert.match(self, /if \(!tile \|\| getComputedStyle\(tile\)\.display === 'none'\) return;/);
-  assert.match(world, /portraitAvatar\(color:string,gear:SaveState\['gear'\],look:string,appearance\?:Appearance\)\{return this\.avatar\(color,\{hat:gear\.hat,glasses:gear\.glasses,outfit:gear\.outfit,disguise:gear\.disguise\},look,appearance\);\}/);
+  assert.match(world, /portraitAvatar\(color:string,gear:SaveState\['gear'\],look:string\)\{return this\.avatar\(color,\{hat:gear\.hat,outfit:gear\.outfit,disguise:gear\.disguise\},look\);\}/);
 });

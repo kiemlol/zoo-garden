@@ -7,8 +7,8 @@ import * as M from '../src/model.ts';
 import * as F from '../src/friends.ts';
 import { applyGameAction } from '../src/actions.ts';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { shapeProfile, shapeOf, BUILD, DECOS, DEFAULT_LOOK, DEFAULT_PIVOTS, FIT, LOOK_IDS, OPTIONS, ROWS, bodyFile, buyLook, fitOf, joinLook, lookOf, lookPrice, ownsLook, parseLooks, rowOf, splitLook, swapOption, toLook, wearLook, type Body, type Fit, type Height, type LookId } from '../src/looks.ts';
-import { HeroLibrary, heroKitFor, heroKit, wearKit, weaponKit, disguiseKit, tuckEars, useHeroLoader } from '../src/assets.ts';
+import { BUILD, DECOS, DEFAULT_LOOK, DEFAULT_PIVOTS, FIT, LOOK_IDS, OPTIONS, ROWS, bodyFile, buyLook, fitOf, joinLook, lookOf, lookPrice, ownsLook, parseLooks, rowOf, splitLook, swapOption, toLook, wearLook, type Body, type Fit, type Height, type LookId } from '../src/looks.ts';
+import { HeroLibrary, heroKitFor, tuckEars, useHeroLoader } from '../src/assets.ts';
 import { HIP, applyGait, gaitSwing, newGait, stepGait } from '../src/walk-cycle.ts';
 import { GROWTH, earnedStage, friendHeight, friendStage, growUp } from '../src/growth.ts';
 import { friendScale, buildFriend, poseFriend } from '../src/friend-view.ts';
@@ -147,51 +147,51 @@ const place = (b: T.Box3, tag: string, f: Fit | undefined, at: T.Vector3) => {
   return new T.Box3().setFromPoints([out.min, out.max]).translate(at);
 };
 
-test('four new figure silhouettes preserve the rig, exact generated hand sockets, grounded feet and compatible saved look ids',()=>{
-  assert.equal(new Set(BODIES.map(b=>b.file)).size,11,'ten legacy paths plus the separately sculpted sturdy body');
-  for(const {file,id}of BODIES){const g=glb(file),profile=shapeProfile(id);
-    for(const name of [...PARTS,'hand-left','hand-right','head-leaf'])assert.ok(g.index(name)>=0,`${file}: ${name}`);
-    for(const [name,point]of Object.entries(profile.pivots))assert.ok(g.at(g.index(name)).distanceTo(new T.Vector3(...point))<.002,`${id}: ${name} matches generated anatomy`);
-    for(const name of ['leg-left','leg-right'])assert.ok(Math.abs(g.box(g.index(name)).min.y)<.02,`${id}: feet touch the floor`);
-    assert.ok(g.tris<6000,`${file}: mobile geometry budget`);
-    assert.ok(!g.doc.materials.some((m:{name:string})=>m.name==='Hero hair'),'no retired embedded hairstyle');
+test('ten body files keep the hero\'s parts and hand empties; their pivots agree with FIT; tiny < chibi < teen < tall < grown', () => {
+  const base = glb('hero.glb');
+  assert.equal(new Set(BODIES.map(b => b.file)).size, 10, 'builds add no files');
+  for (const [name, p] of Object.entries(DEFAULT_PIVOTS)) assert.ok(base.at(base.index(name)).distanceTo(new T.Vector3(...p)) < .002, name);
+  for (const { file, height } of BODIES) {
+    const g = glb(file), fit = FIT[height];
+    for (const name of [...PARTS, 'hand-left', 'hand-right', 'head-leaf']) assert.ok(g.index(name) >= 0, `${file} has ${name}`);
+    for (const n of g.nodes) assert.ok(!n.rotation && !n.scale, `${file}: ${n.name} is unrotated and unscaled, as gear placement assumes`);
+    assert.equal(g.nodes[g.parent.get(g.index('head-leaf'))!].name, 'head', `${file}: the sprout rides the head and hides under hats`);
+    if (height === 'chibi') { for (const name of PARTS) assert.ok(g.at(g.index(name)).distanceTo(base.at(base.index(name))) < .002, `${file} keeps the ${name} pivot`); continue; }
+    // Legs move by the fit's offset: the hips rise (or drop) by the shin change, and the soles stay on the ground.
+    assert.ok(Math.abs(g.at(g.index('leg-left')).y - (DEFAULT_PIVOTS['leg-left'][1] - fit['leg-left']!.offset[1])) < .002, `${file} hips match FIT`);
+    assert.ok(Math.abs(g.box(g.index('leg-left')).min.y) < .02, `${file} stands on the ground`);
   }
-  const top=(id:LookId)=>{const g=glb(bodyFile(splitLook(id).body,splitLook(id).height));return g.box(g.index('head')).max.y;};
-  assert.ok(top('boy-tiny-none-bare')<top(DEFAULT_LOOK)&&top(DEFAULT_LOOK)<top('boy-tall-none-bare'));
-  assert.equal(top('girl-teen-none-bare'),top(DEFAULT_LOOK),'old teen maps to the new normal figure');
-  assert.equal(top('slim-grown-none-bare'),top('boy-tall-none-bare'),'old grown/slim choices map without deleting ownership');
-  const a=glb('hero.glb'),b=glb('hero-sturdy.glb');assert.ok(b.box(b.index('body')).getSize(new T.Vector3()).x>a.box(a.index('body')).getSize(new T.Vector3()).x*2);
+  const top = (h: Height) => { const g = glb(bodyFile('boy', h)); return g.box(g.index('head')).max.y; };
+  const tops = ROWS.height.map(h => top(h as Height)); for (let i = 1; i < tops.length; i++) assert.ok(tops[i] > tops[i - 1], `${ROWS.height[i]} is taller (${tops.map(t => t.toFixed(2))})`);
+  // Grown is the human-like one: about five heads tall (chibi about two).
+  const heads = (h: Height) => { const g = glb(bodyFile('boy', h)), b = g.box(g.index('head')); return b.max.y / (b.max.y - b.min.y); };
+  assert.ok(heads('chibi') < 2.2 && heads('grown') > 4.8, `heads tall: chibi ${heads('chibi').toFixed(2)}, grown ${heads('grown').toFixed(2)}`);
 });
 
-test('all existing gear follows the new rig, sleeves stay on their arms, boots stay grounded and complete weapons meet the palms',async()=>{
-  useHeroLoader(disk);for(const kit of[heroKit,wearKit,weaponKit,disguiseKit]){(kit as unknown as{loadScene:typeof disk}).loadScene=disk;await kit.load();assert.ok(kit.ready);}
-  const w=Object.create(World.prototype) as World;let checked=0;
-  const models=[['gear-wear.glb',wearKit],['gear-weapons.glb',weaponKit],['disguises.glb',disguiseKit]] as const;
-  for(const {id}of BODIES){const kit=heroKitFor(id);await kit.load();
-    for(const[file,library]of models){const source=glb(file),ids=source.nodes.filter((_,i)=>source.parent.get(i)===undefined).flatMap(n=>n.name?[n.name]:[]);
-      for(const itemId of ids){if(!library.has(itemId))continue;const hero=kit.instance('#fff')!;hero.userData.look=id;hero.userData.fit=fitOf(id);
-        const slot=M.ITEMS[itemId]?.slot;if(!slot)continue;const fallback=slot==='weapon'?'hand-right':slot==='hat'?'head':'body';
-        hero.updateMatrixWorld(true);const bareArms=Object.fromEntries(['arm-left','arm-right'].map(tag=>[tag,new T.Box3().setFromObject(hero.getObjectByName(tag)!).expandByScalar(.15)]));
-        assert.ok((w as unknown as{wearKit(h:T.Object3D,id:string,f:string):boolean}).wearKit(hero,itemId,fallback));hero.updateMatrixWorld(true);
-        const held=new T.Box3();for(const tag of Object.keys(DEFAULT_PIVOTS)){const part=hero.getObjectByName(tag)!;
-          for(const piece of part.children.filter(o=>o.userData.tag===tag)){
-            assert.equal(piece.parent,part,`${id}: ${itemId} follows ${tag}`);const bounds=new T.Box3().setFromObject(piece);if(bounds.isEmpty())continue;
-            for(const v of [...bounds.min.toArray(),...bounds.max.toArray()])assert.ok(Number.isFinite(v));
-            if(tag==='hand-right')held.union(bounds);
-            if(slot==='boots')assert.ok(Math.abs(bounds.min.y)<.08,`${id}: ${itemId} soles grounded (${bounds.min.y})`);
-            if(slot==='outfit'&&tag.startsWith('arm-'))assert.ok(bounds.intersectsBox(bareArms[tag]),`${id}: ${itemId} sleeve/cuff intersects its bare arm`);
-            checked++;
-          }
-        }
-        if(slot==='weapon')assert.ok(held.distanceToPoint(hero.getObjectByName('hand-right')!.getWorldPosition(new T.Vector3()))<.05,`${id}: the whole ${itemId} includes its grip; animated crystal/gear need not touch the fist`);
-      }
+test('every wearable (hats, outfits, boots, weapons, disguises) attaches to every body, build and height and lands on its part', () => {
+  const kits = ['gear-wear.glb', 'gear-weapons.glb', 'disguises.glb'].map(glb);
+  let checked = 0;
+  for (const { file, body, id } of BODIES) {
+    const hero = built(file, body), fit = fitOf(id);
+    for (const kit of kits) for (const [i, n] of kit.nodes.entries()) {
+      if (n.mesh === undefined || !n.name) continue;
+      const item = M.ITEMS[kit.nodes[kit.parent.get(i)!]?.name ?? n.name];
+      const tag = n.name.includes('@') ? n.name.split('@')[1] : item?.slot === 'hat' ? 'head' : item?.slot === 'weapon' ? 'hand-right' : 'body';
+      assert.ok(hero.g.index(tag) >= 0, `${file}: ${n.name} finds ${tag}`);
+      const b = place(kit.box(i), tag, fit[tag], hero.at(tag));
+      if (tag === 'hand-right') { assert.ok(b.distanceToPoint(hero.at(tag)) < .05, `${id}: ${n.name} is held in the fist`); checked++; continue; }
+      const target = hero.box(tag).expandByScalar(/halo/.test(n.name) ? .4 : .12); // the halo floats above the head on purpose
+      assert.ok(b.intersectsBox(target), `${id}: ${n.name} sits on ${tag}`);
+      if (/boots/.test(n.name)) assert.ok(Math.abs(b.min.y) < .08, `${id}: ${n.name} stands on the ground (${b.min.y.toFixed(3)})`);
+      if (item?.slot === 'hat' && tag === 'head') assert.ok(b.max.y > hero.box(tag).max.y - .05, `${id}: ${n.name} covers the top of the head (ears and hoods tuck under it)`);
+      checked++;
     }
   }
-  assert.ok(checked>2000,`checked ${checked} existing garment and weapon pieces`);
+  assert.ok(checked > 20 * 100, `checked ${checked} pieces`);
 });
 
 const partTris = (parts: ReturnType<typeof glb>, p: string) => { const n = parts.nodes[parts.index(p)], m = n.mesh ?? parts.nodes[n.children![0]].mesh!; return parts.doc.meshes[m].primitives.reduce((k: number, q: { indices: number }) => k + parts.doc.accessors[q.indices].count / 3, 0); };
-test('ears and hoods sit on the head and tails on the back at every height and build; triangles stay near the hero, 6 meshes per body and no embedded hair', () => {
+test('ears and hoods sit on the head and tails on the back at every height and build; triangles stay near the hero, 7 meshes per body', () => {
   const parts = glb('hero-parts.glb'), base = glb('hero.glb');
   for (const name of ['ears-cat', 'ears-bunny', 'tail-cat', 'tail-bunny', ...DECOS.map(d => 'deco-' + d)]) assert.ok(parts.index(name) >= 0, name);
   const partBox = (name: string) => { const i = parts.index(name), b = new T.Box3(); for (const [j, n] of parts.nodes.entries()) if ((j === i || parts.parent.get(j) === i) && n.mesh !== undefined) b.union(parts.box(j)); return b; };
@@ -213,7 +213,7 @@ test('ears and hoods sit on the head and tails on the back at every height and b
     }
     assert.ok(worst <= base.tris * 1.25, `${file} + a hood and a tail: ${worst} triangles (hero ${base.tris})`);
     report.push(`${file} ${worst}`);
-    assert.equal(hero.g.doc.meshes.length, 6, `${file}: one mesh per part plus head-leaf (the game bakes each into one draw plus the shirt)`);
+    assert.equal(hero.g.doc.meshes.length, 7, `${file}: one mesh per part plus head-leaf (the game bakes each into one draw plus the shirt)`);
   }
   for (const deco of DECOS) assert.ok(partTris(parts, 'deco-' + deco) <= 360, `${deco}: ${partTris(parts, 'deco-' + deco)} triangles`);
 });
@@ -245,7 +245,7 @@ test('at run time every body, build, height, ears and hood draws no more than th
   // Builds really change the shape: the sturdy torso is wider than the boy's, the slim one narrower than the girl's.
   const width = async (id: LookId) => { const k = id === DEFAULT_LOOK ? plain : heroKitFor(id); await k.load(); const h = k.instance('#fff')!; h.updateMatrixWorld(true); return new T.Box3().setFromObject(h.getObjectByName('body')!).getSize(new T.Vector3()).x; };
   assert.ok(await width('sturdy-chibi-none-bare') > await width(DEFAULT_LOOK) * 1.1);
-  assert.equal(await width('slim-chibi-none-bare'),await width('girl-chibi-none-bare'),'legacy gender ids share the new normal anatomy');
+  assert.ok(await width('slim-chibi-none-bare') < await width('girl-chibi-none-bare') * .95);
 });
 
 test('an explorer wearing a hood and a hat shows the hat only; the hood comes back when the hat comes off', async () => {
@@ -290,7 +290,7 @@ test('friends walk on their legs: the swing changes while moving, blends out and
 
 test('a friend posed through the walk swings its hero legs, then stands still at 0', () => {
   const root = buildFriend('pepper'), model = root.userData.model as T.Object3D;
-  const leg=model.getObjectByName('leg-left')!,leg2=model.getObjectByName('leg-right')!; // the replacement stand-in has the complete animated rig
+  const leg = new T.Object3D(); leg.name = 'leg-left'; const leg2 = new T.Object3D(); leg2.name = 'leg-right'; model.add(leg, leg2); // the stand-in has no legs of its own
   const g = newGait(), angles: number[] = [];
   for (let i = 0; i < 40; i++) { stepGait(g, 1.6 / 60, 1 / 60, HIP * root.scale.x); poseFriend(root, 'walk', i / 60, g, .6); angles.push(leg.rotation.x); }
   assert.ok(Math.max(...angles) - Math.min(...angles) > .5, 'the leg swings while walking');

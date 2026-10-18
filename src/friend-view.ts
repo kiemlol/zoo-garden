@@ -1,12 +1,10 @@
-import { avatarFallback } from './avatar-fallback.ts';
-import { applyAppearance } from './appearance-art.ts';
 import * as T from 'three';
 import { mergeParts } from './avatar-merge.ts';
 import { HERO_SCALE } from './world.ts';
 import { FRIENDS, type Friend, type FriendId } from './friends-state.ts';
 import { friendHeight, friendStage } from './growth.ts';
 import { heroKitFor } from './assets.ts';
-import { DEFAULT_LOOK, HEIGHT_RATIO, shapeOf, splitLook, toLook, type LookId } from './looks.ts';
+import { DEFAULT_LOOK, HEIGHT_RATIO, splitLook, toLook, type LookId } from './looks.ts';
 import { friendLook, showsHead } from './friend-looks.ts';
 import type { SaveState } from './model.ts';
 import { applyGait, limbsOf, type Gait } from './walk-cycle.ts';
@@ -49,7 +47,11 @@ function recolourHair(model: T.Object3D, hair: string) {
 }
 /** A stand-in until the world registers its dresser (tests, or a friend shown before the world exists). */
 function standIn(tint: string, hair: string, wear: SaveState['gear'] = {}) {
-  const g=avatarFallback(tint),m0=new T.MeshToonMaterial({color:'#ffffff'});applyAppearance(g,undefined,DEFAULT_LOOK);
+  const g = new T.Group(), m = (c: string) => new T.MeshToonMaterial({ color: c }), m0 = m('#ffffff');
+  const body = new T.Mesh(new T.CylinderGeometry(.32, .42, .65, 8), m(tint)); body.position.y = .85; body.name = 'body';
+  const head = new T.Mesh(new T.SphereGeometry(.59, 12, 8), m('#f3d5af')); head.position.y = 1.59; head.name = 'head';
+  const top = new T.Mesh(new T.SphereGeometry(.6, 12, 6, 0, Math.PI * 2, 0, 1.2), m(hair)); top.position.y = 1.62; head.add(top); top.position.set(0, .03, -.03);
+  g.add(body, head);
   // One small tagged marker per worn item, so tests (and a world-less build) can still see what a friend wears.
   Object.values(wear).forEach((id, i) => { const m = new T.Mesh(new T.BoxGeometry(.2, .2, .2), m0); m.position.set(-.3 + i * .15, 2.2, 0); m.userData.gear = id; g.add(m); });
   return g;
@@ -78,7 +80,7 @@ export function buildAvatar(tint: string, hair: string | null, gear: SaveState['
   if (hair) recolourHair(model, hair); mergeParts(model);
   model.rotation.order = 'YXZ';
   model.traverse(o => { if (o instanceof T.Mesh) { o.castShadow = false; o.receiveShadow = false; } });
-  const actual=toLook(model.userData.look)??DEFAULT_LOOK,ratio=shapeOf(actual)==='sturdy'?2.507252/2.317252:HEIGHT_RATIO[splitLook(actual).height];
+  const ratio = HEIGHT_RATIO[splitLook(toLook(model.userData.look) ?? DEFAULT_LOOK).height];
   const pet = model.getObjectByName('remote-pet'); if (pet) pet.scale.setScalar(.7 * ratio / height); // a pet stays readable beside a small friend (1.4 at half size)
   const scale = HERO_SCALE * height / ratio, root = new T.Group(); root.scale.setScalar(scale); root.add(model);
   blobGeometry ??= new T.CircleGeometry(.36, 14); blobMaterial ??= new T.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: .2, depthWrite: false });

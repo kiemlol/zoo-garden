@@ -152,7 +152,7 @@ test('each hero instance wears the player colour without changing the shared mod
   const body = new T.Mesh(new T.BoxGeometry(), [shirt, shade]); body.name = 'body'; hero.add(body); scene.add(hero);
   const library = new HeroLibrary('hero.glb', async () => scene);
   await library.load();
-  const red = library.instance('#ff0000')!, part = red.getObjectByName('body-surface') as T.Mesh<T.BufferGeometry, T.MeshStandardMaterial[]>;
+  const red = library.instance('#ff0000')!, part = red.getObjectByName('body') as T.Mesh<T.BufferGeometry, T.MeshStandardMaterial[]>;
   assert.equal(part.material[0].color.getHexString(), 'ff0000');
   assert.ok(part.material[1].color.r < 1 && part.material[1].color.r > .5, 'the shade is a darker red');
   assert.equal(shirt.color.getHexString(), 'ffffff');

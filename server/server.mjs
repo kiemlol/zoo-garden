@@ -1,4 +1,3 @@
-import { appearanceOf } from '../src/appearance.ts';
 import {currentFurniture,useFurniture} from './furniture-service.mjs';
 import http from 'node:http';
 import { poseStep, poseFix, arrived } from './pose-budget.mjs';
@@ -38,7 +37,7 @@ const sameString = (a, b) => {
   return first.length === second.length && timingSafeEqual(first, second);
 };
 const cookieValue = request => (request.headers.cookie || '').split(';').map(value => value.trim()).find(value => value.startsWith(COOKIE + '='))?.slice(COOKIE.length + 1);
-const publicAccount = account => ({ id: account.id, username: account.username, name: account.profile.name, color: account.profile.color, level: account.profile.level, gear: account.profile.gear, look: lookOf(account.profile), appearance: appearanceOf(account.profile), likes:likesOf(account), stats:{stars:(account.profile.bosses??[]).length,pets:Object.keys(account.profile.collection??{}).filter(id=>Game.ITEMS[id]?.slot==='pet').length,worlds:(account.profile.discovered??['home']).length} });
+const publicAccount = account => ({ id: account.id, username: account.username, name: account.profile.name, color: account.profile.color, level: account.profile.level, gear: account.profile.gear, look: lookOf(account.profile), likes:likesOf(account), stats:{stars:(account.profile.bosses??[]).length,pets:Object.keys(account.profile.collection??{}).filter(id=>Game.ITEMS[id]?.slot==='pet').length,worlds:(account.profile.discovered??['home']).length} });
 const publicHome = account => {
   const source = account.profile;
   return { ...publicAccount(account), discovered:source.discovered||['home'], plots: source.plots, decorations: source.decorations || [], farm: source.farm || null, helper: source.helper || null, friends: Array.isArray(source.friends) ? source.friends : [], home: source.home || null, placed: source.placed || [],

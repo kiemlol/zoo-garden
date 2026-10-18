@@ -8,8 +8,7 @@ import * as FarmHelper from './farm-helper.ts';
 import { RESTOCK_MAX_LEVEL } from './farm-helper-state.ts';
 import { friendOf, resting, type FriendId } from './friends.ts';
 import { cooldownLeft, activity } from './house-activities.ts';
-import { toLook, missingOptions, lookPrice } from './looks.ts';
-import { WARDROBE_SLOTS } from './wardrobe-rules.ts';
+import { toLook, missingOptions } from './looks.ts';
 import { dyeReason } from './dye-rules.ts';
 
 /**
@@ -229,13 +228,6 @@ export const REFUSALS: Record<string, Reason> = {
   buyDye: dyeReason,
   buyDyeSet: dyeReason,
   wearLook: 'Buy that look first.',
-  dressAvatar: (s,p) => {
-    const look=toLook(p.look);if(!look)return 'That look does not exist.';
-    const price=lookPrice(s,look);if(s.energy<price)return fmt('You need {cost} energy for that.',{cost:price});
-    const gear=p.gear&&typeof p.gear==='object'?p.gear as Record<string,unknown>:{};
-    for(const slot of WARDROBE_SLOTS){const id=gear[slot];if(typeof id==='string'&&id){if(!s.bag[id])return 'You have none of that left.';if(M.gearLevel(id)>s.level)return fmt('Needs level {level}.',{level:M.gearLevel(id)});}}
-    return 'Choose a valid hairstyle, face and owned outfit before saving.';
-  },
   friendLook: (s, p) => { const f = friendOf(s, p.friend as FriendId), look = toLook(p.id); if (!f) return friendReason(s, p, 'friend'); if (!look) return 'That look does not exist.'; if (!missingOptions(s, look).length) return 'Your friend already has that look.'; return p.buy === true ? 'You need more energy for that look.' : 'Buy that look first.'; },
   friendsCatchUp: home,
   ackStored: 'There is nothing new in the chest.',
