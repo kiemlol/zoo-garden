@@ -1,3 +1,4 @@
+import {isRestFurniture} from './furniture-use.ts';
 import {aquarium,type FishShow} from './aquarium.ts';
 import {aquariumPanel} from './aquarium-ui.ts';
 import {inkDomainRadius,type InkDomain} from './ink-skills.ts';
@@ -524,9 +525,9 @@ function updateHud() {
     dark.style.maskImage=holes.join(',');dark.style.maskComposite='intersect';}
 
   // The prompt stays short (the target frame names the creature) so the biggest tappable thing on a phone stays small.
-  $('#hud').classList.toggle('carriage-riding',!!world.carriage?.active);
-  $('#interact-button').dataset.action=world.carriage?.active?'leave-carriage':'interact';
-  if(started&&!modal){const e=world.nearest();$('#context-prompt').hidden=!e;$('#interact-text').textContent=t(e?world.carriage?.active?'Leave carriage':isGhostCarriage(e)?'Board carriage':e.kind==='enemy'?'Attack':e.kind==='plot'?world.state.plots[e.index!]?.crop?M.cropProgress(world.state.plots[e.index!])===1?'Harvest crop':'Check growing crop':'Plant a seed':e.name:'');}else $('#context-prompt').hidden=true;
+  $('#hud').classList.toggle('carriage-riding',!!world.resting);
+  $('#interact-button').dataset.action=world.furniture?.active?'leave-furniture':world.carriage?.active?'leave-carriage':'interact';
+  if(started&&!modal){const e=world.nearest();$('#context-prompt').hidden=!e;$('#interact-text').textContent=t(e?world.furniture?.active?'Leave furniture':world.carriage?.active?'Leave carriage':isRestFurniture(e)?e.mesh.userData.decorationId==='deco_cursed_coffin'?'Lie in coffin':'Sit on bench':isGhostCarriage(e)?'Board carriage':e.kind==='enemy'?'Attack':e.kind==='plot'?world.state.plots[e.index!]?.crop?M.cropProgress(world.state.plots[e.index!])===1?'Harvest crop':'Check growing crop':'Plant a seed':e.name:'');}else $('#context-prompt').hidden=true;
 }
 // The zone banner is outlined text with a difficulty chip and no card (C2): it plays once for 2.8 s and never blocks taps.
 let zoneTimer=0;
@@ -916,7 +917,7 @@ function followPlacement(){if(!placement)return;if(world.stickAngle()!==null)pla
 function openAquarium(uid:string){const tank=world.state.decorations.find(d=>d.uid===uid);if(!tank||!aquarium(tank.id))return;activeAquarium=uid;openDialog('aquarium',M.ITEMS[tank.id].name,aquariumPanel(state,uid,art),'AQUARIUM','🐠');}
 let activeAquarium:string|null=null;
 async function showBagFish(id:string){
- if(!started||visiting||fishGame||placement||flight||world.carriage?.active||world.jump.airborne||combat.pose||combat.airborne>0||state.hp<=0){toast('Hãy đứng trên mặt đất để khoe cá.','🐟');return;}
+ if(!started||visiting||fishGame||placement||flight||world.resting||world.jump.airborne||combat.pose||combat.airborne>0||state.hp<=0){toast('Hãy đứng trên mặt đất để khoe cá.','🐟');return;}
  const show=await perform<FishShow>('showFish',{id});if(!show)return;closeDialog();world.destination=null;world.route=[];world.selected=null;world.fishShow=show;void fishKit.load();
 }
 
@@ -1237,6 +1238,8 @@ frameListeners.add(dt=>house.frame(dt));frameListeners.add(dt=>challenges.tick(d
 // The craft room's upgrade bench (upgrade-bench.ts): gear levels and skill levels, both run through actions.ts.
 const bench=mountUpgradeBench({state:()=>state,perform:(type,payload)=>perform(type,payload) as never,openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ui:()=>({art,chips:materialChips,skills:ownSkills(M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).special??'fist'),moves:airOn(),jump:airOn(),disguised:!!state.gear.disguise,weaponKind:M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).kind})});
 world.onInteract=async(e)=>{
+  if(isRestFurniture(e)&&started&&!uiBlocked()){if(placement||combat.pose||combat.airborne>0)return;endFishing();if(await world.useFurniture(e)){clearHeldInput();tone();}return;}
+
   if(isGhostCarriage(e)&&started&&!uiBlocked()&&!visiting){if(placement||combat.pose||combat.airborne>0)return;endFishing();if(world.boardCarriage(e)){clearHeldInput();tone('jump');}return;}
   if(!started||uiBlocked())return;tone();if(house.interact(e))return;if(visiting&&e.kind!=='travel'&&e.kind!=='plot'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
   if(e.kind==='plot')plotDialog(e.index!);else if(e.kind==='sell')market();else if(e.kind==='shop')shop();else if(e.kind==='chest')storage();else if(e.kind==='upgrade')upgrades();else if(e.kind==='cook')cooking();else if(e.kind==='well')wellDialog();else if(e.kind==='craft'){craftStation='craft';crafting();}else if(e.kind==='travel')planets();else if(e.kind==='fish')fish(e);
@@ -1325,7 +1328,7 @@ function slamImpact(){
 }
 /** Standing still near a creature, the explorer fights it automatically, as in the reference. */
 function autoAttack(kind:string){
-  if(world.carriage?.active)return;
+  if(world.resting)return;
   if(!started||uiBlocked()||visiting||fishGame||placement||kind==='rod'||world.selected||world.destination||world.route.length||world.moving||world.keys.size||combat.locksMovement||combatTimers.attackCooldown>0)return;
   const reach=kind==='gun'?6:2.4,p=world.position;
   let best:Enemy|null=null,bestDistance=Infinity;
@@ -1421,7 +1424,7 @@ function jumpBlock(){
   if(!airOn())return 'idle' as const;
   const layout=world.environment?.layout,flying=world.playerFlying||!!M.activeStats(state).flying;
   return canJump({playing:started&&!document.hidden,down:state.hp<=0,menu:uiBlocked(),cutscene:!!shipSequence?.busy||arriving,starship:!!flight||world.boarded,indoors:!!world.interior,fishing:!!fishGame||world.fishing!=='idle',placing:!!placement,
-    stunned:!!colossus?.locked||(!!ctfApi?.active&&!ctfApi.canAct),thrown:(world.playerLift??0)>0,swimming:!!layout&&inWater(layout,world.position)&&!flying,flying:world.playerFlying,riding:!!world.carriage?.active||!!world.environment?.airborne||!!world.environment?.riding,casting:combat.locksMovement});
+    stunned:!!colossus?.locked||(!!ctfApi?.active&&!ctfApi.canAct),thrown:(world.playerLift??0)>0,swimming:!!layout&&inWater(layout,world.position)&&!flying,flying:world.playerFlying,riding:!!world.resting||!!world.environment?.airborne||!!world.environment?.riding,casting:combat.locksMovement});
 }
 /** One jump, if the explorer may: from the ground, or the next of the three in the air. */
 function tryJump(){
@@ -1591,7 +1594,7 @@ function airSwing(){
 combat.edge.crit=()=>{if(!airOn())return undefined;const from=strikeFrom??world.jump;return from.jumps>=1&&(strikeFrom!==null||from.height>0)?M.AIR_CRIT_DAMAGE:undefined;};
 /** `e`: the creature the explorer walked up to (tap, auto-attack); a press of the attack key or pad passes none. */
 function basicAttack(e?:Enemy){
-  if(world.carriage?.active)return;
+  if(world.resting)return;
   if(ctfApi?.active&&!ctfApi.canAct)return;
   if(!started||uiBlocked()||visiting)return;
   // The dive is its own move: a press while falling from height starts it even while the last swing's cooldown still runs.
@@ -1622,7 +1625,7 @@ world.onAttackEnemy=basicAttack;
  * falling (basicAttack's air branch, untouched).
  */
 function attackPad(){
-  if(world.carriage?.active)return;
+  if(world.resting)return;
   if(ctfApi?.active&&!ctfApi.canAct)return;
   if(!started||uiBlocked()||visiting)return;
   if(world.jump?.airborne){basicAttack();return;}
@@ -1648,7 +1651,7 @@ const readyWas=[0,0,0,0],readyAir=[false,false,false,false];
     mountLongPress(button,()=>{tipEl.textContent=currentSkillTip(i);tipEl.hidden=false;clearTimeout(hide);hide=window.setTimeout(()=>{tipEl.hidden=true;},3500);},()=>started&&!document.hidden&&!uiBlocked());});}
 function skillList(){const disguise=state.gear.disguise?M.DISGUISES[state.gear.disguise]:null;return disguise?.skills??ownSkills(M.weaponStats(state).special??'fist');}
 function skill(index:number){
-  if(world.carriage?.active)return;
+  if(world.resting)return;
   if(ctfApi?.active&&!ctfApi.canAct)return;
   if(!started||uiBlocked()||visiting||!Number.isInteger(index)||index<0||index>3)return;
   if(combat.portalHidden){if(index===1&&combat.leavePortal()){world.playerHidden=false;emitAction({kind:'skill',index:1,special:'dz_sorcerer'});}return;}
@@ -1736,14 +1739,14 @@ export const gameBridge:GameBridge={
   getState:()=>state,getWorld:()=>world,
   sayPlayer(id,text,local){const remote=world.remotePlayers.get(id),at=()=>{const mesh=local?world.player:world.remotePlayers.get(id)?.mesh;const p=mesh?.position??world.position;return {x:p.x,z:p.z,y:p.y+2.5*(mesh?.scale.y??1)};};if(local||remote)helperChat.say('player:'+id,text,at,5,true);},
   clearPlayerSpeech(id){helperChat.clearPlayers(id);},
-  getPresence:()=>({y:house.poseY(world.carriage?.active?world.player.position.y:world.position.y+world.jump.height),x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,visible:!document.hidden,visual:world.visualSnapshot(),dog:(()=>{const dog=world.ownDog?.();return dog!==null&&dog!==undefined&&M.dogWorn(state.gear)&&dogFollows(world.planet,world.position,!!world.interior)?dog:null;})()}),
+  getPresence:()=>({y:house.poseY(world.resting?world.player.position.y:world.position.y+world.jump.height),x:world.position.x,z:world.position.z,facing:world.facing,planet:world.planet,name:state.name,color:state.color,level:state.level,hp:state.hp,maxHp:M.maxHp(state),gear:state.gear,moving:world.moving,visible:!document.hidden,visual:world.visualSnapshot(),dog:(()=>{const dog=world.ownDog?.();return dog!==null&&dog!==undefined&&M.dogWorn(state.gear)&&dogFollows(world.planet,world.position,!!world.interior)?dog:null;})()}),
   getOfflineState:()=>{try{return M.parseSave(localStorage.getItem(activeKey()));}catch{return null;}},
   applyState(next){fishingEpoch++;mysteryCaller=newMysteryCaller();fishingView.dropMystery();if(flight)exitSpace();shipSequence?.reset();arriving=false;autopilotTarget=null;homeQueued=false;state=next;applyMovePad();graphics.setResolution(state.settings.renderRes??'auto');world.applyGraphics(graphics.profile,graphics.ratio);const nameInput=document.querySelector<HTMLInputElement>('#name-input');if(nameInput)nameInput.value=state.name;visiting=null;visitHome=null;world.state=state;resetCombat();world.build(state.planet);world.refreshPlayer();if(modal==='bag')inventory();else if(modal==='quests')quests();else if(modal)closeDialog();updateHud();updateLabels();},
   setPersistence(handler){persistence=handler;},
   setActionHandler(handler){actionHandler=handler;world.authoritativeAction=handler?intent=>handler(intent).then(reply=>reply.result):undefined;},
   applyAuthoritativeState(next){
     const planetChanged=next.planet!==state.planet,wasDead=state.hp<=0;const heldRod=M.ITEMS[state.gear.weapon??'']?.weapon?.kind==='rod'?state.gear.weapon:undefined;const previousDisguise=state.gear.disguise,previousGear=JSON.stringify(state.gear),wasFishing=!!world.fishing&&world.fishing!=='idle',plotsChanged=next.plots.length!==state.plots.length,decorChanged=JSON.stringify(next.decorations)!==JSON.stringify(state.decorations);
-    const beforeLevel=state.level;const current=state as unknown as Record<string,unknown>;for(const key of Object.keys(current))if(!Object.hasOwn(next,key))delete current[key];Object.assign(state,next);if(wasFishing&&!planetChanged){const rod=contextGear.forFishing(state);if(rod)state.gear.weapon=rod;}else if(!planetChanged&&gearWater&&heldRod&&(state.bag[heldRod]??0)>0)state.gear.weapon=heldRod;if(modal==='aquarium'&&activeAquarium&&decorChanged)openAquarium(activeAquarium);const gearChanged=JSON.stringify(state.gear)!==previousGear;levelCheck(beforeLevel);if(planetChanged){visiting=null;visitHome=null;world.state=state;endFishing();resetCombat();world.build(state.planet);world.refreshPlayer();if(wasDead)toast('You are safe at home.','🏡');}if(!visiting){world.state=state;if(plotsChanged){const position=world.position.clone(),riding=!!world.carriage?.active;rebuildHomePresentation(state.planet);if(!riding)world.position.copy(position);}else{world.syncCrops();if(decorChanged)world.syncDecorations();}if(gearChanged){if(previousDisguise!==state.gear.disguise){combat.reset();birdFx.clear();sorcererFx.clear();inkFx.clear();inkWash.clear();world.playerHidden=false;world.spinT=0;}world.refreshPlayer();}world.syncDropped();}
+    const beforeLevel=state.level;const current=state as unknown as Record<string,unknown>;for(const key of Object.keys(current))if(!Object.hasOwn(next,key))delete current[key];Object.assign(state,next);if(wasFishing&&!planetChanged){const rod=contextGear.forFishing(state);if(rod)state.gear.weapon=rod;}else if(!planetChanged&&gearWater&&heldRod&&(state.bag[heldRod]??0)>0)state.gear.weapon=heldRod;if(modal==='aquarium'&&activeAquarium&&decorChanged)openAquarium(activeAquarium);const gearChanged=JSON.stringify(state.gear)!==previousGear;levelCheck(beforeLevel);if(planetChanged){visiting=null;visitHome=null;world.state=state;endFishing();resetCombat();world.build(state.planet);world.refreshPlayer();if(wasDead)toast('You are safe at home.','🏡');}if(!visiting){world.state=state;if(plotsChanged){const position=world.position.clone(),riding=!!world.resting;rebuildHomePresentation(state.planet);if(!riding)world.position.copy(position);}else{world.syncCrops();if(decorChanged)world.syncDecorations();}if(gearChanged){if(previousDisguise!==state.gear.disguise){combat.reset();birdFx.clear();sorcererFx.clear();inkFx.clear();inkWash.clear();world.playerHidden=false;world.spinT=0;}world.refreshPlayer();}world.syncDropped();}
     updateHud();updateLabels();
   },
   spawnNetworkDrop,removeNetworkDrop,releaseNetworkDrop(id){for(const meta of networkDrops.values())if(meta.drop.id===id)meta.drop.releaseAt=0;},clearNetworkDrops(){networkDrops.clear();drops.clear();},
@@ -1982,7 +1985,7 @@ app.addEventListener('click',async event=>{
     case 'shop-rod':shopTab=rodShopTab;shopFocus='rod';if(IG.isFolded('shop','tool'))IG.toggleFold('shop','tool');go('shop');break;
     case 'wild':{closeDialog();const destinations:Record<string,[number,number]>={forest:[-30,0],meadow:[0,30],swamp:[0,-30],canyon:[30,0]};const kind=button.dataset.kind??'forest',destination=destinations[kind]??[0,-30],armed=wildArmed?.kind===kind&&Date.now()<wildArmed.until,route=wildRoute(destination,armed);world.walkTo(route.x,route.z);if(route.inside){wildArmed=null;toast('Follow the path beyond the garden gate.','🍄');}else{wildArmed={kind,until:Date.now()+45000};toast(wildDanger(state.level)?'Wild creatures ahead, and they come in packs! Get ready at the village edge, then choose this place on the map again to walk in.':'You are at the edge of the wild. Choose this place on the map again to walk in.','⚠️');}break;}
     case 'return-home':if(state.planet!=='home')flyHome();else{endFishing();huntingPending=null;movement.clear();closeDialog();world.position.set(0,0,0);world.destination=null;world.route=[];world.selected=null;world.pondTap=null;updateHunting(0);toast('Home, sweet home.','🏡');}break;
-    case 'leave-carriage':world.carriage?.dismount();break;case 'interact':world.interactNearest();break;case 'attack':attackPad();break;case 'jump':if(airOn()&&(event as MouseEvent).detail===0){jumpInput.down();jumpInput.up();}break;/* a pointer already jumped on the way down (below): this is the keyboard's press of the button */case 'skill':skill(index);break;
+    case 'leave-furniture':void world.furniture?.leave();break;case 'leave-carriage':world.carriage?.dismount();break;case 'interact':world.interactNearest();break;case 'attack':attackPad();break;case 'jump':if(airOn()&&(event as MouseEvent).detail===0){jumpInput.down();jumpInput.up();}break;/* a pointer already jumped on the way down (below): this is the keyboard's press of the button */case 'skill':skill(index);break;
     case 'fish-again':fish(fishPond);break;
     case 'reel':if(fishGame){if(event.detail===0)fishGame.input.toggle();}else if(button.classList.contains('hunt'))void throwHarpoon();else if(button.classList.contains('cast'))fish(fishPond);break;
     case 'render-res':{const res=button.dataset.kind as ResolutionSetting;graphics.setResolution(res);world.applyGraphics(graphics.profile,graphics.ratio);await perform('settings',{settings:{renderRes:res}});settings();break;}

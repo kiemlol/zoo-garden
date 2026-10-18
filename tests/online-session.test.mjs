@@ -104,7 +104,7 @@ async function fixture({failFirstAction=false,responseFor,initialActions,friendI
     message(data){this.listeners.get('message')?.({data:JSON.stringify(data)});}
     close(code=1000){this.readyState=3;this.listeners.get('close')?.({code});}
   }
-  const world=new Proxy({keys:new Set(),joystickInput:null,avatarArt:()=>'',lookAvatar:()=>null},{get:(object,key)=>Reflect.get(object,key)??(()=>{})}),bridge={getState:()=>state,getPresence:()=>({planet:state.planet,x:0,z:0}),getWorld:()=>world,getOfflineState:()=>newGame('Offline'),setPersistence(){},setActionHandler(fn){this.perform=fn;},applyAuthoritativeState(value){state=value;},clearNetworkDrops(){spawned.length=0;},spawnNetworkDrop(drop){spawned.push(drop);},removeNetworkDrop(){},releaseNetworkDrop(){},applyAuthorityHealth(){},setNetworkHooks(){},applyState:value=>{state=value;},showNotice:text=>notices.push(text),setVisiting:(...args)=>visits.push(args),onFrame(fn){this.frame=fn;},onAction(){}};
+  const world=new Proxy({keys:new Set(),joystickInput:null,furniture:{cancel(){},reconcile(){}},avatarArt:()=>'',lookAvatar:()=>null},{get:(object,key)=>Reflect.get(object,key)??(()=>{})}),bridge={getState:()=>state,getPresence:()=>({planet:state.planet,x:0,z:0}),getWorld:()=>world,getOfflineState:()=>newGame('Offline'),setPersistence(){},setActionHandler(fn){this.perform=fn;},applyAuthoritativeState(value){state=value;},clearNetworkDrops(){spawned.length=0;},spawnNetworkDrop(drop){spawned.push(drop);},removeNetworkDrop(){},releaseNetworkDrop(){},applyAuthorityHealth(){},setNetworkHooks(){},applyState:value=>{state=value;},showNotice:text=>notices.push(text),setVisiting:(...args)=>visits.push(args),onFrame(fn){this.frame=fn;},onAction(){}};
   const exports={},chatExports={};const context={exports,document,window,AbortController,clearTimeout,setTimeout,URL,structuredClone,crypto:{randomUUID},location:{href:'https://game.example/',protocol:'https:'},localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)},WebSocket:Socket,innerWidth:1280,innerHeight:900,Date:class extends Date{static now(){return clock;}},ResizeObserver:class{observe(){}},require:name=>name==='./chat-ui.ts'?chatExports:name==='./social-rules.ts'?socialRules:name==='./mirror-preview.ts'?{MirrorPreview:class{show(){}},restPose:v=>v}:name==='./assets.ts'?Object.fromEntries(['weaponKit','wearKit','petKit','disguiseKit','heroKit'].map(k=>[k,{ready:false}])):name==='./looks.ts'?{DEFAULT_LOOK:'girl-tall-none-bare'}:name==='./i18n.ts'?i18n:name==='./gameplay-controls.ts'?{gameplayKey}:{newGame,parseSave},fetch:async(url,options)=>{requests.push({url,options});if(url.endsWith('/actions')&&failFirstAction){failFirstAction=false;throw new Error('Connection reset');}const response=await responseFor?.(url,options,session);if(response)return response;return {ok:true,json:async()=>url.includes('/auth/')?structuredClone(session):url.endsWith('/actions')?{ok:true,authorityVersion:1,profile:structuredClone(session.profile),revision:++session.revision,result:true}:{ok:true}};}};
   vm.runInNewContext(chatCompiled,{...context,exports:chatExports});vm.runInNewContext(compiled,context);
   exports.initOnline(bridge);await flush();slot.children[0].click();
@@ -287,4 +287,19 @@ test('new HUD receives quota acknowledgements, preserves a rejected mail draft, 
  const input=app.all().find(n=>n.className==='player-mail-input'),form=app.all().find(n=>n.className==='player-mail-form');input.value='Private draft';form.listeners.get('submit')({preventDefault(){}});
  const sent=app.socket.sent.find(m=>m.type==='dm');assert.equal(sent.to,'bob');app.socket.message({type:'error',requestId:sent.requestId,message:'Try again'});assert.equal(input.value,'Private draft');
  app.socket.message({type:'dmAck',requestId:sent.requestId,dmLeft:0,day:socialRules.socialDay()});assert.equal(input.value,'');assert.equal(app.all().find(n=>n.className==='player-mail-send').disabled,true);assert.equal(app.all().find(n=>n.className==='player-mail-quota').textContent,'Miễn phí 0/10');
+});
+
+
+test('furniture requests wait for a matching server reservation and timeouts release an uncertain acquisition',async()=>{
+ const app=await fixture(),world=app.bridge.getWorld();
+ const waiting=world.requestFurniture('bench-1');
+ const request=app.socket.sent.findLast(m=>m.type==='furnitureUse');assert.equal(request.uid,'bench-1');
+ const pose={uid:'bench-1',id:'deco_cursed_bench',seat:1,garden:'alice',since:Date.now()};
+ app.socket.message({type:'furnitureResult',requestId:request.requestId,pose});assert.equal(JSON.stringify(await waiting),JSON.stringify(pose));
+ const uncertain=world.requestFurniture('coffin-1');app.fire(4000);assert.equal(await uncertain,null);assert.equal(app.socket.sent.at(-1).uid,null,'the server must not retain an unconfirmed acquisition');
+});
+
+test('disconnect releases furniture locally and refuses new reservations until online reconnects',async()=>{
+ const app=await fixture(),world=app.bridge.getWorld();let cancelled=false;world.furniture.cancel=notify=>{assert.equal(notify,false);cancelled=true;};
+ const pending=world.requestFurniture('bench-1');app.socket.close();assert.equal(await pending,null);assert.equal(cancelled,true);assert.equal(await world.requestFurniture('bench-1'),null);
 });

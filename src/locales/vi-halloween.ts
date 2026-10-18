@@ -1,0 +1,16 @@
+export const VI_HALLOWEEN:Record<string,string>={
+ 'Pets':'Thú cưng',
+ 'Cursed ancient tree':'Cây cổ thụ bị nguyền rủa',
+ 'Cursed grave bed':'Giường mộ vườn bị nguyền rủa',
+ 'Cursed garden bench':'Băng ghế vườn bị nguyền rủa',
+ 'Undying heart teddy':'Gấu bông trái tim bất tử',
+ 'Patchwork kitten':'Mèo vá Frankenstein',
+ 'A twisted violet-black tree with glowing cracks, cobwebs, broken iron fences and old gravestones.':'Cây cổ thụ tím đen vặn xoắn với vết nứt phát sáng, mạng nhện, hàng rào sắt gãy và bia mộ cũ.',
+ 'Open the coffin and lie inside. The lid closes after two seconds. Leave with the interaction button or movement controls.':'Mở quan tài và nằm vào trong. Nắp đóng sau hai giây. Dùng nút tương tác hoặc nút di chuyển để ra ngoài.',
+ 'A violet-cushioned stone bench with skulls and roses. Two explorers can sit together, including a visiting friend.':'Băng ghế đá có đệm tím, đầu lâu và hoa hồng. Hai người có thể ngồi cùng nhau, kể cả bạn đến thăm vườn.',
+ 'A stitched lilac and pink teddy on a tree stump, with a heart patch, mint ribbon and little mushrooms.':'Gấu bông tím hồng khâu vá ngồi trên gốc cây, có miếng vá trái tim, nơ xanh bạc hà và nấm nhỏ.',
+ 'A cream and charcoal stitched companion. Every 7 seconds it turns up to three nearby creatures into harmless pumpkins for 3 seconds.':'Thú cưng khâu vá màu kem và xám than. Mỗi 7 giây biến tối đa ba quái gần nhau thành bí ngô vô hại trong 3 giây.',
+ 'Sit on bench':'Ngồi lên ghế','Lie in coffin':'Nằm vào quan tài','Leave furniture':'Đứng dậy / Rời giường',
+ 'Move closer and stand on the ground to use this furniture.':'Hãy lại gần và đứng trên mặt đất để sử dụng.',
+ 'This furniture has no free place.':'Đồ nội thất này đã hết chỗ.',
+};

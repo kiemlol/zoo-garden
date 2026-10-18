@@ -361,7 +361,7 @@ export function initRescue(h: RescueHooks) {
   /** Stuns, slows and knock-backs the explorer's kit put on a stand-in hold the raider in the rules too. */
   function foeStatuses(s: Session) {
     for (const [id, e] of s.proxies) {
-      const st = e.statuses ?? {}, hold = Math.max(e.stun, st.stun ?? 0, st.sheep ?? 0, st.fear ?? 0);
+      const st = e.statuses ?? {}, hold = Math.max(e.stun, st.stun ?? 0, st.sheep ?? 0, st.fear ?? 0, st.pumpkin ?? 0);
       if (hold > 0) { statusEnemy(s.m, id, 'stun', hold); e.stun = 0; for (const k of ['stun', 'sheep', 'fear']) if (st[k]) st[k] = 0; }
       if ((st.slow ?? 0) > 0) { statusEnemy(s.m, id, 'slow', st.slow!); st.slow = 0; }
       const r = s.m.enemies.find(v => v.id === id); if (!r) continue;

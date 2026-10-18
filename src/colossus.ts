@@ -162,7 +162,7 @@ export class ColossusEvent {
     if (e && !this.artAsked && (colossusArtReady() || Math.hypot(w.position.x - e.x, w.position.z - e.z) < ART_RANGE)) { this.artAsked = true; loadColossusArt(() => this.restyle()); }
     if (e) {
       this.rise = Math.min(1, this.rise + dt / 2.5);
-      if (e.hp > 0) { if (online) this.stepOnline(dt); else this.stepOffline(dt); }
+      if (e.hp > 0) { if ((e.statuses?.pumpkin??0)>0) { this.attacks=[];this.serverAttacks=[];this.nextAt=Math.max(this.nextAt,this.time+.3); } else if (online) this.stepOnline(dt); else this.stepOffline(dt); }
       else if (this.dying > 0) { this.dying = Math.min(1, this.dying + dt / 3); if (this.dying >= 1) this.removeEnemy(); }
     }
     this.stepMinions();
@@ -175,7 +175,7 @@ export class ColossusEvent {
   frame() {
     const w = this.h.world, e = this.enemy;
     this.view.begin();
-    if (e && this.rig) {
+    if (e && this.rig && !(e.statuses?.pumpkin)) {
       const a = this.attack, ground = Math.max(0, terrainHeight(w.environment.layout, e));
       poseColossus(this.rig, { x: e.x, z: e.z, ground, facing: this.facing, time: this.time, attack: a, kneel: this.kneel, dying: this.dying, rise: this.rise });
       if (e.hp > 0) {

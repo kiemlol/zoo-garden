@@ -1,3 +1,4 @@
+import {PUMPKIN_SPELL} from './halloween-content.ts';
 import {INK as I,INK_LOOKS,inInkDomain,inkDomainRadius,type InkDomain} from './ink-skills.ts';
 import {SORCERER as S,SORCERER_LOOKS} from './sorcerer-skills.ts';
 import {BIRD, BIRD_LOOKS, birdLanding} from './bird-skills.ts';
@@ -124,7 +125,7 @@ export interface CombatHost {
   /** The guard dog when it may fight (following you away from home, guard-dog.ts): where it is, its toss factor and rate, and your target. */
   dog?():{x:number;z:number;dmg:number;cd:number;target?:string|null}|null;
   /** 'stun' freezes or roots a creature in place (no damage). */
-  status?(target:CombatTarget,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'taunt'|'stun'|'iceSlow'|'attackSlow'|'root'|'compassMark'|'inkSlow',duration:number):void;
+  status?(target:CombatTarget,kind:'fear'|'charm'|'slow'|'blind'|'sheep'|'pumpkin'|'taunt'|'stun'|'iceSlow'|'attackSlow'|'root'|'compassMark'|'inkSlow',duration:number):void;
   moveTarget?(target:CombatTarget,x:number,z:number):void;
   /** Upgrade level of base skill slot 0-3 (skill-upgrades.ts); missing = 0. */
   skillLevel?(index:number):number;
@@ -745,6 +746,12 @@ export class CombatSimulation {
     if(!pet||!Number.isFinite(pet.dmg)||!(pet.dmg>0)||!Number.isFinite(pet.cd)||!(pet.cd>0))return 0;
     const target=this.host.targets().filter(e=>e.hp>0&&Math.hypot(e.x-position.x,e.z-position.z)<7+e.radius).sort((a,b)=>Math.hypot(a.x-position.x,a.z-position.z)-Math.hypot(b.x-position.x,b.z-position.z))[0];
     if(!target)return 0;
+    if(pet.shot==='pumpkin'){
+      // This support pet casts directly; no damage projectile or client-selected online target list.
+      const others=this.host.targets().filter(e=>e!==target&&e.hp>0&&Math.hypot(e.x-target.x,e.z-target.z)<=PUMPKIN_SPELL.cluster&&Math.hypot(e.x-position.x,e.z-position.z)<PUMPKIN_SPELL.range+e.radius).sort((a,b)=>Math.hypot(a.x-target.x,a.z-target.z)-Math.hypot(b.x-target.x,b.z-target.z)).slice(0,PUMPKIN_SPELL.count-1);
+      for(const e of [target,...others])this.host.status?.(e,'pumpkin',PUMPKIN_SPELL.duration);
+      this.emit('cast',pet,.5,'#bd87e4',0);return PUMPKIN_SPELL.cooldown;
+    }
     const angle=Math.atan2(target.x-pet.x,target.z-pet.z);this.shoot(pet.shot??'fire',angle,pet.dmg,9,{x:pet.x,z:pet.z,stun:pet.shot==='ice'?.5:0,helper:true});// a pet's ice shot chills; 1.5 s at its 1.2-1.5 s rate froze a target for good
     this.emit('cast',pet,.35,colorFor(pet.shot??'fire'),angle);return Math.max(.1,pet.cd);
   }

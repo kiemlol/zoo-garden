@@ -328,7 +328,7 @@ export function initCtf(h: CtfHooks) {
   function foeStatuses(s: Session, dt: number) {
     for (const b of s.bots) {
       const e = b.proxy; if (!e) continue; const p = rulesPlayer(s.m, b.id); if (!p || !p.alive) continue;
-      const st = e.statuses ?? {}, hold = Math.max(e.stun, st.stun ?? 0, st.sheep ?? 0, st.fear ?? 0);
+      const st = e.statuses ?? {}, hold = Math.max(e.stun, st.stun ?? 0, st.sheep ?? 0, st.fear ?? 0, st.pumpkin ?? 0);
       if (hold > 0) p.stun = Math.max(p.stun, Math.min(hold, 3));
       if ((st.slow ?? 0) > 0) p.slow = Math.max(p.slow, st.slow!);
       e.stun = Math.max(0, e.stun - dt); for (const k in st) st[k] = Math.max(0, st[k] - dt);

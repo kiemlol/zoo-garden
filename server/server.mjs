@@ -1,3 +1,4 @@
+import {currentFurniture,useFurniture} from './furniture-service.mjs';
 import http from 'node:http';
 import { poseStep, poseFix, arrived } from './pose-budget.mjs';
 import {validateCarriagePose} from '../src/carriage-pose.ts';
@@ -193,6 +194,8 @@ export async function createGameServer(options = {}) {
     const room = rooms.get(peer.room); if (room) { peer.lastSent = null; broadcastPose(room, peer); }
   }
   function presence(peer) {
+    const garden=peer.visit?accounts.get(peer.visit)?.profile:peer.account.profile;const furniture=currentFurniture(peer,garden);
+    if(peer.pose.visual||furniture)peer.pose.visual={...peer.pose.visual,furniture};
     return { ...publicAccount(peer.account), ...peer.pose, difficulty: Game.difficultyOf(peer.account.profile), id: peer.account.id, planet: peer.planet, space: peer.visit ? `home:${peer.visit}` : peer.planet === 'home' && Math.hypot(peer.pose.x, peer.pose.z) < 18 ? `home:${peer.account.id}` : 'wild', active: peer.active };
   }
   /**
@@ -223,6 +226,7 @@ export async function createGameServer(options = {}) {
     if (room.host !== next) { room.host = next; broadcast(room, { type: 'authority', host: next, enemies: room.enemies, environment:room.environment, epoch: ++room.epoch }); }
   }
   function leave(peer) {
+    peer.furniture=null;
     const room = rooms.get(peer.room);
     if (!room) return;
     combatAuthority.engineFor(peer).sim.endInkDomain();
@@ -237,7 +241,7 @@ export async function createGameServer(options = {}) {
     const key = peer.dungeon ? `dungeon:${peer.dungeon.id}` : planet;
     if (peer.room === key) {
       if(peer.visit===visitId&&!refresh)return;
-      peer.visit=visitId;
+      peer.furniture=null;peer.visit=visitId;
       const room=rooms.get(key);
       send(peer.socket,{type:'joined',id:peer.account.id,room:key,host:room.host,planet,visiting:visitId,players:roster(room),enemies:room.enemies,environment:room.environment,epoch:room.epoch});
       return;
@@ -247,7 +251,7 @@ export async function createGameServer(options = {}) {
     const room = existing || { id: key, members: new Set(), host: null, enemies: [], environment:null, requests:new Map(), epoch: 0, killed: new Set(), contributors: new Map(), lastSnapshot: 0 };
     rooms.set(key, room); room.members.add(peer.account.id);
     if (peer.planet && peer.planet !== 'home' || peer.visit) peer.tripAt = Date.now(); // leaving a trip: delivery.ts catch-ups go to the chest
-    peer.planet = planet; peer.room = key; peer.visit = visitId; peer.pose = { ...peer.pose, x: 0, z: planet === 'home' ? 0 : 9, ...(peer.pose.visual?{visual:{...peer.pose.visual,carriage:null,fishing:null,fishShow:null},...(peer.pose.visual.carriage?{y:0,moving:false}:{})}:{}) }; arrived(peer);
+    peer.planet = planet; peer.room = key; peer.visit = visitId; peer.pose = { ...peer.pose, x: 0, z: planet === 'home' ? 0 : 9, ...(peer.pose.visual?{visual:{...peer.pose.visual,furniture:null,carriage:null,fishing:null,fishShow:null},...(peer.pose.visual.carriage?{y:0,moving:false}:{})}:{}) }; arrived(peer);
     elect(room);
     send(peer.socket, { type: 'joined', id: peer.account.id, room: key, host: room.host, planet, visiting:visitId, players: roster(room), enemies: room.enemies, environment:room.environment, epoch: room.epoch });
     broadcast(room, { type: 'enter', player: presence(peer) }, peer.account.id);
@@ -430,6 +434,13 @@ export async function createGameServer(options = {}) {
         const room = rooms.get(peer.room);
         if (message.type === 'active') { peer.active = message.active === true; if (room) elect(room); }
         else if (message.type === 'join') {if(message.planet!==account.profile.planet)throw failure(403,'Travel to that planet before joining it.');join(peer, message.planet);}
+        else if(message.type==='furnitureUse'&&room){
+          const garden=peer.visit?accounts.get(peer.visit)?.profile:account.profile;
+          const result=useFurniture(peer,peers,garden,message.uid);
+          if(result.pose)account.fishShow=null;
+          send(socket,{type:'furnitureResult',requestId:message.requestId,...result});
+          peer.pose.visual={...peer.pose.visual,furniture:result.pose};broadcastPose(room,peer);
+        }
         else if (message.type === 'pose' && room) {
           const now = Date.now(); if (now - peer.poseAt < 65) return;
           const x = number(message.x), z = number(message.z), distance = Math.hypot(x - peer.pose.x, z - peer.pose.z);
@@ -438,13 +449,14 @@ export async function createGameServer(options = {}) {
           const move = poseStep(peer, { x, z }, distance, now); if (!move) { const fix = poseFix(peer, now); if (fix) send(socket, fix); return; } // the client goes back to the server's spot
           const combat=combatAuthority.engineFor(peer).sim;
           const garden=peer.visit?accounts.get(peer.visit)?.profile:account.profile;
-          const carriage=account.profile.hp>0?validateCarriagePose(message.visual?.carriage,garden?.decorations??[],{x,z},peer.planet):null;
+          const hadFurniture=!!peer.furniture,furniture=currentFurniture(peer,garden,now);if(hadFurniture&&!furniture)send(socket,{type:'furnitureResult',pose:null});
+          const carriage=!furniture&&account.profile.hp>0?validateCarriagePose(message.visual?.carriage,garden?.decorations??[],{x,z},peer.planet):null;
           const requestedFishing=readFishingPose(message.visual?.fishing);
-          const fishing=!carriage&&account.profile.hp>0&&!peer.visit&&requestedFishing&&account.profile.bag[requestedFishing.rod]>0&&waterNodes(peer.planet).some(w=>Math.hypot(x-w.x,z-w.z)<=w.r+3.05)?requestedFishing:null;
+          const fishing=!furniture&&!carriage&&account.profile.hp>0&&!peer.visit&&requestedFishing&&account.profile.bag[requestedFishing.rod]>0&&waterNodes(peer.planet).some(w=>Math.hypot(x-w.x,z-w.z)<=w.r+3.05)?requestedFishing:null;
           if(fishing?.bobber&&!waterNodes(peer.planet).some(w=>Math.hypot(fishing.bobber.x-w.x,fishing.bobber.z-w.z)<=w.r+3.05&&Math.abs(fishing.bobber.y)<8))delete fishing.bobber;
           peer.poseAt = now; if (peer.planet !== 'home' || peer.visit) peer.tripAt = now; const y = number(message.y, 0, -30, 50), dog = !peer.visit && dogWorn(account.profile.gear) && account.profile.farm?.animals?.find(a => a.kind === 'dog'); // only a dog worn as a pet comes along (pet-slots.ts)
           // A guard dog follows its explorer only away from the safe village (guard-dog.ts); its breed is all others need.
-          peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,hidden:combat.portalHidden||combat.inkDashing,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0,carriage,fishing,fishShow:!carriage&&!fishing&&account.profile.hp>0&&account.fishShow?.until>now&&account.profile.bag[account.fishShow.id]>0?account.fishShow:null},block:combat.statuses.block>0,decoys:combatAuthority.decoys(peer) };
+          peer.pose = { x, z, y, dog: dog && dogFollows(peer.planet, { x, z, y }) ? Game.coatOf(dog) : null, facing: number(message.facing, 0, -100, 100), moving: message.moving === true, hp: account.profile.hp, maxHp: Game.maxHp(account.profile),visual:{size:combat.visualScale>1?combat.visualScale:Game.activeStats(account.profile).sizeScale,hidden:combat.portalHidden||combat.inkDashing,stealth:combat.statuses.stealth>0,shield:combat.statuses.shield>0,flight:combat.statuses.flight>0?1.7:0,bat:combat.statuses.bats>0,furniture,carriage,fishing,fishShow:!furniture&&!carriage&&!fishing&&account.profile.hp>0&&account.fishShow?.until>now&&account.profile.bag[account.fishShow.id]>0?account.fishShow:null},block:combat.statuses.block>0,decoys:combatAuthority.decoys(peer) };
           broadcastPose(room, peer);
         } else if (message.type === 'dm') {
           if(!requestId)throw failure(400,'This message needs a valid request ID.');

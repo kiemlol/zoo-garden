@@ -35,6 +35,11 @@ test('it attacks the explorers in reach through 75% of their defence, with its r
  assert.deepEqual(r.sent.find(m=>m.type==='colossusHit'),{type:'colossusHit',effect:'crack',x:70,z:4},'a 35% roll (0.1 here) cracks worn armour');
  assert.ok(r.authority.effects.get('p1').crackUntil>T0);
 });
+test('the patchwork pumpkin form interrupts the driven boss and releases its attack controller on expiry',()=>{
+ const r=rig();r.step(4);const enemy=r.s.enemies.get(COLOSSUS_ID),record=r.authority.record(r.home);assert.ok(record.attacks.length);
+ enemy.statuses.pumpkin=3;const hits=r.hurts.length;r.step(3);assert.equal(r.hurts.length,hits);assert.equal(record.attacks.length,0);
+ enemy.statuses.pumpkin=0;r.step(7);assert.ok(r.hurts.length>hits,'normal attacks resume after the temporary form');
+});
 test('a lowered head takes ×2.5 from an explorer standing by it; elsewhere ×1',()=>{
  const r=rig();r.step(.1);const enemy=r.s.enemies.get(COLOSSUS_ID),c=r.authority.record(r.home),source={x:enemy.x,z:enemy.z,facing:c.facing};
  const bite=beginColossusAttack('bite',source,colossusTelegraphs('bite',source,{x:66,z:0}));bite.age=bite.windup*.8;c.attacks=[bite];

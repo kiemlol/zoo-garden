@@ -232,7 +232,7 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         // The server's own pose decides; without a game socket the explorer is not away (a bare HTTP client cannot choose the chest).
         if((WORK_ACTIONS.has(data.type)||CATCH_UP_ACTIONS.has(data.type))&&p&&typeof p==='object')p.away=peer&&!peer.visit?explorerAway(peer.planet,peer.pose.x,peer.pose.z)||CATCH_UP_ACTIONS.has(data.type)&&now-(peer.tripAt||0)<120000:false;
         if(['putAquariumFish','takeAquariumFish'].includes(data.type)){const tank=state.decorations.find(d=>d.uid===p.uid);requireNear(peer,tank);}
-        if(data.type==='showFish'&&(!peer?.active||peer.visit||account.journeyPaid||state.hp<=0||peer.pose.visual?.carriage||peer.pose.visual?.fishing))fail(409,'Stand on the ground to show your fish.');
+        if(data.type==='showFish'&&(!peer?.active||peer.visit||account.journeyPaid||state.hp<=0||peer.pose.visual?.furniture||peer.pose.visual?.carriage||peer.pose.visual?.fishing))fail(409,'Stand on the ground to show your fish.');
         result=applyGameAction(state,intent,{now,random});
         if(data.type==='showFish')account.fishShow=result;
         if(data.type==='rest'||data.type==='houseUse')account.healthBoundaryAt=now;

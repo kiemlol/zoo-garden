@@ -28,7 +28,7 @@ import {grantColossusReward} from '../src/colossus-rewards.ts';
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const finite=(value,fallback=0,min=-160,max=160)=>Number.isFinite(value)?Math.max(min,Math.min(max,value)):fallback;
 const snapshot=enemy=>{const {roster,home,changedAt,deadUntil,generation,pending,contributors,scaled,damageAt,cast,nextCastAt,hostPhase,hostAttackCount,combatAttacks,lastHitAt,...publicState}=enemy;return {...publicState,chaseGrace:Math.max(0,Math.min(4,((lastHitAt||0)+4000-Date.now())/1000))};};
-const STATUS=['fear','charm','slow','blind','sheep','taunt','iceSlow','attackSlow','root','compassMark','inkSlow'];
+const STATUS=['fear','charm','slow','blind','sheep','pumpkin','taunt','iceSlow','attackSlow','root','compassMark','inkSlow'];
 
 /** The browser host animates navigation; the server owns HP, skill timing, stats, kills and rewards. */
 export function createCombatAuthority({store,peers,rooms,remember,send,broadcast,onDeath=()=>{},onError=()=>{},colossusClock}){
@@ -68,7 +68,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   const randomFor=seed=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
   function observeCast(room,enemy,raw,now){
     const previousPhase=enemy.hostPhase,previousCount=enemy.hostAttackCount;enemy.hostPhase=raw.phase;enemy.hostAttackCount=raw.attackCount;
-    const skill=raw.skill;if(!enemy.boss||raw.phase!=='windup'||!BOSS_SKILLS[enemy.type]?.includes(skill)||enemy.hp<=0||now<(enemy.nextCastAt||0)||previousPhase==='windup'&&previousCount===raw.attackCount)return;
+    const skill=raw.skill;if((enemy.statuses.pumpkin||0)>0||!enemy.boss||raw.phase!=='windup'||!BOSS_SKILLS[enemy.type]?.includes(skill)||enemy.hp<=0||now<(enemy.nextCastAt||0)||previousPhase==='windup'&&previousCount===raw.attackCount)return;
     const targets=aliveTargets(room),target=targets.sort((a,b)=>dist(a.pose,enemy)-dist(b.pose,enemy))[0];if(!target||dist(target.pose,enemy)>35)return;
     const source={x:enemy.x,z:enemy.z,radius:enemy.radius,facing:finite(raw.facing,enemy.facing||0,-100,100)},players=targets.map(p=>({id:p.account.id,x:p.pose.x,z:p.pose.z,airborne:engineFor(p).sim.statuses.flight>0}));
     const telegraphPhase=enemy.type==='dragon'?bossPhase(enemy.hp,enemy.maxHp):enemy.hp<enemy.maxHp*.5?2:1;
@@ -93,6 +93,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
   function blizzards(room){const fields=[];for(const engine of engines.values()){const p=engine.peer;if(p.room!==room?.id||!p.active||p.visit||p.account.profile.hp<=0)continue;const f=engineFor(p).sim.blizzardField;if(f)fields.push(f);}return fields;}
   function stopDash(room,enemy,to){const at=blizzardDashContact(enemy,to,blizzards(room));if(!at)return false;interruptBlizzardDash(enemy,at);enemy.blizzardBlockedUntil=Date.now()+BIRD.blizzard.recovery*1000;enemy.cast=null;enemy.combatAttacks=(enemy.combatAttacks??[]).filter(c=>c.skill!=='charge'&&c.skill!=='leap');return true;}
   function hurtEnemyTarget(peer,enemy,multiplier,source='melee'){
+    if((enemy.statuses.pumpkin||0)>0)return;
     if((enemy.blizzardBlockedUntil||0)>Date.now()&&source==='melee')return;
     if(peer.planet==='home'&&!inHabitat(enemy.home,peer.pose))return;
     // The knight's raised shield, facing the creature, stops the blow; a shot it stops flies back and hits the shooter (combat.reflect).
@@ -122,7 +123,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     e.damageAt=now;const defense=Game.defense(combatProfile(peer))+e.sim.defenseBonus+(e.sim.statuses.armor>0?80:0);const room=rooms.get(peer.room),enemy=room&&state(room).enemies.get(COLOSSUS_ID),weak=enemy?blizzardDamageFactor(enemy,blizzards(room))*inkDamageFactor(enemy,inkDomains(room)):1;hp(peer,-colossusDamage(COLOSSUS_STATS.atk*weak,multiplier,defense,factor,roll),'melee');return true;
   }
   function updateCast(room,enemy,dt,now){
-    if(enemy.hp<=0||enemy.pending)return;
+    if(enemy.hp<=0||enemy.pending||(enemy.statuses.pumpkin||0)>0)return;
     for(const cast of enemy.combatAttacks??[])updateAttack(room,enemy,cast,dt,now);
     enemy.combatAttacks=(enemy.combatAttacks??[]).filter(c=>!c.done);enemy.cast=enemy.combatAttacks.at(-1)??null;
   }
@@ -182,7 +183,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       }
       const elapsed=Math.max(.1,(now-enemy.changedAt)/1000),maximum=(ENEMY_TYPES[roster.type].speed+16)*elapsed+2;
       const blocked=(isCreatureDash(enemy)||isCreatureDash(raw))&&stopDash(room,enemy,raw);
-      if(!blocked&&!(enemy.statuses.root>0)&&dist(enemy,raw)<=maximum&&(s.planet!=='home'||inHabitat(enemy.home,raw,enemy.radius*.5))){const at=inkBoundary(enemy,raw,inkDomains(room));enemy.x=at.x;enemy.z=at.z;}
+      if(!blocked&&!(enemy.statuses.pumpkin>0)&&!(enemy.statuses.root>0)&&dist(enemy,raw)<=maximum&&(s.planet!=='home'||inHabitat(enemy.home,raw,enemy.radius*.5))){const at=inkBoundary(enemy,raw,inkDomains(room));enemy.x=at.x;enemy.z=at.z;}
       enemy.changedAt=now;observeCast(room,enemy,raw,now);
       // Only visual/AI state comes from the elected browser. Combat quantities are canonical.
       Object.assign(enemy,{wildCooldown:finite(raw.wildCooldown,0,0,8),y:finite(raw.y,0,-30,50),facing:finite(raw.facing,0,-100,100),phase:typeof raw.phase==='string'?raw.phase.slice(0,24):'idle',phaseTime:finite(raw.phaseTime,0,0,60),lift:finite(raw.lift,0,0,20),liftVelocity:finite(raw.liftVelocity,0,-30,30),cooldown:finite(raw.cooldown,0,0,60),targetX:finite(raw.targetX,enemy.x),targetZ:finite(raw.targetZ,enemy.z),skill:typeof raw.skill==='string'?raw.skill.slice(0,40):'',bossStage:finite(raw.bossStage,0,0,4),attackCount:finite(raw.attackCount,0,0,1e9),skillCount:finite(raw.skillCount,0,0,1e9),spinTick:finite(raw.spinTick,0,0,10),titanAttacks:sanitizeTitanAttacks(raw.titanAttacks),titanLift:finite(raw.titanLift,0,0,20)});
@@ -303,7 +304,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
       // The guard dog throws only while the server says it follows (pose.dog is null at home and on visits); it stands at the trailing spot.
       dog:()=>{const p=current();if(p.visit||typeof p.pose?.dog!=='number'||!dogWorn(p.account.profile.gear)||atHome(p.planet,p.pose))return null;const at=trailSpot(p.pose,p.pose.facing||0);return {x:at.x,z:at.z,dmg:dogTossFactor(p.account.profile.level),cd:DOG_TOSS_CD,target:p.target??null};},
       skillLevel:index=>skillLevel(combatProfile(current()),index),
-      status:(target,kind,duration)=>{if(kind==='stun'){/* a freeze or a root holds bosses too */target.stun=Math.max(target.stun||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});return;}if(target.boss&&BOSS_RESISTED.includes(kind)){kind='slow';duration*=RESIST_SLOW;}target.statuses[kind]=Math.max(target.statuses[kind]||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});},
+      status:(target,kind,duration)=>{if(kind==='stun'){/* a freeze or a root holds bosses too */target.stun=Math.max(target.stun||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});return;}if(kind==='pumpkin'){target.pumpkinUntil=Math.max(target.pumpkinUntil||0,Date.now()+duration*1000);target.combatAttacks=[];target.cast=null;target.telegraphs=[];target.skillEffects=[];target.titanAttacks=[];target.phase='chase';}if(target.boss&&BOSS_RESISTED.includes(kind)){kind='slow';duration*=RESIST_SLOW;}target.statuses[kind]=Math.max(target.statuses[kind]||0,duration);if(room())broadcast(room(),{type:'status',id:target.id,kind,duration});},
       moveTarget:(target,x,z)=>{if(dist(target,{x,z})>12)return;const safe=inkBoundary(target,{x,z},inkDomains(room()));x=safe.x;z=safe.z;target.x=x;target.z=z;if(room())broadcast(room(),{type:'moveEnemy',id:target.id,x,z});}});
     engines.set(peer.account.id,engine);return engine;
   }
@@ -314,11 +315,11 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
     if(newLife){engine.reconciledLife=epoch(peer.account);engine.environment=new EnvironmentSimulation(createEnvironmentLayout(peer.planet));engine.damageAt=0;}
     if(reason==='reset'){engine.nextBasic=0;engine.nextSkill=[0,0,0,0];}
   }
-  function basic(peer,targetId){if(peer.visit||!peer.active||peer.account.profile.hp<=0)return;if(typeof targetId==='string')peer.target=targetId;const e=engineFor(peer),now=Date.now();if(now<e.nextBasic)return;const target=state(rooms.get(peer.room)).enemies.get(targetId);if(e.sim.basic(target)){const weapon=Game.weaponStats(combatProfile(peer));e.nextBasic=now+Math.max(.12,(weapon.cd||.5)/Math.max(.2,1+Game.activeStats(peer.account.profile).haste))*1000;}}
-  function skill(peer,index,aim){if(peer.visit||!peer.active||peer.account.profile.hp<=0||!Number.isInteger(index)||index<0||index>3)return;const e=engineFor(peer),now=Date.now();if(e.sim.portalHidden){if(index===1)e.sim.leavePortal();return;}if(now<e.nextSkill[index])return;e.aim=aim&&Number.isFinite(aim.x)&&Number.isFinite(aim.z)?{x:finite(aim.x),z:finite(aim.z)}:null;const profile=combatProfile(peer),dz=profile.gear.disguise,weapon=Game.weaponStats(profile),list=Game.DISGUISES[dz]?.skills||[...BASE_SKILLS,SPECIALS[weapon.special||'fist']||SPECIALS.fist];if(dz?e.sim.disguise(dz,index):e.sim.skill(index,weapon.special||'fist')){e.nextSkill[index]=now+skillCooldown(profile,index,list[index].cd,!!dz)/Math.max(.2,1+Game.activeStats(profile).haste)*1000;internal(peer.account.id,'skill',[],records=>{const s=records.get(peer.account.id).profile;Game.recordEvent(s,'skill');return {index};}).catch(()=>{});}}
+  function basic(peer,targetId){if(peer.furniture||peer.visit||!peer.active||peer.account.profile.hp<=0)return;if(typeof targetId==='string')peer.target=targetId;const e=engineFor(peer),now=Date.now();if(now<e.nextBasic)return;const target=state(rooms.get(peer.room)).enemies.get(targetId);if(e.sim.basic(target)){const weapon=Game.weaponStats(combatProfile(peer));e.nextBasic=now+Math.max(.12,(weapon.cd||.5)/Math.max(.2,1+Game.activeStats(peer.account.profile).haste))*1000;}}
+  function skill(peer,index,aim){if(peer.furniture||peer.visit||!peer.active||peer.account.profile.hp<=0||!Number.isInteger(index)||index<0||index>3)return;const e=engineFor(peer),now=Date.now();if(e.sim.portalHidden){if(index===1)e.sim.leavePortal();return;}if(now<e.nextSkill[index])return;e.aim=aim&&Number.isFinite(aim.x)&&Number.isFinite(aim.z)?{x:finite(aim.x),z:finite(aim.z)}:null;const profile=combatProfile(peer),dz=profile.gear.disguise,weapon=Game.weaponStats(profile),list=Game.DISGUISES[dz]?.skills||[...BASE_SKILLS,SPECIALS[weapon.special||'fist']||SPECIALS.fist];if(dz?e.sim.disguise(dz,index):e.sim.skill(index,weapon.special||'fist')){e.nextSkill[index]=now+skillCooldown(profile,index,list[index].cd,!!dz)/Math.max(.2,1+Game.activeStats(profile).haste)*1000;internal(peer.account.id,'skill',[],records=>{const s=records.get(peer.account.id).profile;Game.recordEvent(s,'skill');return {index};}).catch(()=>{});}}
   function damage(peer,enemyId,source='melee',decoyId){
     if(peer.visit)return;const room=rooms.get(peer.room),enemy=room&&state(room).enemies.get(enemyId),e=engineFor(peer),now=Date.now();
-    if(!enemy||enemy.hp<=0||peer.planet==='home'&&!inHabitat(enemy.home,peer.pose))return;
+    if(!enemy||enemy.hp<=0||(enemy.statuses.pumpkin||0)>0||peer.planet==='home'&&!inHabitat(enemy.home,peer.pose))return;
     if(enemy.boss&&BOSS_SKILLS[enemy.type]?.includes(enemy.skill))return;
     const def=ENEMY_TYPES[enemy.type];if(!def||['shell','roll-windup'].includes(enemy.phase))return;const reach=source==='shot'?45:def.reach+enemy.radius+2;
     if(dist(peer.pose,enemy)>reach)return;
@@ -349,7 +350,7 @@ export function createCombatAuthority({store,peers,rooms,remember,send,broadcast
         if(isCreatureDash(enemy))stopDash(room,enemy,enemy);
         updateCast(room,enemy,dt,now);
         if(enemy.type==='mosslug'&&enemy.hp>0){const at=enemy.trailAt;if(!at||dist(at,enemy)>.65){enemy.trailAt={x:enemy.x,z:enemy.z};(s.slimePatches??=[]).push({x:enemy.x,z:enemy.z,life:MOSSLUG.trailLife});}if(enemy.phase==='shell'){enemy.phaseTime=Math.max(0,((enemy.shellUntil||0)-now)/1000);if(!enemy.phaseTime)enemy.phase='chase';}}
-        enemy.stun=Math.max(0,(enemy.stun||0)-dt);for(const key of STATUS)enemy.statuses[key]=Math.max(0,(enemy.statuses[key]||0)-dt);
+        enemy.stun=Math.max(0,(enemy.stun||0)-dt);for(const key of STATUS)enemy.statuses[key]=key==='pumpkin'?Math.max(0,((enemy.pumpkinUntil||0)-now)/1000):Math.max(0,(enemy.statuses[key]||0)-dt);
         if(enemy.hp<=0&&!enemy.pending&&Number.isFinite(enemy.deadUntil)){enemy.respawn=Math.max(0,(enemy.deadUntil-now)/1000);if(enemy.respawn===0&&active.every(p=>dist(p.pose,enemy.home)>22)){enemy.x=enemy.home.x;enemy.z=enemy.home.z;enemy.hp=enemy.maxHp=enemy.baseMaxHp;enemy.damage=enemy.baseDamage;enemy.scaled=false;enemy.contributors.clear();enemy.generation++;room.killed.delete(enemy.id);health(room,enemy);}}
       }
       room.environment=environmentSnapshot(s.environment);

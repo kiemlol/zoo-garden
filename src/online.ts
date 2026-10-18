@@ -1,3 +1,4 @@
+import type {FurniturePose} from './furniture-rules.ts';
 import {PlayerChat} from './chat-ui.ts';
 import type {SocialState,SocialPlayer} from './social-rules.ts';
 import type { GameBridge, NetworkDrop } from './game-bridge.ts';
@@ -13,6 +14,7 @@ interface Explorer { id:string;username?:string;name:string;color:string;level:n
 interface Home extends Explorer { discovered?:PlanetId[]; plots:SaveState['plots'];farm?:SaveState['farm'];placed?:unknown[];decorations?:unknown[];helper?:unknown;friends?:unknown[] }
 interface EnemyState { id:string;x:number;z:number;hp:number;maxHp:number;[key:string]:unknown }
 interface NetworkWorld {
+  furnitureGarden:string;requestFurniture?: (uid:string|null)=>Promise<FurniturePose|null>;furniture?:{cancel(notify?:boolean):void;reconcile(p:FurniturePose|null):void};
   updateRemotePlayers(players:Explorer[]):void;clearRemotePlayers():void;
   setNetworkRole(role:'host'|'peer'|null):void;
   /** The host's difficulty while someone else hosts the room (creature scale, the Settings note); null otherwise. */
@@ -101,6 +103,7 @@ export function initOnline(game:GameBridge) {
     let value:{error?:string};try{value=await response.json();}catch{throw Object.assign(new Error(response.status>=500?'The game server is having trouble. Please try again shortly.':'Online play needs the game server. Your offline adventure is ready to play.'),{status:response.status});}
     if(!response.ok)throw Object.assign(new Error(response.status>=500?'The game server is having trouble. Please try again shortly.':value.error||'Connection interrupted. Please try again.'),{status:response.status});return value as T;
   }
+  const furnitureRequests=new Map<string,(p:FurniturePose|null)=>void>();
   const send=(value:unknown)=>{if(socket?.readyState===WebSocket.OPEN){try{socket.send(JSON.stringify(value));return true;}catch{return false;}}return false;};
   const playerChat=new PlayerChat({game,send,api,friend:id=>friends.some(f=>f.id===id),friendAction:async(action,id)=>{await friendAction(action,id);},player:id=>players.get(id)??friends.find(f=>f.id===id),notice:message=>announce(message)});
   function clearChat(room:string|null=null){chatRoom=room;playerChat.enterPlanet(room??'');playerChat.online(false);}
@@ -131,6 +134,7 @@ export function initOnline(game:GameBridge) {
   /** Mirrors the host's difficulty into the world (server.mjs presence carries it). */
   function syncRoomDifficulty(){const d=host&&host!==account?.id?players.get(host)?.difficulty:null;world().roomDifficulty=d==='easy'||d==='normal'||d==='hard'?d:null;}
   function renderPlayers(){
+    world().furnitureGarden=visiting??account?.id??'local';
     syncRoomDifficulty();
     const local=game.getPresence();
     world().updateRemotePlayers([...players.values()].filter(player=>player.id!==account?.id&&player.planet===local.planet));
@@ -140,7 +144,12 @@ export function initOnline(game:GameBridge) {
     if(enemies?.length&&(becomingHost||host!==account?.id))world().applyEnemySnapshots(enemies);
     const role=account&&socket?.readyState===WebSocket.OPEN?(host===account.id?'host':'peer'):null;
     world().setNetworkRole(role);
-    if(!role){world().localPlayerId=account?.id??'local';world().onRemoteDamage=()=>{};world().onEnvironmentAction=()=>{};game.setNetworkHooks({role:null});return;}
+    if(!role){world().furniture?.cancel(false);world().requestFurniture=account?async()=>null:undefined;for(const resolve of furnitureRequests.values())resolve(null);furnitureRequests.clear();world().localPlayerId=account?.id??'local';world().onRemoteDamage=()=>{};world().onEnvironmentAction=()=>{};game.setNetworkHooks({role:null});return;}
+    world().requestFurniture=uid=>new Promise(resolve=>{
+      const requestId=crypto.randomUUID();const timer=window.setTimeout(()=>{furnitureRequests.delete(requestId);resolve(null);if(uid!==null)send({type:'furnitureUse',uid:null});},4000);
+      furnitureRequests.set(requestId,p=>{clearTimeout(timer);resolve(p);});
+      if(!send({type:'furnitureUse',uid,requestId})){clearTimeout(timer);furnitureRequests.delete(requestId);resolve(null);}
+    });
     world().localPlayerId=account?.id??'local';
     world().onRemoteDamage=(id,_amount,source,enemyId)=>{if(role==='host'&&enemyId)send({type:'damage',id,source,enemyId});};
     world().onEnvironmentAction=action=>{send({type:'environmentAction',action});};
@@ -197,7 +206,7 @@ export function initOnline(game:GameBridge) {
     const connection=socket;
     function joined(message:any){
       const nextRoom=typeof message.room==='string'?message.room:message.planet;chatRoom=nextRoom;playerChat.enterPlanet(message.planet);playerChat.online(true);
-      if(visiting)game.setVisiting(null);players.clear();for(const player of message.players||[])players.set(player.id,player);planet=message.planet;visiting=typeof message.visiting==='string'?message.visiting:null;
+      world().furniture?.cancel(false);if(visiting)game.setVisiting(null);players.clear();for(const player of message.players||[])players.set(player.id,player);planet=message.planet;visiting=typeof message.visiting==='string'?message.visiting:null;
       // A visit changes the room, never the owner's saved adventure planet.
       if(message.enemies?.length)world().applyEnemySnapshots(message.enemies);game.clearNetworkDrops();const dropEpoch=++roomEpoch;void api<{drops:NetworkDrop[]}>('drops').then(result=>{if(socket===connection&&roomEpoch===dropEpoch&&chatRoom===nextRoom&&!visiting&&account)for(const drop of result.drops||[])if(drop.room===nextRoom)game.spawnNetworkDrop(drop,account.id);}).catch(()=>{});if(message.environment)world().applyEnvironmentSnapshot(message.environment);authority(message.host,message.enemies);renderPlayers();status='Online';refreshButton();if(dialog.open)render();
     }
@@ -205,6 +214,7 @@ export function initOnline(game:GameBridge) {
     socket.addEventListener('message',event=>{
       if(socket!==connection)return;let message:any;try{message=JSON.parse(event.data);}catch{return;}
       if(playerChat.receive(message))return;
+      if(message.type==='furnitureResult'){const done=furnitureRequests.get(message.requestId);if(done){furnitureRequests.delete(message.requestId);done(message.pose??null);}else world().furniture?.reconcile(message.pose??null);if(message.error)announce(message.error);return;}
       if(message.type==='welcome'){friends=message.friends||[];requests=message.requests||[];sent=message.sent||[];visitLog=message.visitLog||[];if(message.social)playerChat.setState(message.social);refreshButton();}
       else if(message.type==='joined')joined(message);
       else if(message.type==='authority'){if(message.environment)world().applyEnvironmentSnapshot(message.environment);authority(message.host,message.enemies);}

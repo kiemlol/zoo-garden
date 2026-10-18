@@ -2,6 +2,7 @@ import {VI_INK_PAINTER} from './vi-ink-painter.ts';
 import {VI_SORCERER} from './vi-sorcerer.ts';
 import {VI_BIRD_DISGUISES} from './vi-bird-disguises.ts';
 import {VI_FESTIVAL} from './vi-festival.ts';
+import {VI_HALLOWEEN} from './vi-halloween.ts';
 import {VI_WILD_CREATURES} from './vi-wild-creatures.ts';
 import { TITAN_VI } from './vi-titan.ts';
 import { BOSS_PET_VI } from './vi-boss-pets.ts';
@@ -896,5 +897,6 @@ Object.assign(VI_CATALOG, {
 Object.assign(VI_CATALOG,VI_WILD_CREATURES);
 
 Object.assign(VI_CATALOG,VI_FESTIVAL);
+Object.assign(VI_CATALOG,VI_HALLOWEEN);
 
 Object.assign(VI_CATALOG,VI_BIRD_DISGUISES,VI_SORCERER,VI_INK_PAINTER);

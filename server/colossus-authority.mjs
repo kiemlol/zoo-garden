@@ -44,6 +44,7 @@ export function createColossusAuthority({send,broadcast,peers,clock=colossusCloc
     c.time+=dt;
     if(enemy&&enemy.hp>0&&!enemy.pending){
       const list=targets(),points=list.map(p=>({id:p.account.id,x:p.pose.x,z:p.pose.z})),near=points.filter(p=>dist(p,enemy)<S.sight).sort((a,b)=>dist(a,enemy)-dist(b,enemy)),cadence=colossusCadence(enemy.hp/enemy.maxHp);
+      if((enemy.statuses.pumpkin||0)>0){c.attacks=[];c.nextAt=Math.max(c.nextAt,c.time+.3);}else{
       const current=c.attacks.at(-1);
       if(near[0]&&(!current||current.done||current.age>=current.windup)){const want=Math.atan2(near[0].x-enemy.x,near[0].z-enemy.z),d=Math.atan2(Math.sin(want-c.facing),Math.cos(want-c.facing));c.facing+=Math.max(-dt*.7,Math.min(dt*.7,d));}
       enemy.facing=c.facing;
@@ -64,6 +65,7 @@ export function createColossusAuthority({send,broadcast,peers,clock=colossusCloc
       if(near[0]&&c.time>=c.nextAt&&(!busy||busy.age>=busy.windup)){
         const skill=colossusSkill(c.count++),source={x:enemy.x,z:enemy.z,facing:c.facing},a=beginColossusAttack(skill,source,colossusTelegraphs(skill,source,near[0],near,random),cadence.windupScale);
         c.attacks.push(a);c.nextAt=c.time+a.windup+cadence.cooldown;enemy.phase='windup';enemy.skill=skill;publish(room,c,now,window,true,s);
+      }
       }
       // Burning ticks and the landing after a throw: true damage, a share of the explorer's maximum health.
       for(const peer of list){const fx=effects.get(peer.account.id);if(!fx)continue;const max=peer.account.profile.hp>0?maxHp(peer):0;if(!max)continue;

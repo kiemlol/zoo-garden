@@ -1,3 +1,4 @@
+import {HALLOWEEN_ITEMS,HALLOWEEN_RECIPES} from './halloween-content.ts';
 import {MAX_FISH_SIZE_CM} from './fish-size.ts';
 import {INK_ITEM} from './ink-content.ts';
 import {INK_SKILLS} from './ink-skills.ts';
@@ -4205,3 +4206,6 @@ for(const [id,cost,mats] of [['deco_aquarium_m',240,{coral:16,pearl:2}],['deco_a
 
 // One shared ceiling for every species, including entries registered after the base catalog.
 for(const fish of Object.values(FISH)){fish.size=fish.size.map(cm=>Math.min(MAX_FISH_SIZE_CM,cm));if(ITEMS[fish.id]?.size)ITEMS[fish.id].size=[...fish.size];}
+
+Object.assign(ITEMS,HALLOWEEN_ITEMS);
+RECIPES.push(...HALLOWEEN_RECIPES);
