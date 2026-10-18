@@ -21,12 +21,12 @@
 .gacha-pumpkin-canvas { display:block; width:100%; height:100%; pointer-events:none; }
 .gacha-selection { display:grid; gap:18px; justify-items:center; min-width:0; }
 .gacha-pool { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:12px 8px; width:100%; max-width:420px; }
-.gacha-screen .gacha-orb { border-radius:50%; border:3px solid #f4d1ff; background:linear-gradient(145deg,#e7b5f6,#c78bdb); box-shadow:inset 0 3px 0 #fff6,0 4px 0 #79589966; }
+.gacha-screen .gacha-orb { box-sizing:border-box; aspect-ratio:1 / 1; border-radius:50%; border:3px solid #f4d1ff; background:linear-gradient(145deg,#e7b5f6,#c78bdb); box-shadow:inset 0 3px 0 #fff6,0 4px 0 #79589966; }
 .gacha-screen .gacha-orb.blue { border-color:#a2e8f4; background:linear-gradient(145deg,#8ee1f1,#50bcd6); box-shadow:inset 0 3px 0 #fff6,0 4px 0 #4a93ae66; }
-.gacha-screen .gacha-prize { position:relative; padding:10%; grid-column:span 3; width:100%; aspect-ratio:1; display:block; min-width:0; }
+.gacha-screen .gacha-prize { position:relative; padding:0; grid-column:span 3; width:100%; height:auto; aspect-ratio:1 / 1; display:block; min-width:0; min-height:0; align-self:start; }
 .gacha-prize:nth-child(1),.gacha-prize:nth-child(8) { grid-column:2 / span 3; }
 .gacha-prize:nth-child(4) { grid-column:1 / span 3; }
-.gacha-prize .gacha-art { font-size:40px; }
+.gacha-prize .gacha-art { position:absolute; inset:13%; width:auto; height:auto; font-size:40px; }
 .gacha-prize.selected { outline:3px solid #fff4bc; outline-offset:3px; }
 .gacha-item-name { position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%); width:max-content; max-width:230px; padding:6px 12px; border-radius:14px; background:#ffe294; color:#5a4353; font-weight:900; font-size:13px; line-height:1.2; box-shadow:0 3px 0 #9f754a55; z-index:4; pointer-events:none; }
 .gacha-item-name::after { content:''; position:absolute; left:calc(50% - 5px); top:100%; border:5px solid transparent; border-top-color:#ffe294; }
@@ -68,9 +68,9 @@
 .gacha-summary { min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:32px; padding:60px 50px 38px; box-sizing:border-box; }
 .gacha-summary > h2 { color:#fff9eb; text-shadow:0 3px 0 #6e5285,2px 0 #6e5285,-2px 0 #6e5285; font-size:clamp(27px,5vw,50px); margin:0; }
 .gacha-results { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:28px 20px; width:min(76vw,700px); align-items:center; justify-content:center; }
-.gacha-result-card { aspect-ratio:1; position:relative; padding:15%; box-sizing:border-box; min-width:0; }
+.gacha-result-card { aspect-ratio:1 / 1; position:relative; padding:0; width:100%; height:auto; box-sizing:border-box; min-width:0; min-height:0; align-self:start; }
 .gacha-result-card:only-child { grid-column:3; }
-.gacha-result-card .gacha-art { font-size:52px; }
+.gacha-result-card .gacha-art { position:absolute; inset:15%; width:auto; height:auto; font-size:52px; }
 .gacha-result-card .gacha-new { position:absolute; top:-16px; left:0; right:0; text-align:center; }
 .gacha-screen .gacha-ok { width:180px; min-height:55px; flex:none; font-size:22px; }
 .gacha-odds-shade { position:absolute; inset:0; z-index:10; background:#3d2b6055; display:grid; place-items:center; padding:16px; box-sizing:border-box; }
@@ -143,3 +143,13 @@
  .gacha-screen .gacha-ok { width:140px; min-height:42px; font-size:18px; }
 }
 @media(prefers-reduced-motion:reduce) { .gacha-screen *, .gacha-screen *::before, .gacha-screen *::after { animation:none!important; transition:none!important; } }
+
+/* Absolutely positioned art cannot impose an intrinsic height on Safari grid rows. Both kinds of orb stay square. */
+.gacha-model-slot { position:relative; width:100%; height:100%; min-width:0; min-height:0; }
+.gacha-model-slot > .gacha-art { position:absolute; inset:0; }
+.gacha-model-canvas { position:absolute; inset:0; display:block; width:100%; height:100%; pointer-events:none; }
+.gacha-model-slot[data-ready=true] > .gacha-art { visibility:hidden; }
+.gacha-can-turn { touch-action:none; cursor:grab; }
+.gacha-can-turn:active { cursor:grabbing; }
+.gacha-reward-content > .gacha-model-slot { width:min(33vh,290px); height:min(33vh,290px); }
+@media(max-height:520px) { .gacha-reward-content > .gacha-model-slot { width:40vh; height:40vh; } }

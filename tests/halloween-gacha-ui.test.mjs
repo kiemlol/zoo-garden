@@ -9,14 +9,14 @@ import * as Config from '../src/halloween-gacha-config.ts';
 import { PUMPKIN_OPEN_SECONDS } from '../src/gacha-pumpkin.ts';
 const source = readFileSync(new URL('../src/halloween-gacha-ui.ts', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
 function fixture() {
-  let state = M.newGame('UI'), release, calls = 0, clock = 0, openings = 0, disposed = 0; state.energy = 100000; state.halloweenGacha = { total: 149, misses: 149 };
+  let state = M.newGame('UI'), release, calls = 0, clock = 0, openings = 0, disposed = 0; const sounds = [], itemEvents = []; state.energy = 100000; state.halloweenGacha = { total: 149, misses: 149 };
   const tasks = new Map(); let timer = 0;
   const context = { ...Config, PUMPKIN_OPEN_SECONDS, performance: { now: () => clock }, ITEMS: M.ITEMS, t: (s, params = {}) => s.replace(/\{(\w+)\}/g, (_, k) => String(params[k])), setTimeout: callback => { tasks.set(++timer, callback); return timer; }, clearTimeout: id => tasks.delete(id), matchMedia: () => ({ matches: false }) };
   vm.createContext(context); vm.runInContext(stripTypeScriptTypes(source, { mode: 'transform' }) + '\nglobalThis.Panel = HalloweenGachaPanel;', context);
-  const panel = new context.Panel({ state: () => state, art: id => `<img src="${id}.webp">`, close: () => panel.unmount(), pumpkin: () => ({ show(slot, opening) { if (opening) openings++; }, dispose() { disposed++; } }), draw: async count => { const original = state; calls++; await new Promise(r => release = r); return applyGameAction(original, { type: 'halloweenDraw', payload: { count } }, { now: 100, random: () => .999 }); } });
-  function host() { return { hidden: true, innerHTML: '', addEventListener() {}, removeEventListener() {}, querySelector(selector) { return selector === '.gacha-pumpkin-slot' && this.innerHTML.includes('gacha-pumpkin-slot') ? {} : null; } }; }
+  const panel = new context.Panel({ state: () => state, art: id => `<img src="${id}.webp">`, close: () => panel.unmount(), sound: sound => sounds.push(sound), item: () => ({ show(slot,id,rotating){itemEvents.push(['show',id,rotating]);},dispose(){itemEvents.push(['dispose']);} }), pumpkin: () => ({ show(slot, opening) { if (opening) openings++; }, dispose() { disposed++; } }), draw: async count => { const original = state; calls++; await new Promise(r => release = r); return applyGameAction(original, { type: 'halloweenDraw', payload: { count } }, { now: 100, random: () => .999 }); } });
+  function host() { return { hidden: true, innerHTML: '', addEventListener() {}, removeEventListener() {}, querySelector(selector) { return (selector === '.gacha-pumpkin-slot' && this.innerHTML.includes('gacha-pumpkin-slot') || selector === '.gacha-model-slot' && this.innerHTML.includes('gacha-model-slot')) ? {} : null; } }; }
   const click = action => panel.click({ target: { closest: () => action ? ({ dataset: { gacha: action }, disabled: false }) : null }, stopPropagation() {} });
-  return { panel, host, click, tasks, tick() { clock += 400; }, flush() { clock += 2000; for (const cb of tasks.values()) cb(); tasks.clear(); }, get state() { return state; }, replaceState() { state = M.newGame('Other'); }, get calls() { return calls; }, get openings() { return openings; }, get disposed() { return disposed; }, release() { release(); } };
+  return { panel, host, click, tasks, sounds, itemEvents, tick() { clock += 400; }, flush() { clock += 2000; for (const cb of tasks.values()) cb(); tasks.clear(); }, get state() { return state; }, replaceState() { state = M.newGame('Other'); }, get calls() { return calls; }, get openings() { return openings; }, get disposed() { return disposed; }, release() { release(); } };
 }
 
 test('pending UI closes/reopens safely, prevents double purchase, and reveals already saved rewards', async () => {
@@ -30,7 +30,7 @@ test('pending UI closes/reopens safely, prevents double purchase, and reveals al
 
 test('closing during the first pumpkin animation cancels its timer and disposes the model; reopening completes without another payment', async () => {
   const f = fixture(); f.panel.mount(f.host()); const pending = f.panel.draw(1); f.release(); await pending;
-  f.click('advance'); assert.equal(f.tasks.size, 1); const before = f.disposed; f.panel.unmount(); assert.equal(f.tasks.size, 0); assert.equal(f.disposed, before + 1);
+  f.click('advance'); assert.equal(f.tasks.size, 2); const before = f.disposed; f.panel.unmount(); assert.equal(f.tasks.size, 0); assert.equal(f.disposed, before + 1);
   const next = f.host(); f.panel.mount(next); assert.match(next.innerHTML, /data-gacha-phase="ready"/);
   f.click('advance'); f.flush(); assert.match(next.innerHTML, /data-gacha-phase="reward"/); assert.match(next.innerHTML, /GUARANTEED/); assert.equal(f.calls, 1);
 });
@@ -65,4 +65,18 @@ test('shop shows icon-only prizes and a compact pity badge, names appear on sele
   f.panel.selected = Config.HALLOWEEN_PRIZES[0]; f.panel.render(); assert.match(host.innerHTML, /gacha-item-name/);
   f.click('rates'); for (const p of Config.HALLOWEEN_PRIZES) assert.ok(host.innerHTML.includes(`${p.weight / 100}%`));
   f.click('rates-close'); assert.doesNotMatch(host.innerHTML, /gacha-odds-shade/);
+});
+
+
+test('sound cues follow real transitions once: squash, lid launch, rarity reveal and result; history/repaint never replays a win', async () => {
+  const f=fixture(),host=f.host();f.panel.mount(host);const pending=f.panel.draw(10);f.release();await pending;f.sounds.length=0;
+  f.click('advance');assert.deepEqual(f.sounds,['gacha-squash']);f.flush();assert.deepEqual(f.sounds,['gacha-squash','gacha-open','gacha-purple']);
+  f.panel.render();assert.equal(f.sounds.length,3);f.tick();f.click('advance');assert.equal(f.sounds.at(-1),'gacha-blue');
+  f.click('all');assert.equal(f.sounds.at(-1),'gacha-summary');f.click('back');f.click('history');assert.equal(f.sounds.at(-1),'click');
+});
+
+test('closing before the lid lift cancels all delayed sound cues; 3D viewer is disposed when leaving a preview', async () => {
+  const f=fixture();f.panel.mount(f.host());f.panel.selected=Config.HALLOWEEN_PRIZES[0];f.panel.render();assert.deepEqual(f.itemEvents.at(-1),['show','rod_key',true]);
+  const pending=f.panel.draw(1);f.release();await pending;assert.ok(f.itemEvents.some(e=>e[0]==='dispose'));
+  f.click('advance');const before=f.sounds.length;f.panel.unmount();f.flush();assert.equal(f.sounds.length,before);
 });

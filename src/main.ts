@@ -1,3 +1,4 @@
+import {gachaIconUrl} from './gacha-art.ts';
 import {HalloweenGachaPanel} from './halloween-gacha-ui.ts';
 import {isRestFurniture} from './furniture-use.ts';
 import {aquarium,type FishShow} from './aquarium.ts';
@@ -453,7 +454,7 @@ function botActive(){return started&&!actionHandler&&!document.hidden&&!uiBlocke
 /** 'wardrobe' while the bag was opened from the bedroom wardrobe: it then lists only things to wear (house-stores.ts). */
 let bagMode:'bag'|'wardrobe'='bag';
 const halloweenGachaRoot=document.createElement('div');halloweenGachaRoot.id='halloween-gacha-root';halloweenGachaRoot.hidden=true;halloweenGachaRoot.setAttribute('role','dialog');halloweenGachaRoot.setAttribute('aria-modal','true');document.body.append(halloweenGachaRoot);
-const halloweenGachaPanel=new HalloweenGachaPanel({state:()=>state,draw:count=>perform('halloweenDraw',{count}),art,close:()=>closeDialog()});
+const halloweenGachaPanel=new HalloweenGachaPanel({state:()=>state,draw:count=>perform('halloweenDraw',{count}),art:(id,icon)=>`<img class="art-icon" src="${gachaIconUrl(id)}" alt="" draggable="false" data-fallback="${esc(icon)}" data-id="${id}">`,sound:sound=>{if(!document.hidden)tone(sound);},close:()=>closeDialog()});
 function halloweenGacha(){openDialog('halloween-gacha','Halloween chest','','HALLOWEEN NIGHT DRAW','🎃');$('#dialog-layer').hidden=true;halloweenGachaPanel.mount(halloweenGachaRoot);}
 function openDialog(type:string,title:string,body:string,kicker='MAKE YOURSELF AT HOME',icon?:string) {
   halloweenGachaPanel.unmount();

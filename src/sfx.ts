@@ -4,6 +4,7 @@
  */
 export type Sound = 'alert' | 'click' | 'punch' | 'swing' | 'hit' | 'crit' | 'hurt' | 'pop' | 'splash' | 'cast' | 'reel' | 'snap'
   | 'jump' | 'flip' | 'land'
+  | 'gacha-squash' | 'gacha-open' | 'gacha-blue' | 'gacha-purple' | 'gacha-summary'
   | 'success' | 'level' | 'harvest' | 'shoot' | 'poof' | 'coin' | 'ready' | 'boom' | 'zap' | 'freeze' | 'magic' | 'shock';
 
 export class Sfx {
@@ -54,6 +55,12 @@ export class Sfx {
     this.last.set(sound, now);
     const t = now + .005;
     switch (sound) {
+      // Festival draw cues only (no background music): soft compression, lid whoosh, then a rarity chime.
+      case 'gacha-squash': this.tone(ctx,t,'sine',190,95,.16,.1); this.tone(ctx,t+.08,'sine',130,230,.12,.045); break;
+      case 'gacha-open': this.hiss(ctx,t,'bandpass',700,4500,.22,.075,1.2); this.tone(ctx,t+.025,'triangle',350,950,.18,.045); break;
+      case 'gacha-blue': this.hiss(ctx,t,'highpass',2200,4500,.12,.025); [784,1175].forEach((f,i)=>this.tone(ctx,t+.04+i*.09,'sine',f,f,.21,.045)); break;
+      case 'gacha-purple': this.hiss(ctx,t,'bandpass',1200,5200,.17,.035); [659,988,1318,1976].forEach((f,i)=>{this.tone(ctx,t+.04+i*.075,'sine',f,f,.28,.042);this.tone(ctx,t+.05+i*.075,'triangle',f*2,f*2,.18,.012);}); break;
+      case 'gacha-summary': [523,659,784,1046].forEach((f,i)=>this.tone(ctx,t+i*.065,'sine',f,f,.23,.045)); break;
       case 'alert': this.tone(ctx, t, 'square', 660, 990, .07, .035); this.tone(ctx, t + .07, 'square', 990, 1320, .08, .03); break;
       case 'click': this.tone(ctx, t, 'sine', 740, 520, .06, .05); break;
       case 'pop': this.tone(ctx, t, 'sine', 420, 980, .09, .09); break;
