@@ -41,6 +41,7 @@ export const DISGUISE_KITS:Readonly<Record<string,readonly string[]>>={
   dz_penguin:['penguin-peck','penguin-slide','penguin-blizzard','frozen-fish'],dz_explorer_duck:['duck-dagger','duck-grapple','duck-net','duck-lantern'],
   dz_superhero:['flight','dive','sweep','boulder'],dz_ninja:['clones','stealth','backstab','smoke'],dz_mage:['fireball','teleport','sheep','blackhole'],
   dz_knight:['block','knightcharge','taunt','holy'],dz_mecha:['tank','turret','missiles','energyshield'],dz_dino:['devour','tail','roar','giant'],
+  dz_wind_spirit:['heal','hover','charm','tree'], // Cosmetic Meshy variant, same existing fairy kit.
   dz_fairy:['heal','hover','charm','tree'],dz_pirate:['cannon','hook','parrot','broadside'],dz_vampire:['drain','bats','batcircle','bloodnova'],
   dz_snowman:['snowball','decoy','icefloor','iceage'],
   dz_army:['popgun','sandbag','flare','airdrop'],dz_navy:['anchor','surfride','whistle','lighthouse'],dz_aodai:['lotus','ribbon','fan','lanterns'],

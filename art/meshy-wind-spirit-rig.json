@@ -1,0 +1,128 @@
+{
+  "sourceSha256": "4f210a2cf91647b8dbe2d97beb9a942cfda27f1bb72ed7480821a4cf777a3352",
+  "sourceMeshFingerprints": {
+    "output_unwrapped": "db234d4318e5e22045512e4b77119dbcc3031b7831509d755d1dcc6bb3178d40"
+  },
+  "triangles": 14504,
+  "bones": 15,
+  "weightedVertices": {
+    "body": 12456,
+    "head": 24043,
+    "arm-left": 1940,
+    "forearm-left": 695,
+    "hand-left": 290,
+    "leg-left": 2523,
+    "shin-left": 3268,
+    "foot-left": 3355,
+    "arm-right": 1511,
+    "forearm-right": 979,
+    "hand-right": 498,
+    "leg-right": 991,
+    "shin-right": 1068,
+    "foot-right": 1665
+  },
+  "animations": [
+    "Idle",
+    "Walk",
+    "Run",
+    "Jump",
+    "Sit",
+    "Lie",
+    "FishCast",
+    "FishWait",
+    "FishReel",
+    "Attack"
+  ],
+  "height": 2.35,
+  "sourcePreserved": true,
+  "appearance": {
+    "NORMAL": "8c19a02b907ed6789c2f6428739cd41ebbf40ea0805490d2fa39972e86076bb3",
+    "TEXCOORD_0": "1607a6ceb7a2df36c400971934e065de928e69c408d253e1981757414d98fb03",
+    "indices": "56465998a758ef363b435fb30f7bdd9f830071584b91ddd4e84b33d0f9f83c9c",
+    "position": "90277413283e93adc618937150120577483177fdf3271e68ec81efe72a42bcc8",
+    "textures": [
+      "988e280de98320c05e056179a7753262fb36ed412826da8a26079f78336fc6c2",
+      "e3a47dea9034cfbba7d8ea41b2ec735b48333c6e96b5ad5b27ebe4d19859d08f",
+      "87560bc4f8fa0b43be2f4e32a6b7938c17e3dcb65e4005f5e58e473387aad66b"
+    ]
+  },
+  "uniformScale": 1.2356844967336356,
+  "positionError": 2.384185791015625e-07,
+  "landmarks": {
+    "root": [
+      0,
+      0,
+      0
+    ],
+    "body": [
+      0,
+      0,
+      0.75
+    ],
+    "head": [
+      0,
+      0,
+      1.3
+    ],
+    "arm-left": [
+      -0.24,
+      0,
+      1.28
+    ],
+    "forearm-left": [
+      -0.44,
+      -0.015,
+      1.03
+    ],
+    "hand-left": [
+      -0.66,
+      -0.025,
+      0.82
+    ],
+    "leg-left": [
+      -0.14,
+      0,
+      0.7
+    ],
+    "shin-left": [
+      -0.14,
+      0,
+      0.37
+    ],
+    "foot-left": [
+      -0.14,
+      0,
+      0.12
+    ],
+    "arm-right": [
+      0.24,
+      0,
+      1.28
+    ],
+    "forearm-right": [
+      0.44,
+      -0.015,
+      1.03
+    ],
+    "hand-right": [
+      0.66,
+      -0.025,
+      0.82
+    ],
+    "leg-right": [
+      0.14,
+      0,
+      0.7
+    ],
+    "shin-right": [
+      0.14,
+      0,
+      0.37
+    ],
+    "foot-right": [
+      0.14,
+      0,
+      0.12
+    ]
+  }
+}

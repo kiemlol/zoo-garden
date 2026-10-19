@@ -900,3 +900,8 @@ Object.assign(VI_CATALOG,VI_FESTIVAL);
 Object.assign(VI_CATALOG,VI_HALLOWEEN);
 
 Object.assign(VI_CATALOG,VI_BIRD_DISGUISES,VI_SORCERER,VI_INK_PAINTER);
+
+Object.assign(VI_CATALOG,{
+  'White Wind Spirit':'Linh Nữ Gió Trắng',
+  'Silver hair, pink eyes, a white ribbon dress and a feathered halo. Uses the Flower Fairy skills.':'Tóc bạc, mắt hồng, váy dải trắng và vòng gió lông vũ. Dùng bộ kỹ năng Tiên Hoa.',
+});

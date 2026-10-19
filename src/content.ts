@@ -4209,3 +4209,9 @@ for(const fish of Object.values(FISH)){fish.size=fish.size.map(cm=>Math.min(MAX_
 
 Object.assign(ITEMS,HALLOWEEN_ITEMS);
 RECIPES.push(...HALLOWEEN_RECIPES);
+
+// Meshy-authored complete costume; reuses the existing fairy kit without adding new combat rules.
+ITEMS.dz_wind_spirit={name:'White Wind Spirit',icon:'🪽',desc:'Silver hair, pink eyes, a white ribbon dress and a feathered halo. Uses the Flower Fairy skills.',type:'disguise',slot:'disguise',price:1,sell:0};
+DISGUISES.dz_wind_spirit={...DISGUISES.dz_fairy,name:ITEMS.dz_wind_spirit.name,emoji:ITEMS.dz_wind_spirit.icon,color:'#eeeaf6'};
+RECIPES.push({result:'dz_wind_spirit',energy:1,materials:{},category:'Disguises',station:'shop'});
+SHOP_CATEGORIES.find(c=>c.tab==='Disguises')?.items.push({id:'dz_wind_spirit',cost:1});

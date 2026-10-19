@@ -1,3 +1,4 @@
+import {windSpiritKit,WIND_SPIRIT,animateWindSpirit} from './meshy-costume.ts';
 import {yardOf,YARD_CHEST,YARD_WELL,YARD_TREES,inwardFacing} from './home-layout.ts';
 import {FurnitureUse,isRestFurniture,drawFurniture,drawFurnitureLids,resetFurniturePose} from './furniture-use.ts';
 import type {FurniturePose} from './furniture-rules.ts';
@@ -156,7 +157,7 @@ export {DEFAULT_PIVOTS};
 const AI_REST_RANGE=48,EXPLORER_RADIUS=.45,DIVE_RING=2.4;
 /** The AI numbers of a creature without its own definition, made once rather than per creature per step. */
 /** Disguises that show the flying pose while airborne (the fairy hovers upright-ish, the superhero glides). */
-const FLIGHT_POSE_DISGUISES:readonly string[]=['dz_superhero','dz_fairy'];
+const FLIGHT_POSE_DISGUISES:readonly string[]=['dz_superhero','dz_fairy',WIND_SPIRIT];
 const DEFAULT_AI={speed:2.4,reach:1.8,sight:6,behavior:'melee',cooldown:1.3,windup:.35,flying:false,titan:false} as const,DEFAULT_BOSS_AI={...DEFAULT_AI,sight:11} as const;
 /** A* steps for a creature walking home (about a 35 m square of 1 m cells): enough around fences and ponds, never a long stall. */
 const ROUTE_BUDGET=1200,heightBox=new T.Box3(),occluderPoints=[new T.Vector3(),new T.Vector3(),new T.Vector3()],explorerPoints=occluderPoints.slice(0,2);
@@ -761,7 +762,7 @@ export class World {
    * first time; avatars are rebuilt when it arrives, and simple shapes stand in until then.
    */
   private kitFor(raw:string){
-    const id=baseOf(raw),slot=M.ITEMS[raw]?.slot,kit=/^(hat|pet)_colossus$/.test(id)?colossusGearKit:/^(hat|pet)_t_/.test(id)?titanKit:/^pet_b_/.test(id)?bossPetKit:/^pet_dg_/.test(id)?dungeonKit:slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
+    const id=baseOf(raw);if(id===WIND_SPIRIT)return null;const slot=M.ITEMS[raw]?.slot,kit=/^(hat|pet)_colossus$/.test(id)?colossusGearKit:/^(hat|pet)_t_/.test(id)?titanKit:/^pet_b_/.test(id)?bossPetKit:/^pet_dg_/.test(id)?dungeonKit:slot==='weapon'?weaponKit:slot==='disguise'?disguiseKit:slot==='pet'?petKit:wearKit;
     if(!kit.requested)void kit.load().then(()=>{if(kit.ready)this.refreshAvatars();});
     return kit.ready&&kit.has(weaponModelName(id))?kit:null;
   }
@@ -771,16 +772,18 @@ export class World {
    */
   private avatar(color:string,gear:SaveState['gear']={},look:LookId|string=DEFAULT_LOOK){
     const disguise=gear.disguise?M.DISGUISES[gear.disguise]:undefined,id=gear.disguise??'';
-    const kitDisguise=!!id&&!!this.kitFor(id)&&heroKit.ready,fullBodyDisguise=kitDisguise&&(Object.hasOwn(BIRD_SKILLS,id)||id==='dz_sorcerer'||id==='dz_ink_painter');
+    if(id===WIND_SPIRIT&&!windSpiritKit.requested)void windSpiritKit.load().then(()=>{if(windSpiritKit.ready)this.refreshAvatars();});
+    const meshy=id===WIND_SPIRIT&&windSpiritKit.ready;
+    const kitDisguise=meshy||!!id&&id!==WIND_SPIRIT&&!!this.kitFor(id)&&heroKit.ready,fullBodyDisguise=meshy||kitDisguise&&(Object.hasOwn(BIRD_SKILLS,id)||id==='dz_sorcerer'||id==='dz_ink_painter');
     // A body style downloads on first use; the default explorer stands in until it arrives.
     // Complete costumes keep a hidden base rig; their own geometry is fitted continuously to the selected look.
     const combo=toLook(look)??DEFAULT_LOOK,styled=heroKitFor(fullBodyDisguise?DEFAULT_LOOK:combo);if(styled!==heroKit&&!styled.requested)void styled.load().then(()=>{if(styled.ready)this.refreshAvatars();});
-    const base=styled.ready&&heroKit.ready?styled:heroKit,tint=disguise&&!kitDisguise?disguise.color:color,c=base.instance(tint)??this.chibi(tint);
-    c.userData.look=fullBodyDisguise?combo:base===heroKit?DEFAULT_LOOK:combo;const fit=fitOf(combo);if(base!==heroKit&&Object.keys(fit).length)c.userData.fit=fit;
+    const base=styled.ready&&heroKit.ready?styled:heroKit,tint=disguise&&!kitDisguise?disguise.color:color,c=(meshy?windSpiritKit.instance():null)??base.instance(tint)??this.chibi(tint);
+    c.userData.look=fullBodyDisguise?combo:base===heroKit?DEFAULT_LOOK:combo;const fit=fitOf(combo);if(!meshy&&base!==heroKit&&Object.keys(fit).length)c.userData.fit=fit;
     // The sprout pokes through hats and most costumes; the fairy crown and hero mask leave it showing.
     // A hat kept under a costume is not drawn (below), so only the costume decides then.
     const top=id?kitDisguise&&['dz_fairy','dz_superhero'].includes(id):!gear.hat,leaf=c.getObjectByName('head-leaf');if(leaf)leaf.visible=top;tuckEars(c,!top);
-    if(id){if(!kitDisguise)this.simpleDisguise(c,id,disguise!.color);}
+    if(id){if(!kitDisguise&&id!==WIND_SPIRIT)this.simpleDisguise(c,id,disguise!.color);}
     else{
       if(['dress_pumpkin','outfit_flex'].includes(gear.outfit??''))c.traverse(o=>{if(o instanceof T.Mesh&&/^Hero shirt/.test((o.material as T.Material).name))o.visible=false;});
       if(gear.hat&&!this.wearKit(c,gear.hat,'head'))this.simpleHat(c,gear.hat);
@@ -790,9 +793,9 @@ export class World {
     }
     // Keep the rig/hand anchors animated, but hide every original render mesh before attaching the full costume.
     // Hiding only the shirt leaves skin, shorts, hair, backpack and styled tails poking through when posed.
-    if(fullBodyDisguise)c.traverse(o=>{if(o instanceof T.Mesh)o.visible=false;});
-    if(kitDisguise)this.wearKit(c,id,'body');
-    if(fullBodyDisguise)fitBirdDisguise(c,id,combo);
+    if(fullBodyDisguise&&!meshy)c.traverse(o=>{if(o instanceof T.Mesh)o.visible=false;});
+    if(kitDisguise&&!meshy)this.wearKit(c,id,'body');
+    if(fullBodyDisguise&&!meshy)fitBirdDisguise(c,id,combo);
     if(gear.weapon&&!this.wearKit(c,gear.weapon,'hand-right'))this.simpleWeapon(c,gear.weapon);
     if(isKeyRod(baseOf(gear.weapon??'')))prepareKeyRod(c);
     // Up to two pets beside them (pet-slots.ts): the first on the left as ever, the second on the right; with their dog out (drawn by dog-world.ts on the left) the one pet takes the right.
@@ -845,7 +848,7 @@ export class World {
   /** An explorer's head side for a face picture (hero-portrait.ts): the look, with the hat and outfit or the disguise over them; no weapon, boots or companion. */
   portraitAvatar(color:string,gear:SaveState['gear'],look:string){return this.avatar(color,{hat:gear.hat,outfit:gear.outfit,disguise:gear.disguise},look);}
   /** Which of the files that picture is drawn from have arrived (body, body style, then each worn piece): its cache key, so a late file redraws it once. */
-  avatarArt(gear:SaveState['gear'],look:string){const worn=gear.disguise?[gear.disguise]:[gear.hat,gear.outfit];return `${+heroKit.ready}${+heroKitFor(toLook(look)??DEFAULT_LOOK).ready}${worn.map(id=>+(!!id&&!!this.kitFor(id))).join('')}`;}
+  avatarArt(gear:SaveState['gear'],look:string){const worn=gear.disguise?[gear.disguise]:[gear.hat,gear.outfit];return `${+heroKit.ready}${+heroKitFor(toLook(look)??DEFAULT_LOOK).ready}${worn.map(id=>+(id===WIND_SPIRIT?windSpiritKit.ready:!!id&&!!this.kitFor(id))).join('')}`;}
   /** Full social preview also refreshes when a late weapon/boots/companion kit arrives. */
   equipmentArt(gear:SaveState['gear'],look:string){return this.avatarArt(gear,look)+Object.values(gear).map(id=>id?+(!!this.kitFor(id)):0).join('');}
   /** A body style shown while previewing at the mirror: local only, never saved or sent online. */
@@ -1119,6 +1122,7 @@ export class World {
       else if(u.wasResting)resetFurniturePose(m);
       u.wasResting=!!rest;
       drawFishShow(m,!fishing&&!passenger&&!rest?remote.pose.visual?.fishShow:null,this.time);
+      animateWindSpirit(m,rest?rest.id==='deco_cursed_coffin'?'Lie':'Sit':passenger?'Sit':fishing?.phase==='cast'?'FishCast':fishing?.phase==='fight'?'FishReel':fishing?'FishWait':(u.air??0)>0?'Jump':moving?'Walk':'Idle',dt,moving?g.phase/(Math.PI*2):undefined);
       animateKeyRod(m,this.keyRodTime??this.time);drawRemoteKeyBobber(m,fishing,this.keyRodTime??this.time);
       // Their pet waits at their own pen while they are in the safe village (pet-pen.ts): it is drawn beside them only away from it.
       const pets=(u.pets??=m.children.filter(o=>o.name==='remote-pet')) as T.Object3D[],follows=pets.length>0&&petFollows(remote.pose.planet??this.planet,remote.pose);for(const pet of pets)pet.visible=follows;
@@ -2017,7 +2021,7 @@ export class World {
     this.player.position.copy(this.position);this.player.position.y+=(this.playerLift??0)+this.jump.height+(this.airCarry||0);this.player.rotation.y=this.facing;this.player.scale.setScalar((this.playerSizeScale>1?this.playerSizeScale:stats.sizeScale)*HERO_SCALE);this.applyAvatarVisual(this.player,this.visualSnapshot());
     // The companion waits by the pen at home and trails behind and to one side away from it; flyers hover and flap, walkers hop.
     (this.petPen??=new PetCompanion()).update(this,dt);(this.petPen2??=new PetCompanion(1)).update(this,dt);
-    this.animatePlayer(dt);this.player.rotation.z=this.playerSlip>0?Math.sin(this.time*13)*.12:0;this.carriage?.draw();this.furniture?.draw();this.animateRemotes(dt);drawFurnitureLids(this);
+    this.animatePlayer(dt);this.player.rotation.z=this.playerSlip>0?Math.sin(this.time*13)*.12:0;this.carriage?.draw();this.furniture?.draw();animateWindSpirit(this.player,this.furniture?.active?this.furniture.pose?.id==='deco_cursed_coffin'?'Lie':'Sit':this.carriage?.active?'Sit':this.fishing==='cast'?'FishCast':this.fishing==='fight'?'FishReel':this.fishing&&this.fishing!=='idle'?'FishWait':this.jump.airborne?'Jump':this.punchT>0?'Attack':this.moving?'Walk':'Idle',dt,this.moving?this.walkClock/(Math.PI*2):undefined);this.animateRemotes(dt);drawFurnitureLids(this);
     this.player.visible=!this.boarded&&!this.playerHidden;this.companion.visible=!this.boarded&&this.petPen.shown;if(this.companion2)this.companion2.visible=!this.boarded&&this.petPen2.shown;
     // The reference's follow: 9/s on the explorer, 5/s on the starship in cut-scenes, always looking straight at the target.
     this.cameraTarget.lerp(this.cameraFocus??this.position,followBlend(dt,!!this.cameraFocus));this.camera.position.copy(this.cameraTarget).add(this.viewOffset??=cameraOffset(16/9));this.camera.lookAt(this.cameraTarget);

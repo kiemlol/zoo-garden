@@ -44,8 +44,8 @@ function arena(extra: Partial<CombatTarget>[] = []) {
   return { sim, p, effects, hits, statuses, targets, run, healed: () => healed };
 }
 
-test('all 20 disguises have exactly four skills, a kit entry, a description, a sound and an icon each', () => {
-  assert.equal(Object.keys(DISGUISES).length, 20);
+test('all 21 disguises have exactly four skills, a kit entry, a description, a sound and an icon each', () => {
+  assert.equal(Object.keys(DISGUISES).length, 21);
   for (const [id, d] of Object.entries(DISGUISES)) {
     assert.equal(d.skills.length, 4, id); assert.equal(DISGUISE_KITS[id]?.length, 4, id); assert.equal(DISGUISE_INFO[id]?.length, 4, id);
     d.skills.forEach((s, i) => { assert.ok(s.name && s.icon && s.cd > 0, `${id} ${i}`); assert.ok(skillDescription(i, { disguise: id }).length > 10); assert.ok(skillSound(i, id)); });

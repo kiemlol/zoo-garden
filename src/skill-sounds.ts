@@ -18,6 +18,8 @@ const DISGUISE: Record<string, readonly Sound[]> = {
   dz_army: ['pop', 'hit', 'shoot', 'boom'], dz_navy: ['swing', 'splash', 'alert', 'level'], dz_aodai: ['magic', 'swing', 'swing', 'success'],
   dz_aodai_man: ['swing', 'cast', 'poof', 'level'], dz_usa: ['swing', 'hit', 'magic', 'boom'], dz_vietnam: ['magic', 'swing', 'boom', 'crit'],
 };
+// Keep the Fairy kit sounds for the Meshy costume.
+DISGUISE.dz_wind_spirit=DISGUISE.dz_fairy;
 export function skillSound(index: number, disguise?: string, special = 'fist'): Sound {
   if (disguise) return DISGUISE[disguise]?.[index] ?? 'punch';
   return index === 0 ? 'swing' : index === 1 ? 'swing' : index === 2 ? 'boom' : SPECIAL[special] ?? 'crit';

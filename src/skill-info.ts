@@ -125,6 +125,9 @@ export const DISGUISE_INFO: Record<string, readonly string[]> = {
     `A great golden star falls on the nearest enemy within ${DZ.bigstar.range} m after ${DZ.bigstar.delay} s: ×${DZ.bigstar.power} damage within ${DZ.bigstar.radius} m, and enemies there are slowed ${DZ.bigstar.slow} s.`],
 };
 
+// The Meshy costume uses the existing Fairy kit, including its descriptions.
+DISGUISE_INFO.dz_wind_spirit=DISGUISE_INFO.dz_fairy;
+
 export interface SkillView { name: string; icon: string; cd: number }
 /** The Lob's splash and the Quake's ring at an upgrade level, as combat.ts casts them (the moves of moves.ts). */
 export const lobSplash = (level: number) => MOVES.lob.splash + skillTuning(0, level).radius;

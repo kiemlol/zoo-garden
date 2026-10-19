@@ -1,0 +1,73 @@
+{
+  "id": "dz_wind_spirit",
+  "model": "public/assets/models/wind-spirit.glb",
+  "generator": "Meshy CLI 0.4.0",
+  "generatedAt": "2026-10-19",
+  "generation": {
+    "resource": "multi-image-to-3d",
+    "taskId": "01a153cf-93b1-7221-8a29-6d1b30ded323",
+    "consumedCredits": 30,
+    "views": [
+      "front",
+      "left",
+      "back",
+      "right"
+    ]
+  },
+  "remesh": {
+    "resource": "remesh",
+    "taskId": "01a153d8-feaf-7636-bbc9-62eb0bd46daf",
+    "consumedCredits": 5,
+    "targetTriangles": 15000,
+    "approvedByUser": true
+  },
+  "references": {
+    "folder": "https://drive.google.com/drive/folders/1LDJGH3WpxdwpUYZA__Ejsijt-XA4eL_V",
+    "files": [
+      "IMG_0458.PNG",
+      "IMG_0460.PNG",
+      "IMG_0459.PNG",
+      "IMG_0471.PNG"
+    ]
+  },
+  "rig": {
+    "tool": "Blender 4.3.2",
+    "script": "art/blender/kit/rig_meshy_costume.py",
+    "report": "art/meshy-wind-spirit-rig.json",
+    "meshEdited": false,
+    "texturesRepainted": false,
+    "uniformSceneHeight": 2.35
+  },
+  "gameplay": {
+    "shop": "Equipment shop > Disguises",
+    "testPrice": 1,
+    "combatKit": "dz_fairy",
+    "newSkills": false
+  },
+  "rebuild": "Download the existing remesh task through Meshy CLI, then run: blender -b --factory-startup --python-exit-code 1 --python art/blender/kit/rig_meshy_costume.py -- --source PATH_TO_REMESHED_GLB",
+  "cliProjectFolder": "/workspace/work/meshy-costume/meshy_output/20261019_105818_white-wind-spirit-costume_01a153cf",
+  "validation": {
+    "typecheck": "npx tsc --noEmit passed",
+    "build": "npm run build passed; existing Vite large-chunk warning only",
+    "tests": {
+      "total": 2057,
+      "passed": 1998,
+      "skipped": 57,
+      "failed": 2,
+      "baselineFailed": 2,
+      "newFailures": 0,
+      "existingFailures": [
+        "tests/looks.test.ts:171 (rod_key crystal grip)",
+        "tests/vi-embedded-tables.test.ts:46 (locale snapshot growth)"
+      ]
+    },
+    "browser": [
+      "offline walk and jump",
+      "bench/coffin enter and exit",
+      "fishing and rod attachment",
+      "portrait viewport and wardrobe",
+      "two online accounts: separate skins, walk, seated knees, fishing"
+    ],
+    "onlineJump": "Existing online jump switch remains disabled; no gameplay rule changed"
+  }
+}

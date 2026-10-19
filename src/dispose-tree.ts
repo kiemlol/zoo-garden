@@ -1,4 +1,4 @@
-import type * as T from 'three';
+import * as T from 'three';
 
 /** Materials a module caches for the whole session (world.ts `material()`): never disposed with a tree. */
 export const keepAlive = new WeakSet<T.Material>();
@@ -23,6 +23,7 @@ export function disposeOwnedTextures(material: T.Material) {
 export function disposeTree(root: T.Object3D) {
   root.traverse(o => {
     const mesh = o as T.Mesh; if (!mesh.isMesh) return;
+    if (mesh instanceof T.SkinnedMesh && mesh.userData.meshyCostume) mesh.skeleton.dispose();
     if (!kept(mesh.geometry)) mesh.geometry.dispose();
     for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) if (m && !kept(m) && !keepAlive.has(m)) { disposeOwnedTextures(m); m.dispose(); }
   });

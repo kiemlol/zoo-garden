@@ -88,3 +88,16 @@ test('an object with matrixAutoUpdate off still updates through matrixWorldNeeds
   try { hand.matrix.makeTranslation(9, 0, 0); hand.matrixWorldNeedsUpdate = true; updateSceneMatrices(scene); assert.equal(child.matrixWorld.elements[12], 9); }
   finally { perfFlags.trustTransforms = true; }
 });
+
+test('skinned avatars keep Three bind space when walking, turning and changing scale', () => {
+  const scene=new T.Scene(), avatar=new T.Group(), skin=new T.SkinnedMesh(new T.BoxGeometry(),new T.MeshBasicMaterial());
+  const bone=new T.Bone();skin.add(bone);skin.bind(new T.Skeleton([bone]));avatar.add(skin);scene.add(avatar);manageSceneMatrices(scene);
+  for(const [x,y,z,angle,scale] of [[0,0,0,0,1],[5,0,5,Math.PI,1],[-7,2,8,.3,.65]]){
+    avatar.position.set(x,y,z);avatar.rotation.y=angle;avatar.scale.setScalar(scale);updateSceneMatrices(scene);
+    const expected=new T.Matrix4().copy(skin.matrixWorld).invert();assert.deepEqual(skin.bindMatrixInverse.elements,expected.elements);
+    const actual=skin.bindMatrixInverse.clone();skin.updateMatrixWorld(true);assert.deepEqual(skin.bindMatrixInverse.elements,actual.elements,'matches Three default upkeep');
+    const identity=skin.matrixWorld.clone().multiply(actual);identity.elements.forEach((v,i)=>assert.ok(Math.abs(v-(i%5===0?1:0))<1e-10));
+  }
+  skin.bindMode='detached';skin.bindMatrix.makeTranslation(1,2,3);updateSceneMatrices(scene);
+  assert.deepEqual(skin.bindMatrixInverse.elements,skin.bindMatrix.clone().invert().elements);
+});

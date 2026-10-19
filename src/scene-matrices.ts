@@ -50,6 +50,10 @@ function visit(o: Tracked, parentChanged: boolean) {
     if (o.matrixWorldAutoUpdate) { if (o.parent === null) o.matrixWorld.copy(o.matrix); else o.matrixWorld.multiplyMatrices(o.parent.matrixWorld, o.matrix); }
     o.matrixWorldNeedsUpdate = false; o._stale = false;
   } else if (auto) o.matrixWorldNeedsUpdate = false;
+  // This pass replaces updateMatrixWorld, including SkinnedMesh's bind-space upkeep.
+  // Without it a skinned costume inherits the avatar transform twice when it moves/turns.
+  const skin = o as T.SkinnedMesh;
+  if (skin.isSkinnedMesh) skin.bindMatrixInverse.copy(skin.bindMode === 'attached' ? skin.matrixWorld : skin.bindMatrix).invert();
   const children = o.children;
   if (o.userData.staticTree && perfFlags.freezeStaticTrees) {
     // A settled tree (same children as when it was walked, nothing hidden in it) has nothing to recompute.
