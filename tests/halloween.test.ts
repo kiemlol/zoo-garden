@@ -30,7 +30,7 @@ test('bench keeps a seated explorer through menus, refuses movement/attacks, the
  let time=now;t.mock.method(Date,'now',()=>time);const{w,e}=fixture();assert.ok(await w.useFurniture(e));
  w.update(.1,true,false);assert.equal(w.resting,true);const at=furniturePoint(w.state.decorations[0],0);assert.ok(Math.hypot(w.position.x-at.x,w.position.z-at.z)<1e-6);assert.equal(w.player.rotation.y,e.mesh.rotation.y);
  w.update(.2,false,false);assert.equal(w.furniture!.active,true,'opening a panel never ejects a sitter');const p=w.position.clone();w.walkTo(0,0);w.select(e);assert.equal(w.destination,null);assert.ok(w.position.equals(p));
- w.joystickInput={x:1,z:0};w.update(.02,true,false);assert.equal(w.furniture!.pose!.leavingAt,time);w.joystickInput=null;await w.furniture!.leave();time+=FURNITURE_LEAVE_MS;w.update(.02,true,false);assert.equal(w.resting,false);assert.equal(w.blocked(w.position.x,w.position.z),false);assert.equal(await w.useFurniture(e),false,'rapid repeated events cannot reenter');
+ w.joystickInput={x:1,z:0};w.update(.02,true,false);assert.equal(w.furniture!.active,false,'movement leaves a bench immediately');w.joystickInput=null;assert.equal(await w.furniture!.leave(),false);w.update(.02,true,false);assert.equal(w.resting,false);assert.equal(w.blocked(w.position.x,w.position.z),false);assert.equal(await w.useFurniture(e),false,'rapid repeated events cannot reenter');
 });
 test('coffin opens, allows lying down, waits two seconds and closes, then reopens on exit',async t=>{
  let time=now;t.mock.method(Date,'now',()=>time);const{w,e}=fixture(CURSED_COFFIN);assert.ok(await w.useFurniture(e));const p=w.furniture!.pose!;assert.equal(coffinLid(p,time),0);
@@ -54,7 +54,7 @@ test('server allocates two distinct seats atomically and keys occupancy to the a
  const peer=(id:string,visit:string|null='owner')=>({account:{id,profile:{hp:100}},active:true,planet:'home',room:'home',visit,pose:{x:0,z:2,y:0}});
  const a=peer('owner',null),b=peer('guest'),c=peer('third'),outsider=peer('other',null),peers=new Map([a,b,c,outsider].map(p=>[p.account.id,p]));
  assert.equal(useFurniture(a,peers,garden,'same',now).pose!.seat,0);assert.equal(useFurniture(b,peers,garden,'same',now).pose!.seat,1);assert.match(useFurniture(c,peers,garden,'same',now).error!,/no free/);assert.equal(useFurniture(outsider,peers,garden,'same',now).pose!.seat,0);
- const leaving=useFurniture(a,peers,garden,null,now+100).pose!;assert.equal(useFurniture(a,peers,garden,null,now+200).pose!.leavingAt,leaving.leavingAt);assert.equal(currentFurniture(a,garden,now+100+FURNITURE_LEAVE_MS),null);assert.equal(useFurniture(c,peers,garden,'same',now+100+FURNITURE_LEAVE_MS).pose!.seat,0);
+ assert.equal(useFurniture(a,peers,garden,null,now+100).pose,null);assert.equal(useFurniture(a,peers,garden,null,now+100).pose,null,'duplicate exits stay cleared');assert.equal(currentFurniture(a,garden,now+100),null);assert.equal(useFurniture(c,peers,garden,'same',now+100).pose!.seat,0,'a bench seat is freed without a timer');
 });
 test('server rejects far, airborne, dead and invented furniture requests, and releases moved furniture',()=>{
  const g={decorations:[{uid:'one',id:CURSED_COFFIN,x:0,z:0,rotation:0}]},p:any={account:{id:'p',profile:{hp:100}},active:true,planet:'home',room:'home',visit:null,pose:{x:0,z:2,y:0}},peers=new Map([['p',p]]);
@@ -90,4 +90,9 @@ test('an online reply for another object cannot attach a passenger to the reques
  const{w,e}=fixture();const requests:(string|null)[]=[];
  w.requestFurniture=async uid=>{requests.push(uid);return uid===null?null:{uid:'stale-other-seat',id:CURSED_BENCH,seat:0,garden:'local',since:now};};
  assert.equal(await w.useFurniture(e),false);assert.equal(w.resting,false);assert.ok(requests.includes(null));
+});
+
+test('online bench exit restores movement before a delayed server response',async()=>{
+ const{w,e}=fixture();let release!:(p:unknown)=>void;w.requestFurniture=uid=>uid===null?new Promise(r=>release=r):Promise.resolve({uid:'seat1',id:CURSED_BENCH,seat:0,garden:'local',since:now});
+ assert.ok(await w.useFurniture(e));const leave=w.furniture!.leave();assert.equal(w.resting,false);assert.equal(w.blocked(w.position.x,w.position.z),false);release(null);assert.equal(await leave,true);assert.equal(w.resting,false);
 });

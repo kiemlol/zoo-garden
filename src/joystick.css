@@ -16,13 +16,10 @@
 @media(max-width:600px) and (orientation:portrait){#hud.joystick-on #target-frame{left:16px;bottom:calc(202px + env(safe-area-inset-bottom));top:auto;transform:none;max-width:calc(100vw - 32px)}#hud.joystick-on.joystick-right #target-frame{left:auto;right:16px}}
 /* Keep interaction prompts and transient notices clear of both thumb controls. */
 @media(max-width:600px) and (orientation:portrait){
-  #hud.joystick-on #context-prompt{left:50%;transform:translateX(-50%);bottom:calc(218px + var(--safe-bottom))}
   #app:has(#hud.joystick-on) #toasts{left:50%;transform:translateX(-50%);align-items:center;bottom:calc(260px + var(--safe-bottom));max-width:calc(100vw - 28px)}
-  #app.target-on #hud.joystick-on #context-prompt{bottom:calc(276px + var(--safe-bottom))}
   #app.target-on:has(#hud.joystick-on) #toasts{bottom:calc(320px + var(--safe-bottom))}
 }
 @media(max-height:500px){
-  #hud.joystick-on #context-prompt{left:50%;transform:translateX(-50%);bottom:calc(18px + var(--safe-bottom))}
   #app:has(#hud.joystick-on) #toasts{left:50%;transform:translateX(-50%);align-items:center;max-width:calc(100vw - 360px);bottom:calc(70px + var(--safe-bottom))}
 }
 #app:has(#hud.joystick-on) #dialog-layer:not([hidden]) ~ #toasts{top:calc(14px + var(--safe-top));bottom:auto}

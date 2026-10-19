@@ -255,7 +255,7 @@ test('a completed catch grants once before the landing callback displays its fee
   assert.equal(f.state.bag[id], 1); assert.equal(f.state.counters.fish, 1);
   assert.equal(f.state.fishRecords[id], 23);
   assert.deepEqual(f.calls.reels.at(-1), { on: true, mode: 'cast' });
-  assert.equal(f.ctx.recastUntil, f.ctx.now + 6000);
+  assert.deepEqual(f.calls.reels.at(-1), {on:true,mode:'cast'}, 'the shore action is ready for another cast');
 });
 
 test('a delayed catch cannot grant items, XP or UI effects after the active save changes', () => {

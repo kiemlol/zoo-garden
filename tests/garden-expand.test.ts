@@ -119,12 +119,12 @@ test('placed beds keep their 45° turn, turned beds need more room, and old save
 
 test('decorations may stand on clear ground inside the fence, not on beds or other decorations', () => {
   const s = M.newGame();
-  assert.equal(M.decorSpotOk(s, 4, 4), true);
+  assert.equal(M.decorSpotOk(s, 8, 4), true);
   assert.equal(M.decorSpotOk(s, -13.85, 2.45), false, 'a bed');
   assert.equal(M.decorSpotOk(s, 16.7, 0), false, 'past the fence');
   M.addItem(s, 'bench_wood' in M.ITEMS ? 'bench_wood' : Object.keys(M.ITEMS).find(id => M.ITEMS[id].type === 'decor')!);
-  const id = Object.keys(s.bag)[0]; assert.ok(M.placeDecoration(s, id, 4, 4, Math.PI / 4));
-  assert.equal(M.decorSpotOk(s, 4.5, 4), false, 'another decoration');
+  const id = Object.keys(s.bag)[0]; assert.ok(M.placeDecoration(s, id, 8, 4, Math.PI / 4));
+  assert.equal(M.decorSpotOk(s, 8.5, 4), false, 'another decoration');
   s.planet = 'candy'; assert.equal(M.decorSpotOk(s, 8, 8), false);
 });
 

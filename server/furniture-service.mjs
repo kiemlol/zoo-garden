@@ -10,7 +10,7 @@ export function currentFurniture(peer,garden,now=Date.now()){
 /** Synchronous acquisition is atomic across simultaneous WebSocket messages from different explorers. */
 export function useFurniture(peer,peers,garden,uid,now=Date.now()){
  const existing=currentFurniture(peer,garden,now);
- if(uid===null){if(existing&&existing.leavingAt===undefined)existing.leavingAt=now;return {pose:existing};}
+ if(uid===null){if(existing&&existing.leavingAt===undefined)existing.leavingAt=now;if(existing&&furnitureExpired(existing,now)){peer.furniture=null;return {pose:null};}return {pose:existing};}
  if(existing)return {pose:existing};
  const d=typeof uid==='string'&&garden?.decorations?.find(d=>d.uid===uid),capacity=d&&furnitureCapacity(d.id);
  if(!capacity||peer.planet!=='home'||!peer.active||peer.account.profile.hp<=0||peer.pose.visual?.carriage||peer.pose.visual?.flight||peer.pose.visual?.bat||Math.abs(peer.pose.y??0)>.15||Math.hypot(peer.pose.x-d.x,peer.pose.z-d.z)>(d.id==='deco_cursed_coffin'?3.5:3.3))return {pose:null,error:'Move closer and stand on the ground to use this furniture.'};

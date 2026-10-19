@@ -145,7 +145,7 @@ for (const [name, view] of Object.entries(VIEWS)) {
             const hunt=document.querySelector('#reel-button'),hint=document.querySelector('#fish-hint'),skills=[...document.querySelectorAll('.skill')];
             hunt.className='reel-hud'+(mode==='reel'?'':' '+mode);hunt.hidden=false;hunt.style.animation='none';hint.hidden=mode==='cast';
             const receiver=el=>{const b=el.getBoundingClientRect();return document.elementFromPoint((b.left+b.right)/2,(b.top+b.bottom)/2)?.closest('button');};
-            return {hunt:rect(hunt),hint:rect(hint),skills:skills.map(rect),joystick:rect(document.querySelector('#movement-joystick')),huntTappable:receiver(hunt)===hunt,skillsTappable:skills.every(el=>receiver(el)===el),receivers:[hunt,...skills].map(el=>receiver(el)?.outerHTML.slice(0,160)),prompt:getComputedStyle(document.querySelector('#context-prompt')).display};
+            return {hunt:rect(hunt),hint:rect(hint),skills:skills.map(rect),joystick:rect(document.querySelector('#movement-joystick')),huntTappable:receiver(hunt)===hunt,skillsTappable:skills.every(el=>receiver(el)===el),receivers:[hunt,...skills].map(el=>receiver(el)?.outerHTML.slice(0,160)),prompt:document.querySelector('#context-prompt')?getComputedStyle(document.querySelector('#context-prompt')).display:'none'};
           },{swapped,mode});
           assert.ok(h.huntTappable&&(mode==='reel'||h.skillsTappable),`${mode} and every active combat skill remain independently tappable (${swapped?'swapped':'default'}): ${JSON.stringify(h)}`);
           assert.equal(h.prompt,'none',`${mode} replaces the redundant pond context prompt`);

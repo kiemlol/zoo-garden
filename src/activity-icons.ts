@@ -1,0 +1,7 @@
+/** Flat toy-style art stays crisp at every HUD scale, without loading a model or allocating per frame. */
+export function activityIcon(mode:'reel'|'cast'|'hunt'|'exit'){
+ const shell=(body:string)=>`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" fill="none" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+ if(mode==='exit')return shell('<path d="M26 10H17a7 7 0 0 0-7 7v30a7 7 0 0 0 7 7h9M24 32h30M43 21l11 11-11 11" stroke="#564356" stroke-width="7"/><path d="M24 30h27M43 21l9 9" stroke="#fff5da" stroke-width="2"/>');
+ if(mode==='hunt')return shell('<path d="M18 55 45 12M32 10l-2 18 18-9M45 12l10 6M45 12l-7-7" stroke="#57465e" stroke-width="7"/><path d="M18 54 44 13M33 11l-2 15 16-8" stroke="#ffe49b" stroke-width="3"/>');
+ return shell(`<path d="M8 54Q24 24 39 10q8-4 14 2" stroke="#51405d" stroke-width="8"/><path d="M9 53Q25 24 40 11q7-3 12 2" stroke="#ffdc92" stroke-width="4"/><path d="m11 48 7 4" stroke="#b36e49" stroke-width="6"/><circle cx="24" cy="37" r="7" fill="#88d9e8" stroke="#51405d" stroke-width="3"/><path d="M24 34v6m-3-3h6M53 13v24" stroke="#fff8e6" stroke-width="2.5"/><path d="M49 40q4-10 8 0v5a4 4 0 0 1-8 0z" fill="#ff987a" stroke="#51405d" stroke-width="2.5"/><path d="M49 41h8" stroke="#fff7db" stroke-width="3"/>${mode==='reel'?'<path d="m33 29 6-6 6 6M39 24v12" stroke="#fff6d8" stroke-width="4"/>':'<path d="M43 53q10 4 17-1M46 58q6 2 11 0" stroke="#efffff" stroke-width="3"/>'}`);
+}

@@ -16,7 +16,7 @@ export function coffinLid(p:FurniturePose,now:number){
  const age=now-p.since,closeAt=COFFIN_OPEN_MS+COFFIN_ENTER_MS+COFFIN_WAIT_MS;
  return age<COFFIN_OPEN_MS?smooth(age/COFFIN_OPEN_MS):age<closeAt?1:1-smooth((age-closeAt)/COFFIN_CLOSE_MS);
 }
-export function furnitureExpired(p:FurniturePose,now:number){return p.leavingAt!==undefined&&now>=p.leavingAt+FURNITURE_LEAVE_MS;}
+export function furnitureExpired(p:FurniturePose,now:number){return p.leavingAt!==undefined&&now>=p.leavingAt+(p.id===CURSED_COFFIN?FURNITURE_LEAVE_MS:0);}
 /** Validate relayed state before touching a scene; clients cannot author reservation times or seat indexes. */
 export function readFurniturePose(raw:unknown):FurniturePose|null{
  if(!raw||typeof raw!=='object')return null;const p=raw as FurniturePose;

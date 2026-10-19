@@ -50,6 +50,7 @@ export class FurnitureUse {
   if(!this.pose||this.pose.leavingAt!==undefined)return false;
   // Open the lid before exiting. Mark immediately so repeated taps cannot start another enter/exit.
   const pose=this.pose;pose.leavingAt=Date.now();
+  if(pose.id!==CURSED_COFFIN){this.cancel(false);if(this.world.requestFurniture)void this.world.requestFurniture(null);return true;}
   if(this.world.requestFurniture){const next=await this.world.requestFurniture(null);if(this.pose===pose&&next)this.pose=readFurniturePose(next);}
   return true;
  }
@@ -74,6 +75,7 @@ export class FurnitureUse {
   if(w.state!==this.garden||w.planet!=='home'||w.interior||w.boarded||w.state.hp<=0||w.playerFlying||w.playerHidden||!w.entities.includes(this.entity)){this.finish();return;}
   const at=furniturePoint(decoration(this.entity),this.pose.seat);if(Math.hypot(w.position.x-at.x,w.position.z-at.z)>4){const p=w.position.clone();this.cancel();w.position.copy(p);return;}
   if(active&&(w.keys.size>0||w.joystickInput))void this.leave();
+  if(!this.pose)return; // An immediate bench exit has already restored the standing pose.
   if(furnitureExpired(this.pose,now)){this.finish();return;}this.clearMovement();this.place();
  }
  draw(){if(this.pose&&this.entity)drawFurniture(this.world.player,this.entity,this.pose);}

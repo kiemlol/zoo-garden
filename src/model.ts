@@ -358,10 +358,11 @@ export const BED_SCALE = .6, BED_HALF = .585, BED_STEP = 1.23, BED_GAP = 1.19, T
  */
 export const CROP_SCALE = .72;
 /** Centre of the garden; hand-placed beds may also go on the BED_STEP grid around it. */
-export const GARDEN_CENTRE = { x: -12, z: 4.295 };
-/** The garden grid: 6 columns x 4 rows; row 0 leaves a grass strip below the west trail (z = 2.45). */
+export const GARDEN_CENTRE = { x: -12, z: 3.695 };
+export const YARD_BED_NUDGE = .6;
+/** The garden grid: 6 columns x 4 rows; row 0 leaves a grass strip below the west trail (z = 1.85). */
 export const GARDEN_COLUMNS = 6, GARDEN_ROWS = 4;
-const gridSpot = (column: number, row: number) => ({ x: +(GARDEN_CENTRE.x + (column - 2.5) * BED_STEP).toFixed(2), z: +(2.45 + row * BED_STEP).toFixed(2) });
+const gridSpot = (column: number, row: number) => ({ x: +(GARDEN_CENTRE.x + (column - 2.5) * BED_STEP).toFixed(2), z: +(1.85 + row * BED_STEP).toFixed(2) });
 /**
  * The 24 grid spots in fill order: the 3 x 3 starting block (west columns), then its fourth row, followed by the matching eastern 3 x 4 block.
  * Auto-placed beds take the first free one, so a growing garden fills the 6 x 4 grid instead of spreading.
@@ -922,6 +923,16 @@ function relocateYardUtilities(s:SaveState) {
  const moved=[{...next.cook,r:1.4},{...next.upgrade,r:1.5}];
  s.decorations=s.decorations.filter(d=>!moved.some(o=>Math.hypot(d.x-o.x,d.z-o.z)<o.r+(ITEMS[d.id]?.collider??.65))||!returnDecoration(s,d,true));
 }
+/** Layout v3 nudges the established bed block toward the trail and moves the crystal across the front path. */
+function refineYardActions(s:SaveState){
+ const yard={...yardOf(s),version:3 as const,upgrade:{x:2.6,z:2.6}};s.yardLayout=yard;
+ s.plots.forEach((p,i)=>{const at=bedPosition(s,i),target=defaultBed(i);if(Math.abs(at.x-target.x)<.01&&Math.abs(at.z-target.z-YARD_BED_NUDGE)<.01)p.z=target.z;});
+ yard.upgrade=fitYardAnchor(yard,'upgrade',yard.upgrade,s.plots.map((p,i)=>({...bedPosition(s,i),r:bedSpan(p.rotation)*Math.SQRT2})));
+ s.decorations=s.decorations.filter(d=>{
+  const r=ITEMS[d.id]?.collider??.65,conflict=Math.hypot(d.x-yard.upgrade.x,d.z-yard.upgrade.z)<r+1.5||s.plots.some((p,i)=>{const b=bedPosition(s,i),half=bedSpan(p.rotation);return Math.hypot(Math.max(0,Math.abs(d.x-b.x)-half),Math.max(0,Math.abs(d.z-b.z)-half))<r;});
+  return !conflict||!returnDecoration(s,d,true);
+ });
+}
 export function parseSave(raw: string | null): SaveState | null {
     if (!raw)
         return null;
@@ -931,7 +942,7 @@ export function parseSave(raw: string | null): SaveState | null {
             return null;
         const s = newGame(v.name, typeof v.color === 'string' && /^#[0-9a-f]{6}$/i.test(v.color) ? v.color : COLORS[0]);
         s.yardLayout = readYardLayout(v.yardLayout);
-        const legacy = !(typeof v.contentVersion === 'number' && v.contentVersion >= 2), oldCropTimers = !(typeof v.contentVersion === 'number' && v.contentVersion >= 3), layoutBed = v.gardenLayout === GARDEN_LAYOUT ? (readYardLayout(v.yardLayout) ? defaultBed : previousBed) : v.gardenLayout === 3 ? layout3Bed : v.gardenLayout === 2 ? layout2Bed : legacyBed;
+        const legacy = !(typeof v.contentVersion === 'number' && v.contentVersion >= 2), oldCropTimers = !(typeof v.contentVersion === 'number' && v.contentVersion >= 3), layoutBed = v.gardenLayout === GARDEN_LAYOUT ? (readYardLayout(v.yardLayout) ? (v.yardLayout.version<3?(i:number)=>({...defaultBed(i),z:+(defaultBed(i).z+YARD_BED_NUDGE).toFixed(2)}):defaultBed) : previousBed) : v.gardenLayout === 3 ? layout3Bed : v.gardenLayout === 2 ? layout2Bed : legacyBed;
         const inventory = (data: unknown): Inventory => { const result: Inventory = {}; if (record(data))
             for (const [raw, n] of Object.entries(data)) {
                 const id = canonicalItem(raw);
@@ -1054,6 +1065,7 @@ export function parseSave(raw: string | null): SaveState | null {
         if (v.gardenLayout === GARDEN_LAYOUT || !readYardLayout(v.yardLayout)) { trimGarden(s); settleBeds(s); s.gardenLayout = GARDEN_LAYOUT; } else shrinkGarden(s, v.gardenLayout === 3 ? 3 : v.gardenLayout === 2 ? 2 : 1);
         if (!s.gardenTrim && record(v.gardenTrim) && Number.isSafeInteger(v.gardenTrim.beds) && v.gardenTrim.beds > 0) s.gardenTrim = { beds: Math.min(99, v.gardenTrim.beds), energy: integer(v.gardenTrim.energy), items: inventory(v.gardenTrim.items) };
         if(s.yardLayout!.version<2)relocateYardUtilities(s);
+        if(s.yardLayout!.version<3)refineYardActions(s);
         // The guard dog is a pet now (pet-slots.ts): a save that owns the dog gets its item, worn in the free pet slot, so it follows as before.
         syncDogPet(s);
         const hunting = parseHunting(v.hunting); if (hunting) s.hunting = hunting;

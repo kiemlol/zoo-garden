@@ -618,40 +618,6 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
   text-shadow: 0 1px 2px rgba(20, 50, 20, .6);
 }
 
-#context-prompt {
-  position: absolute;
-  left: 50%;
-  bottom: calc(46px + var(--safe-bottom));
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-#context-prompt button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 18px 7px 7px;
-  border-radius: 999px;
-  border: 3px solid #fff;
-  background: linear-gradient(180deg, #6fe056, var(--grass));
-  color: #fff;
-  font-size: var(--t-md);
-  font-weight: 1000;
-  text-shadow: 0 1px 0 rgba(0, 60, 0, .35);
-  box-shadow: 0 4px 0 var(--grass-deep), 0 10px 22px rgba(20, 60, 20, .25);
-}
-#context-prompt kbd {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: #fff;
-  color: var(--grass-deep);
-  font-size: var(--t-sm);
-  font-weight: 1000;
-  text-shadow: none;
-}
-
 #touch-controls { display: none; }
 
 /* Fishing: a big round Reel button, pressed while held and pulsing on a bite. */
@@ -661,25 +627,33 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
   bottom: calc(84px + var(--safe-bottom));
   width: 108px;
   height: 108px;
+  min-width: 0;
+  min-height: 0;
+  padding: 4px;
+  box-sizing: border-box;
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
   border-radius: 50%;
-  border: 5px solid #fff;
-  background: radial-gradient(circle at 35% 30%, #8fd8ff, #2f7fd6);
-  box-shadow: 0 6px 0 rgba(20, 60, 120, .35), 0 14px 28px rgba(20, 50, 90, .3);
+  border: 4px solid #f3e4ff;
+  outline: 2px solid #71547e;
+  background: linear-gradient(145deg,#e7b5f6,#b67ad2);
+  box-shadow: inset 0 3px 0 #fff6,0 4px 0 #79589966;
   color: #fff;
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 2px;
+  grid-template-rows: minmax(0,1fr) auto;
+  gap: 0;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   animation: pop .25s cubic-bezier(.2, 1.3, .5, 1);
 }
 .reel-hud .reel-icon { font-size: 36px; line-height: 1; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .2)); }
-#reel-text { font-size: var(--t-md); font-weight: 1000; text-shadow: 0 2px 0 rgba(10, 40, 80, .5); }
+#reel-text { white-space: nowrap; line-height: 1.05; font-size: var(--t-md); font-weight: 1000; text-shadow: 0 2px 0 rgba(10, 40, 80, .5); }
 .reel-hud.down { transform: scale(.9); background: radial-gradient(circle at 35% 30%, #6fc2f0, #1f5fb0); }
 .reel-hud.bite { animation: reel-bite .35s ease-in-out infinite; background: radial-gradient(circle at 35% 30%, #ffe27a, #ff8a2a); }
-.reel-hud.cast { width: 92px; height: 92px; background: radial-gradient(circle at 35% 30%, #a8f58a, #37b82c); box-shadow: 0 6px 0 rgba(20, 90, 20, .35); }
+.reel-hud.cast { background: linear-gradient(145deg,#8ee1f1,#50bcd6); }
 @keyframes reel-bite { 50% { transform: scale(1.1) rotate(-6deg); } }
 /* Line strained (fishing.ts STRAIN): the button flashes red until Reel is let go. */
 .reel-hud.strained { animation: reel-strain .22s ease-in-out infinite; background: radial-gradient(circle at 35% 30%, #ff9a8a, #d8262c); }
@@ -701,7 +675,6 @@ button, input, #dialog, #title-screen { pointer-events: auto; }
 #hud.fishing .skills { opacity: .35; }
 #hud.fishing .skills button { pointer-events: none; }
 #hud.fishing #touch-controls { display: none !important; }
-#hud.fishing #context-prompt { display: none !important; }
 #hud.fishing .home-button { visibility: hidden; }
 /* Reference placement bar: one line naming the item, a refusal note while the spot is bad, three small buttons. It sits
    above the toast stack so the placement toasts never cover ✔ Place. */
@@ -1698,8 +1671,6 @@ h1 > span {
   #fish-hint { right: 10px; bottom: calc(182px + var(--safe-bottom)); }
   .home-button span { display: none; }
   .save-indicator { display: none; }
-  #context-prompt { bottom: calc(96px + var(--safe-bottom)); }
-  #context-prompt button { font-size: var(--t-sm); }
   #toasts { bottom: calc(150px + var(--safe-bottom)); }
   .toast { font-size: var(--t-sm); padding: 7px 14px 7px 7px; border-radius: 20px; }
   .toast > span { width: 28px; height: 28px; font-size: 16px; }
@@ -1768,8 +1739,6 @@ h1 > span {
     touch-action: none;
   }
   #touch-controls button[data-action="attack"] { background: rgba(226, 73, 63, .8); }
-  #context-prompt kbd { font-size: 0; }
-  #context-prompt kbd::before { content: '👆'; font-size: 16px; }
   .skill > kbd { display: none; }
 }
 @media (pointer: coarse) and (max-width: 600px) {
@@ -1777,7 +1746,6 @@ h1 > span {
   #placement-bar { bottom: calc(212px + var(--safe-bottom)); }
   body.placing #toasts { bottom: calc(330px + var(--safe-bottom)); }
   #touch-controls button { width: 34px; height: 34px; }
-  #context-prompt { left: 10px; transform: none; bottom: calc(96px + var(--safe-bottom)); }
   #toasts { left: 10px; transform: none; align-items: flex-start; max-width: calc(100vw - 140px); bottom: calc(150px + var(--safe-bottom)); }
 }
 /* Touch: panel bodies never take taps, so a tap on a creature behind a tracker reaches the creature (CC-2, F17).
@@ -1839,9 +1807,6 @@ h1 > span {
   .skill > small, .skill > kbd, .control-hint, .save-indicator { display: none; }
   .home-button { bottom: 0; height: 40px; padding: 0 10px; }
   .home-button span { display: none; }
-  #context-prompt { bottom: calc(8px + var(--safe-bottom)); }
-  #context-prompt button { padding: 4px 14px 4px 4px; font-size: var(--t-sm); }
-  #context-prompt kbd { width: 26px; height: 26px; }
   #touch-controls { right: 10px; bottom: calc(56px + var(--safe-bottom)); gap: 3px; }
   #touch-controls > div { gap: 3px; }
   #touch-controls button { width: 32px; height: 32px; }
@@ -2000,3 +1965,12 @@ html, body { touch-action: manipulation; -webkit-touch-callout: none; -webkit-us
 #touch-controls, #touch-controls *, #app .reel-button, #boost-button { touch-action: none; }
 
 @media (pointer: coarse) { input, textarea, select { font-size: max(16px, 1em); } }
+
+/* Same circular framing as the gacha orbs; fixed equal sides resist global button minimums. */
+.reel-hud .reel-icon { display:block; width:auto; height:100%; max-height:48px; aspect-ratio:1; }
+.reel-hud svg { display:block; width:100%; height:100%; }
+.reel-hud.activity-exit { background:linear-gradient(145deg,#f5dfbb,#d5b58c); padding:0; }
+.reel-hud.activity-exit svg { filter:drop-shadow(0 2px 0 #fff8); }
+#hud.carriage-riding .skills { opacity:.35; pointer-events:none; }
+
+.reel-hud.activity-exit > svg { width:54%; height:54%; }

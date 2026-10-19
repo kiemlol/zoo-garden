@@ -1,5 +1,5 @@
+import {activityIcon} from './activity-icons.ts';
 import {decorationControls,decorationPanel} from './decoration-ui.ts';
-import {showContextPrompt} from './context-prompt.ts';
 import {readYardLayout} from './home-layout.ts';
 import {gachaIconUrl} from './gacha-art.ts';
 import {HalloweenGachaPanel} from './halloween-gacha-ui.ts';
@@ -271,8 +271,8 @@ app.innerHTML = `
     <div id="boss-bar" hidden><span id="boss-icon">👑</span><div><div class="boss-head"><strong id="boss-name"></strong></div><div class="boss-meter"><i id="boss-fill"></i></div></div></div>
     <div id="target-frame" hidden aria-live="off"><span class="target-icon"></span><div><div class="target-head"><strong></strong><span class="target-level">Lv 1</span></div><div class="target-meter"><i></i><b class="target-hp"></b></div></div></div>
     <div id="zone-banner" role="status"><strong id="banner-name">Clover Village</strong><small id="banner-detail">A little place to call home</small><span id="banner-chip"></span></div>
-    <button id="reel-button" class="reel-hud" data-action="reel" hidden aria-label="Reel in the line"><span class="reel-icon" aria-hidden="true">🎣</span><span id="reel-text">Reel</span></button><div id="fish-hint" role="status" hidden></div>
-    <div id="context-prompt" hidden><button id="interact-button" data-action="interact"><kbd>F</kbd><span id="interact-text">Interact</span></button></div>
+    <button id="reel-button" class="reel-hud" data-action="reel" hidden aria-label="Reel in the line"><span class="reel-icon" aria-hidden="true">${activityIcon('reel')}</span><span id="reel-text">Reel</span></button><div id="fish-hint" role="status" hidden></div>
+    <button id="rest-exit-button" class="reel-hud activity-exit" data-action="leave-furniture" hidden aria-label="Rời chỗ">${activityIcon('exit')}</button>
     <div class="bottom-bar"><div class="skills" aria-label="Combat skills"><button class="skill skill-spin" data-action="skill" data-index="0" aria-label="Q Petal Gale"><kbd>Q</kbd><span>${hudIcon('gale')}</span><small>Petal Gale</small><b class="cooldown"></b></button><button class="skill skill-dash" data-action="skill" data-index="1" aria-label="W Breeze Step"><kbd>W</kbd><span>${hudIcon('breeze')}</span><small>Breeze Step</small><b class="cooldown"></b></button><button class="skill skill-stomp" data-action="skill" data-index="2" aria-label="E Root Quake"><kbd>E</kbd><span>${hudIcon('quake')}</span><small>Root Quake</small><b class="cooldown"></b></button><button class="skill skill-special" data-action="skill" data-index="3" aria-label="R Paw Storm"><kbd>R</kbd><span>${hudIcon('paw')}</span><small id="special-name">Paw Storm</small><b class="cooldown"></b></button><button class="attack-pad" data-action="attack" aria-label="Tornado" title="Tornado">${hudIcon('gale')}<b class="cooldown"></b></button></div><div id="keys-guide" class="keys-guide" aria-label="Keyboard controls"></div><div class="control-hint"><span>Click to wander</span><i>•</i> <span id="movement-hint">Arrows to move</span> <i>•</i> <kbd>Space</kbd> attack</div><button class="home-button" data-action="return-home" title="Return home">${hudIcon('home')} <span>Home</span></button></div>
     <div id="touch-controls"><button data-move="ArrowUp" aria-label="Move up">▲</button><div><button data-move="ArrowLeft" aria-label="Move left">◀</button><button data-action="attack" aria-label="Attack">⚔</button><button data-move="ArrowRight" aria-label="Move right">▶</button></div><button data-move="ArrowDown" aria-label="Move down">▼</button></div>
     <div id="environment-bar" aria-label="Environment"></div><div id="placement-bar" hidden><p><span id="placement-name"></span><span id="placement-hint"></span></p><div class="placement-buttons"><button class="sky-button" data-action="rotate-decor">↻ Rotate</button><button class="primary" data-action="confirm-place">✔ Place</button><button class="soft-button" data-action="cancel-decor" aria-label="Cancel">✕</button></div></div><div id="visit-banner" hidden></div>
@@ -535,8 +535,7 @@ function updateHud() {
 
   // The prompt stays short (the target frame names the creature) so the biggest tappable thing on a phone stays small.
   $('#hud').classList.toggle('carriage-riding',!!world.resting);
-  $('#interact-button').dataset.action=world.furniture?.active?'leave-furniture':world.carriage?.active?'leave-carriage':'interact';
-  if(started&&!modal){const e=world.nearest();$('#context-prompt').hidden=!showContextPrompt(e?.kind,!!world.furniture?.active||!!world.carriage?.active);$('#interact-text').textContent=t(e?world.furniture?.active?'Leave furniture':world.carriage?.active?'Leave carriage':isRestFurniture(e)?e.mesh.userData.decorationId==='deco_cursed_coffin'?'Lie in coffin':'Sit on bench':isGhostCarriage(e)?'Board carriage':e.kind==='enemy'?'Attack':e.kind==='plot'?world.state.plots[e.index!]?.crop?M.cropProgress(world.state.plots[e.index!])===1?'Harvest crop':'Check growing crop':'Plant a seed':e.name:'');}else $('#context-prompt').hidden=true;
+
 }
 // The zone banner is outlined text with a difficulty chip and no card (C2): it plays once for 2.8 s and never blocks taps.
 let zoneTimer=0;
@@ -558,7 +557,7 @@ interface LabelAnchor {e:Entity;wy:number;back:number;dx:number;centre:boolean;w
 const labelAnchors=new Map<string,LabelAnchor>();
 let hudPanels:{left:number;right:number;top:number;bottom:number}[]=[];
 let hudFresh=false;
-function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#keys-guide,#hud .minimap,#boss-bar,#target-frame,#hud .skills,#hud .home-button,#context-prompt,#touch-controls,#movement-joystick').forEach(node=>{const r=node.getBoundingClientRect();if(r.width&&r.height)hudPanels.push(r);});}
+function measureHud(){hudPanels=[];document.querySelectorAll('#hud .player-card,#hud .top-actions,#hud .tracker-stack,#keys-guide,#hud .minimap,#boss-bar,#target-frame,#hud .skills,#hud .home-button,#reel-button,#rest-exit-button,#touch-controls,#movement-joystick').forEach(node=>{const r=node.getBoundingClientRect();if(r.width&&r.height)hudPanels.push(r);});}
 /** The label's screen box at its anchor: bottom centre for buildings, centre for the small crop marks. */
 function labelRect(a:LabelAnchor){const p=world.screen(a.e.x+a.dx,a.wy,a.e.z-a.back),top=p.y-(a.centre?a.h/2:a.h);return {x:p.x,y:p.y,front:p.front,left:p.x-a.w/2,right:p.x+a.w/2,top,bottom:top+a.h};}
 const smallLabels=()=>viewWidth()<=600||viewHeight()<=520;
@@ -995,7 +994,7 @@ function settings(){openDialog('settings','Your little preferences',`<div class=
 function help(){openDialog('help','A small guide to a big world',`<div class="help-grid">${HELP_TOPICS.filter(([,title])=>title!=='Four moves'&&(airOn()||title!=='Jump and air combat')).map(row=>airOn()&&row[1]==='Four skills'?HELP_TOPICS.find(r=>r[1]==='Four moves')??row:row).map(([icon,title,body])=>`<div><span>${icon}</span><h3>${esc(t(title))}</h3><p>${esc(t(body))}</p></div>`).join('')}</div><div class="button-row"><button class="soft-button" data-action="fullscreen">⛶ ${t('Fullscreen')}</button></div>`,'MAKE YOURSELF AT HOME');}
 
 // Fishing happens in the world: no panel, just the pond, the line and a big Reel button.
-let fishPond:Entity|null=null,recastUntil=0;
+let fishPond:Entity|null=null;
 const fishingView=new FishingView(world.scene,world.fx!,fishKit,sound=>tone(sound));
 world.fishingBobber=()=>fishingView.bobberPose();
 // The mystery shadow is called only while fishing (fishing.ts attractMystery): offline this caller decides, online the server's does and this one mirrors it for the view.
@@ -1078,7 +1077,21 @@ function stockPonds(){fishingView.attach(world.scene);fishingView.populate(world
 // Rod fish follow the harpoon slots' species so picking up hunting gear by the shore keeps the pond's look.
 function pondStock(pond:PondView){const hunt=huntingPondAt(state.planet,pond.x,pond.z);return hunt?fishHuntTargets(hunt,0,state.hunting).map(t=>t.id):null;}
 const formatSize=(cm:number)=>cm>=100?`${(cm/100).toFixed(2).replace(/\.?0+$/,'')} m`:`${cm} cm`;
-function showReel(on:boolean,mode:'reel'|'cast'|'hunt'='reel'){const button=$('#reel-button');button.hidden=!on;button.classList.toggle('cast',mode==='cast');button.classList.toggle('hunt',mode==='hunt');button.classList.remove('bite','down');button.removeAttribute('aria-pressed');button.setAttribute('aria-label',t(mode==='hunt'?'Hunt a fish':mode==='cast'?'Cast':'Reel in the line'));$('#reel-text').textContent=t(mode==='hunt'?'Hunt':mode==='cast'?'Cast':'Reel');$('.reel-icon').textContent=mode==='hunt'?'🔱':'🎣';$('#hud').classList.toggle('fishing',on&&mode==='reel');$('#fish-hint').hidden=!(on&&mode!=='cast');}
+function showReel(on:boolean,mode:'reel'|'cast'|'hunt'='reel'){const button=$('#reel-button');button.hidden=!on;button.classList.toggle('cast',mode==='cast');button.classList.toggle('hunt',mode==='hunt');button.classList.remove('bite','down');button.removeAttribute('aria-pressed');button.setAttribute('aria-label',t(mode==='hunt'?'Hunt a fish':mode==='cast'?'Câu cá':'Reel in the line'));$('#reel-text').textContent=t(mode==='hunt'?'Hunt':mode==='cast'?'Câu cá':'Reel');const icon=$('.reel-icon');if(icon.dataset.mode!==mode){icon.innerHTML=activityIcon(mode);icon.dataset.mode=mode;}$('#hud').classList.toggle('fishing',on&&mode==='reel');$('#fish-hint').hidden=!(on&&mode!=='cast');}
+/** One circular action owns this corner: leave a seat, reel, hunt, or cast at the nearby pond. */
+function updateActivityButton(){
+ const exit=$('#rest-exit-button'),button=$('#reel-button');
+ const available=started&&!uiBlocked()&&!document.hidden&&!flight&&!placement&&state.hp>0;
+ exit.hidden=!(available&&world.resting);
+ if(!exit.hidden){exit.dataset.action=world.furniture?.active?'leave-furniture':'leave-carriage';showReel(false);return;}
+ if(fishGame)return;
+ if(!available||visiting||world.interior||world.resting){if(!button.hidden)showReel(false);return;}
+ if(button.classList.contains('hunt'))return;
+ const pond=world.entities.filter(e=>e.kind==='fish'&&e.pond&&Math.hypot(e.x-world.position.x,e.z-world.position.z)<=e.radius+3)
+  .sort((a,b)=>(Math.hypot(a.x-world.position.x,a.z-world.position.z)-a.radius)-(Math.hypot(b.x-world.position.x,b.z-world.position.z)-b.radius))[0];
+ if(pond){fishPond=pond;if(button.hidden||!button.classList.contains('cast'))showReel(true,'cast');}
+ else if(!button.hidden)showReel(false);
+}
 function endFishing(message?:string,icon='🎣'){fishingEpoch++;const was=!!fishGame;if(fishGame){mysteryGotAway(fishGame);fishingView.dropMystery(fishGame.pondId);}if(fishGame?.ticket&&actionHandler)void perform('fishCancel',{ticketId:fishGame.ticket});fishGame=null;fishingView.cancel();world.fishing='idle';showReel(false);if(was&&message)toast(message,icon);}
 /** Apply only actual changes: staying by the shore must not rebuild the avatar or save every frame. */
 function applyContextWeapon(id:M.ItemId|null){
@@ -1219,7 +1232,7 @@ function updateFishing(dt:number){
     mysteryGotAway(f);
     if(f.ticket&&actionHandler)void perform('fishCancel',{ticketId:f.ticket});
     if(sim.snapped){fishingView.snap();setTimeout(()=>floating('Line snapped! 💔',world.position.x,world.position.z,'hurt'),250);}else fishingView.cancel();
-    showReel(true,'cast');recastUntil=performance.now()+6000;toast(sim.reason,'💧');return;
+    showReel(true,'cast');toast(sim.reason,'💧');return;
   }
   showReel(false);void finishFishingCatch(f);
 }
@@ -1244,7 +1257,7 @@ async function finishFishingCatch(f:FishingRound){
       {const m=caught&&reward.size>0?M.catchMultiplier(caught,reward.size,reward.huge):1;if(m>=1.5)setTimeout(()=>floating(t('×{n} size bonus',{n:m.toFixed(1)}),world.position.x,world.position.z,'level'),900);}
       if(reward.mystery)toast(reward.supergiant?'The mysterious shadow was a supergiant fish!':'A treasure was hiding beneath the question mark!',item.icon);
       else if(caught?.rarity==='legendary')toast(t('Legendary catch! {name}, {size}.',{name:t(caught.name),size:formatSize(reward.size)}),'👑');
-      if(!fishGame){showReel(true,'cast');recastUntil=performance.now()+6000;}
+      if(!fishGame){showReel(true,'cast');}
     },{id:reward.id,supergiant:reward.supergiant,icon:item.icon,fish:!!caught});
 }
 
@@ -1446,7 +1459,7 @@ function syncAirCombat(){
   world.jumpRules=on;combat.edge.moves=on;skillTips.clear();document.body.classList.toggle('air-combat',on);
   if(on&&!document.querySelector('#hud .jump-pad')){
     $('#hud .skills').insertAdjacentHTML('beforeend',`<button class="jump-pad" data-action="jump">${hudIcon('jump')}</button>`);
-    $('#context-prompt').insertAdjacentHTML('beforebegin','<div id="combo-chip" hidden aria-hidden="true"><b id="combo-count"></b><span id="combo-word"></span><i id="combo-bonus"></i><em id="combo-steps"><u></u><u></u><u></u><u></u></em></div>');
+    $('#reel-button').insertAdjacentHTML('beforebegin','<div id="combo-chip" hidden aria-hidden="true"><b id="combo-count"></b><span id="combo-word"></span><i id="combo-bonus"></i><em id="combo-steps"><u></u><u></u><u></u><u></u></em></div>');
   }
   const pad=document.querySelector<HTMLElement>('#hud .jump-pad');if(pad){pad.hidden=!on;pad.setAttribute('aria-label',t('Jump'));pad.title=t('Jump');}
   // Desktop shows both as tray buttons with their key and name (hud-ours.css reads these attributes).
@@ -2152,7 +2165,7 @@ function frame(now:number){
   updateHunting(dt);updateGuardian(dt);
   fishingView.update(dt,world.time,fishGame||fishingView.active?tipPosition():rodTip,world.interior?FAR_AWAY:world.position,fishGame?.simulation??null);
   skillFx.update(dt);world.gazeAngle=skillFx.gazeAngle(world.player);
-  if(!fishGame&&!$('#reel-button').hidden&&!$('#reel-button').classList.contains('hunt')&&(performance.now()>recastUntil||world.moving))showReel(false);
+  updateActivityButton();
   // Resizing the WebGL canvas clears its drawing buffer. Apply automatic quality changes
   // before drawing, so the browser never presents an empty frame during a quality transition.
   const graphicsChange=graphics.sample(realDt,started&&!document.hidden&&!uiBlocked()&&performance.now()>settledAt);if(graphicsChange)world.applyGraphics(graphics.profile,graphics.ratio);if(graphics.takeSave())saveGraphics(graphics);

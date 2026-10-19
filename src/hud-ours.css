@@ -226,9 +226,9 @@ svg.hi { display: block; width: 1em; height: 1em; flex: none; overflow: visible;
   #app #hud .attack-pad > svg { width: 60%; height: 60%; }
   #app #hud .attack-pad:active { translate: 0 2px; filter: brightness(.94); }
   /* Fishing: the cast / reel button stands over the paw, left of the dock; its hint sits between them. */
-  #app #hud #reel-button { position: fixed; left: auto; right: var(--col); bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 16px); }
-  #app #hud #reel-button + #fish-hint { left: auto; right: var(--col); bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 132px); }
-  #app #hud.joystick-right #reel-button, #app #hud.joystick-right #reel-button + #fish-hint { right: auto; left: calc(18px + var(--safe-left)); }
+  #app #hud :is(#reel-button,#rest-exit-button) { position: fixed; left: auto; right: var(--col); bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 16px); }
+  #app #hud :is(#reel-button,#rest-exit-button) + #fish-hint { left: auto; right: var(--col); bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 132px); }
+  #app #hud.joystick-right :is(#reel-button,#rest-exit-button), #app #hud.joystick-right :is(#reel-button,#rest-exit-button) + #fish-hint { right: auto; left: calc(18px + var(--safe-left)); }
 }
 body.indoors #app #hud .skills { display: none; }
 
@@ -263,12 +263,12 @@ body.indoors #app #hud .skills { display: none; }
   body.air-combat #app #hud .jump-pad[hidden] { display: none; }
   body.air-combat #app #hud .jump-pad > svg { width: 60%; height: 60%; pointer-events: none; }
   body.air-combat #app #hud .jump-pad:active { translate: 0 2px; filter: brightness(.94); }
-  body.air-combat #app #hud #reel-button { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 16px); }
-  body.air-combat #app #hud #reel-button + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 132px); }
+  body.air-combat #app #hud :is(#reel-button,#rest-exit-button) { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 16px); }
+  body.air-combat #app #hud :is(#reel-button,#rest-exit-button) + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 132px); }
 }
 @media (orientation: portrait) and (max-width: 600px), (max-height: 520px) and (orientation: landscape) {
-  body.air-combat #app #hud #reel-button { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 58px); }
-  body.air-combat #app #hud #reel-button + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 8px); }
+  body.air-combat #app #hud :is(#reel-button,#rest-exit-button) { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 58px); }
+  body.air-combat #app #hud :is(#reel-button,#rest-exit-button) + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.55 + 8px); }
 }
 @media (max-height: 500px) and (orientation: landscape) {
   body.air-combat.in-rescue #rescue-build, body.air-combat.in-rescue[data-rescue-orient="portrait"] #rescue-build { right: calc(var(--safe-right) + 18px + var(--sk) * 3.784 + 8px); }
@@ -319,8 +319,8 @@ body.indoors #app #hud .skills { display: none; }
   #app #hud .experience > span { font-size: 8.5px; }
   #app #hud .tracker-stack { top: calc(var(--edge) + var(--safe-top) + var(--hero-h) + 6px); width: min(188px, calc(100vw - var(--dock-w) - var(--mm) - var(--edge) * 3 - var(--safe-left) - var(--safe-right) - 12px)); }
   #app #hud .home-button, #app #hud.joystick-on .home-button, #app #hud.joystick-on.joystick-right .home-button { width: 44px; height: 44px; padding: 0; justify-content: center; }
-  #app #hud #reel-button { width: 56px; height: 56px; bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 58px); }
-  #app #hud #reel-button + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 8px); max-width: min(190px, calc(100vw - var(--col) - var(--safe-left) - 154px)); }
+  #app #hud :is(#reel-button,#rest-exit-button) { width: 56px; height: 56px; bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 58px); }
+  #app #hud :is(#reel-button,#rest-exit-button) + #fish-hint { bottom: calc(22px + var(--safe-bottom) + var(--sk) * 2.38 + 8px); max-width: min(190px, calc(100vw - var(--col) - var(--safe-left) - 154px)); }
 }
 @media (orientation: portrait) and (max-width: 600px) {
   /* The row for the boss bar: under the map and Home, and under the left column as it stands in a fight (the folded quest
@@ -363,7 +363,7 @@ body.indoors #app #hud .skills { display: none; }
 @media (min-width: 601px) { #app.target-on .colossus-banner { top: calc(78px + var(--safe-top)); } }
 /* Desktop fishing: the cast / reel button stands clear above the skill tray. */
 @media (pointer: fine) and (min-width: 901px) and (min-height: 521px) {
-  #app #hud #reel-button { bottom: calc(132px + var(--safe-bottom)); }
+  #app #hud :is(#reel-button,#rest-exit-button) { bottom: calc(132px + var(--safe-bottom)); }
   #app #hud #fish-hint { right: 144px; bottom: calc(168px + var(--safe-bottom)); }
 }
 /* 360 px and narrower: the portrait tile steps aside (the satchel is the first dock button). Its level badge moves up
@@ -499,14 +499,14 @@ body.in-rescue #app #hud .home-button { right: calc(var(--edge) + var(--safe-rig
     right: calc(var(--col) + max(var(--mm), 96px) + 12px); top: calc(120px + var(--safe-top));
     width: auto; transform: none;
   }
-  #app #hud #reel-button, body.air-combat #app #hud #reel-button {
+  #app #hud :is(#reel-button,#rest-exit-button), body.air-combat #app #hud :is(#reel-button,#rest-exit-button) {
     right: calc(18px + var(--safe-right) + var(--fight-width, var(--sk) * 3.66) + 16px); left: auto; bottom: calc(22px + var(--safe-bottom));
   }
-  #app #hud #reel-button + #fish-hint, body.air-combat #app #hud #reel-button + #fish-hint {
+  #app #hud :is(#reel-button,#rest-exit-button) + #fish-hint, body.air-combat #app #hud :is(#reel-button,#rest-exit-button) + #fish-hint {
     right: calc(18px + var(--safe-right) + var(--fight-width, var(--sk) * 3.66) + 16px); left: auto; bottom: calc(90px + var(--safe-bottom)); max-width: 150px;
   }
-  #app #hud.joystick-right #reel-button, body.air-combat #app #hud.joystick-right #reel-button,
-  #app #hud.joystick-right #reel-button + #fish-hint, body.air-combat #app #hud.joystick-right #reel-button + #fish-hint {
+  #app #hud.joystick-right :is(#reel-button,#rest-exit-button), body.air-combat #app #hud.joystick-right :is(#reel-button,#rest-exit-button),
+  #app #hud.joystick-right :is(#reel-button,#rest-exit-button) + #fish-hint, body.air-combat #app #hud.joystick-right :is(#reel-button,#rest-exit-button) + #fish-hint {
     right: auto; left: calc(18px + var(--safe-left) + var(--fight-width, var(--sk) * 3.66) + 16px);
   }
 }
@@ -545,16 +545,15 @@ body.air-combat { --fight-width: calc(var(--sk) * 3.784); }
 /* A boss and an interaction prompt can appear together. Reserve distinct rows
    beneath the status plate instead of deriving both from the bottom edge. */
 @media (max-width: 600px) and (min-height: 521px) {
-  #app.boss-on #hud #context-prompt { top: calc(var(--row3) + 60px); bottom: auto; }
   #app.boss-on #hud #target-frame { top: calc(var(--row3) + 120px); bottom: auto; }
 }
 @media (max-height: 520px) and (min-width: 601px) {
-  #app:has(#reel-button:not([hidden])) #stored-note { right: calc(18px + var(--safe-right) + var(--fight-width, var(--sk) * 3.66) + 84px); }
-  #app:has(#hud.joystick-right):has(#reel-button:not([hidden])) #stored-note { left: max(calc(var(--hero-w) + var(--edge) + var(--safe-left) + 8px), calc(18px + var(--safe-left) + var(--fight-width, var(--sk) * 3.66) + 84px)); }
+  #app:has(:is(#reel-button,#rest-exit-button):not([hidden])) #stored-note { right: calc(18px + var(--safe-right) + var(--fight-width, var(--sk) * 3.66) + 84px); }
+  #app:has(#hud.joystick-right):has(:is(#reel-button,#rest-exit-button):not([hidden])) #stored-note { left: max(calc(var(--hero-w) + var(--edge) + var(--safe-left) + 8px), calc(18px + var(--safe-left) + var(--fight-width, var(--sk) * 3.66) + 84px)); }
 }
 @media (max-width: 600px) {
-  #app:has(#reel-button:not([hidden])) #stored-note { right: calc(var(--col) + 68px); }
-  #app:has(#hud.joystick-right):has(#reel-button:not([hidden])) #stored-note { left: calc(86px + var(--safe-left)); right: var(--col); }
+  #app:has(:is(#reel-button,#rest-exit-button):not([hidden])) #stored-note { right: calc(var(--col) + 68px); }
+  #app:has(#hud.joystick-right):has(:is(#reel-button,#rest-exit-button):not([hidden])) #stored-note { left: calc(86px + var(--safe-left)); right: var(--col); }
 }
 @media (pointer: coarse) {
   #app #hud #quest-summary.can-walk { min-height: 44px; }
