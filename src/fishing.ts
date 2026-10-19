@@ -99,6 +99,14 @@ export function planCast(water:Water, player:Point, tap:Point){
   return {shore,cast};
 }
 
+/** Rotate the old cast's reach onto the current facing. Never turn the player or shorten a cast to hit water. */
+export function planForwardCast(water:Water,player:Point,facing:number,reference:Point=water){
+ const previous=planCast(water,player,reference),distance=Math.hypot(previous.cast.x-player.x,previous.cast.z-player.z);
+ const cast={x:player.x+Math.sin(facing)*distance,z:player.z+Math.cos(facing)*distance};
+ if(!Number.isFinite(facing)||Math.hypot(cast.x-water.x,cast.z-water.z)>water.r-CAST.edgeGap+1e-8)return null;
+ return {...previous,cast};
+}
+
 /** An early press: the bobber moves 0.7 m toward the explorer; near the rim the line is reeled in. */
 export function earlyPull(water:Water, cast:Point, player:Point){
   const dx=player.x-cast.x,dz=player.z-cast.z,d=Math.hypot(dx,dz)||1;

@@ -17,7 +17,7 @@ test('yard migration moves the twelve beds into a clear 3 by 4 block without cha
  assert.deepEqual(reload(r),r,'loading the migrated save twice is idempotent');
 });
 test('replacement shops and pink tree use saved anchors; displaced items return exactly once even into a full bag',()=>{
- const s=oldGarden();s.bag=Object.fromEntries(Object.keys(M.ITEMS).slice(0,60).map(id=>[id,1]));
+ const s=oldGarden();s.bag=Object.fromEntries(Object.keys(M.ITEMS).slice(0,M.bagCapacity(s)+5).map(id=>[id,1]));
  const yard=defaultYardLayout();s.decorations=[decoration('coffin','deco_cursed_coffin',yard.stores.craft.x,yard.stores.craft.z),decoration('tree','deco_cursed_tree',yard.stores.shop.x,yard.stores.shop.z),decoration('teddy','deco_undying_teddy',-12,9),decoration('well','deco_aquarium',YARD_WELL.x,YARD_WELL.z),decoration('chest','deco_aquarium',YARD_CHEST.x,YARD_CHEST.z),decoration('pen','deco_aquarium',M.PEN.x,M.PEN.z),decoration('bed','deco_aquarium',M.defaultBed(0).x,M.defaultBed(0).z),decoration('market','deco_aquarium',yard.stores.sell.x,yard.stores.sell.z),decoration('untouched','deco_cursed_bench',4,3)];
  s.decorations[3].fish=[{id:'fish_clown',size:14},{id:'fish_clown',size:12}];s.fishRecords.fish_clown=9;
  const r=reload(s);assert.deepEqual(r.yardLayout,yard);assert.deepEqual(r.decorations,[s.decorations.at(-1)]);

@@ -1,4 +1,4 @@
-import {defaultYardLayout,readYardLayout,homeClearance,fitYardAnchor,YARD_WELL,YARD_CHEST,type YardLayout} from './home-layout.ts';
+import {defaultYardLayout,readYardLayout,homeClearance,fitYardAnchor,YARD_WELL,YARD_CHEST,yardOf,type YardLayout} from './home-layout.ts';
 import {parseHalloweenGacha,type HalloweenGachaSave} from './halloween-gacha-config.ts';
 import {capFishSize} from './fish-size.ts';
 import { ITEMS, CROPS, PLANETS, RECIPES, DISGUISES, FISH, FISH_WEIGHTS, LOOT_TABLES, UPGRADES, STARTING_PLOTS, MAX_EXTRA_PLOTS, LEGACY_MAX_PLOTS, MAX_DECORATIONS, STORY_STEPS, canonicalItem, type ItemId, type Inventory, type GearSlot, type CropId, type PlanetId, type BuffKey, type BuffDef, type WeaponDef } from './content.ts';
@@ -738,10 +738,21 @@ export function placeDecoration(s: SaveState, raw: ItemId, x: number, z: number,
     return expandGarden(s, x, z, rotation); if (s.planet !== 'home' || item?.type !== 'decor' || s.decorations.length >= MAX_DECORATIONS || !Number.isFinite(rotation) || !decorSpotOk(s,x,z,id) || !removeItem(s.bag, id))
     return false;s.decorations.push({ uid: `decor-${s.nextDecorationId++}`, id, x, z, rotation }); recordEvent(s, 'decorate'); return true; }
 export function moveDecoration(s: SaveState, uid: string, x: number, z: number, rotation?: number) { const d = s.decorations.find(d => d.uid === uid); if (!d || s.planet !== 'home' || !decorSpotOk(s,x,z,d.id,uid) || rotation !== undefined && !Number.isFinite(rotation))
-    return false; if(aquarium(d.id)&&!decorSpotOk(s,x,z,d.id,uid))return false;d.x = x; d.z = z; if (rotation !== undefined)
+    return false; d.x = x; d.z = z; if (rotation !== undefined)
     d.rotation = rotation; return true; }
-export function removeDecoration(s: SaveState, uid: string) { const index = s.decorations.findIndex(d => d.uid === uid); if (index < 0 || s.planet !== 'home')
-    return false; if(s.decorations[index].fish?.length)return false;if (!addItem(s, s.decorations[index].id)) return false; s.decorations.splice(index, 1); return true; }
+/** Packing a filled tank returns the tank and every resident atomically; capacity failure changes nothing. */
+function returnDecoration(s:SaveState,d:Decoration,force=false) {
+ const items:Inventory={[d.id]:1};for(const f of d.fish??[])items[f.id]=(items[f.id]??0)+1;
+ if(Object.entries(items).some(([id,n])=>!Number.isSafeInteger((s.bag[id]??0)+(n??0))))return false;
+ if(!force&&!canAddAll(s,items)){noteFull('bag');return false;}
+ for(const [id,n] of Object.entries(items)){s.bag[id]=(s.bag[id]??0)+(n??0);s.collection[id]=1;}
+ for(const f of d.fish??[])s.fishRecords[f.id]=Math.max(s.fishRecords[f.id]??0,Math.max(FISH[f.id].size[0],Math.min(FISH[f.id].size[1],f.size)));
+ return true;
+}
+export function removeDecoration(s:SaveState,uid:string) {
+ const index=s.decorations.findIndex(d=>d.uid===uid);if(index<0||s.planet!=='home'||!returnDecoration(s,s.decorations[index]))return false;
+ s.decorations.splice(index,1);return true;
+}
 export function putAquariumFish(s:SaveState,uid:string,id:string,random:()=>number=Math.random){
  const d=s.decorations.find(d=>d.uid===uid);if(s.planet!=='home'||!d||aquariumRefusal(d.id,d.fish,id)||!((s.bag[id]??0)>0))return false;
  const size=fishSize(id,s.fishRecords,random);if(!removeItem(s.bag,id))return false;(d.fish??=[]).push({id,size});return true;
@@ -865,7 +876,7 @@ function integer(value: unknown, fallback = 0, max = Number.MAX_SAFE_INTEGER) { 
 function planetId(value: unknown): PlanetId | null { const id = value === 'sky' ? 'cloud' : value === 'dark' ? 'shadow' : value; return typeof id === 'string' && Object.hasOwn(PLANETS, id) ? id as PlanetId : null; }
 /** One-time layout change. Compensation bypasses slot limits: a full bag must never destroy placed belongings. */
 function relocateYard(s: SaveState) {
-    const yard = defaultYardLayout(), anchors = new Set<string>();
+    const yard = defaultYardLayout(1), anchors = new Set<string>();
     for (const [id,kind] of [['deco_cursed_tree','shop'],['deco_cursed_coffin','craft']] as const) {
         const target = yard.stores[kind];
         const d = s.decorations.filter(d=>d.id===id).sort((a,b)=>Math.hypot(a.x-target.x,a.z-target.z)-Math.hypot(b.x-target.x,b.z-target.z))[0];
@@ -885,14 +896,31 @@ function relocateYard(s: SaveState) {
         const r = ITEMS[d.id]?.collider??.65;
         const conflict = anchors.has(d.uid)||obstacles.some(o=>Math.hypot(d.x-o.x,d.z-o.z)<r+o.r)||!clearOfPen(d.x,d.z,r,.2)||inYard(d.x,d.z,r)||s.plots.some((p,i)=>{const b=bedPosition(s,i),half=bedSpan(p.rotation);return Math.hypot(Math.max(0,Math.abs(d.x-b.x)-half),Math.max(0,Math.abs(d.z-b.z)-half))<r;});
         if (!conflict) return true;
-        const returned: Inventory = {[d.id]:1};
-        for (const fish of d.fish??[]) returned[fish.id]=(returned[fish.id]??0)+1;
-        // Retain a corrupt/overflowing record in place rather than deleting its contents.
-        if (Object.entries(returned).some(([id,n])=>!Number.isSafeInteger((s.bag[id]??0)+(n??0)))) return true;
-        for (const [id,n] of Object.entries(returned)) s.bag[id]=(s.bag[id]??0)+(n??0);
-        for (const fish of d.fish??[]) s.fishRecords[fish.id]=Math.max(s.fishRecords[fish.id]??0,Math.max(FISH[fish.id].size[0],Math.min(FISH[fish.id].size[1],fish.size)));
-        return false;
+        return !returnDecoration(s,d,true);
     });
+}
+/** Utility layout v2: keep the large aquarium's UID, contents and turn while finding nearby free ground. */
+function relocateYardUtilities(s:SaveState) {
+ const next={...yardOf(s),version:2 as const,cook:{x:6,z:-7},upgrade:{x:-3.4,z:-2.4}};
+ const tank=s.decorations.filter(d=>d.id==='deco_aquarium_l').sort((a,b)=>Math.hypot(a.x+3.4,a.z+2.4)-Math.hypot(b.x+3.4,b.z+2.4))[0];
+ const beds=s.plots.map((p,i)=>({...bedPosition(s,i),r:bedSpan(p.rotation)*Math.SQRT2}));
+ s.yardLayout=next;
+ next.upgrade=fitYardAnchor(next,'upgrade',tank??next.upgrade,beds);
+ next.cook=fitYardAnchor(next,'cook',next.cook,beds);
+ // Prefer a free nearby spot to returning any unrelated decoration to the bag.
+ if(tank){
+  const candidates:{x:number;z:number}[]=[];
+  for(let ix=-55;ix<=55;ix++)for(let iz=-55;iz<=55;iz++)candidates.push({x:+(tank.x+ix*.3).toFixed(2),z:+(tank.z+iz*.3).toFixed(2)});
+  candidates.sort((a,b)=>Math.hypot(a.x-tank.x,a.z-tank.z)-Math.hypot(b.x-tank.x,b.z-tank.z));
+  const r=ITEMS[tank.id].collider??1.6;
+  const free=(p:{x:number;z:number})=>Math.abs(p.x)>=r+.65&&Math.abs(p.z)>=r+.65&&decorSpotOk(s,p.x,p.z,tank.id,tank.uid);
+  // Prefer the open yard in front, so the cottage does not hide the relocated display.
+  const spot=candidates.find(p=>p.z>=tank.z&&free(p))??candidates.find(free);
+  if(spot)Object.assign(tank,spot);
+  else if(returnDecoration(s,tank,true))s.decorations=s.decorations.filter(d=>d!==tank);
+ }
+ const moved=[{...next.cook,r:1.4},{...next.upgrade,r:1.5}];
+ s.decorations=s.decorations.filter(d=>!moved.some(o=>Math.hypot(d.x-o.x,d.z-o.z)<o.r+(ITEMS[d.id]?.collider??.65))||!returnDecoration(s,d,true));
 }
 export function parseSave(raw: string | null): SaveState | null {
     if (!raw)
@@ -1025,6 +1053,7 @@ export function parseSave(raw: string | null): SaveState | null {
         if (!s.yardLayout) relocateYard(s);
         if (v.gardenLayout === GARDEN_LAYOUT || !readYardLayout(v.yardLayout)) { trimGarden(s); settleBeds(s); s.gardenLayout = GARDEN_LAYOUT; } else shrinkGarden(s, v.gardenLayout === 3 ? 3 : v.gardenLayout === 2 ? 2 : 1);
         if (!s.gardenTrim && record(v.gardenTrim) && Number.isSafeInteger(v.gardenTrim.beds) && v.gardenTrim.beds > 0) s.gardenTrim = { beds: Math.min(99, v.gardenTrim.beds), energy: integer(v.gardenTrim.energy), items: inventory(v.gardenTrim.items) };
+        if(s.yardLayout!.version<2)relocateYardUtilities(s);
         // The guard dog is a pet now (pet-slots.ts): a save that owns the dog gets its item, worn in the free pet slot, so it follows as before.
         syncDogPet(s);
         const hunting = parseHunting(v.hunting); if (hunting) s.hunting = hunting;

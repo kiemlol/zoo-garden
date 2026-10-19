@@ -609,11 +609,11 @@ export class World {
       const shop=this.stall('#68bcc7','shop');shop.rotation.y=inwardFacing(yard.stores.shop);this.addEntity('shop','Equipment shop','🛍️',shop,yard.stores.shop.x,yard.stores.shop.z,2);this.obstacle(yard.stores.shop.x,yard.stores.shop.z,1.7);
       const chest=group(box('#aa794d',1.25,.7,.8,0,.35),cyl('#a67c4f',.5,.5,1.2,0,.65),box('#e7bb68',.15,.8,.84,0,.4));chest.children[1].rotation.z=Math.PI/2;
       this.addEntity('chest','Storage chest','📦',chest,YARD_CHEST.x,YARD_CHEST.z,1);this.obstacle(YARD_CHEST.x,YARD_CHEST.z,.6);
-      this.addEntity('upgrade','Energy crystal','💎',this.crystal(),8.5,-7,1.5);this.obstacle(8.5,-7,1.4);
+      this.addEntity('upgrade','Energy crystal','💎',this.crystal(),yard.upgrade.x,yard.upgrade.z,1.5);this.obstacle(yard.upgrade.x,yard.upgrade.z,1.4);
       this.addEntity('travel','Starship station','🚀',this.rocket(),13.5,-3,2);this.obstacle(13.5,-3,1.5);
       const forge=group(box('#a89e8c',1.8,.8,1.2,0,.4),box('#677b7d',1.1,.25,.65,0,1),cyl('#708384',.4,.25,.5,0,.75),box('#bd9673',.2,1.1,.2,.7,.75));
       forge.rotation.y=inwardFacing(yard.stores.craft);this.addEntity('craft','Workshop','🔨',forge,yard.stores.craft.x,yard.stores.craft.z,1.3);this.obstacle(yard.stores.craft.x,yard.stores.craft.z,1.1);
-      const cook=group(cyl('#71646b',1.2,.8,1.1,0,.55),cyl('#fc9b51',.7,.7,.12,0,1.12),box('#49454e',1.8,.12,.15,0,1.3));this.addEntity('cook','Volcano kitchen','🔥',cook,1,10.5,1.4);this.obstacle(1,10.5,1);
+      const cook=group(cyl('#71646b',1.2,.8,1.1,0,.55),cyl('#fc9b51',.7,.7,.12,0,1.12),box('#49454e',1.8,.12,.15,0,1.3));this.addEntity('cook','Volcano kitchen','🔥',cook,yard.cook.x,yard.cook.z,1.4);this.obstacle(yard.cook.x,yard.cook.z,1);
       for(let i=0;i<this.state.plots.length;i++)this.makePlot(i);
       this.buildPen();
       const well=group(cyl('#a0a8a2',1,1,.8,0,.4,0,10),cyl('#63c5ed',.72,.72,.05,0,.83),box('#957651',.12,2.2,.12,-.85,1.5),box('#957651',.12,2.2,.12,.85,1.5),box('#cc9f78',2.4,.15,1.8,0,2.6));well.userData.prop='well';this.addEntity('well','Ember well','🪨',well,YARD_WELL.x,YARD_WELL.z,1.6);this.obstacle(YARD_WELL.x,YARD_WELL.z,1.2);
@@ -1310,7 +1310,7 @@ export class World {
     const list=base.concat(light);this.creatureObstacleCache={base,lit,list};return list;
   }
   private navigationOptions(clearance=.36,allowVoid=false):NavigationOptions{if(this.interior)return {bounds:WORLD_BOUNDS,clearance,gridSize:.5,walkable:this.interior.walkable};return {bounds:WORLD_BOUNDS,clearance,walkable:p=>Math.hypot(p.x,p.z)<=WORLD_BOUNDS&&(allowVoid||this.playerFlying||!this.environment||environmentWalkable(this.environment.layout,p))};}
-  blocked(x:number,z:number) {return blocked({x,z},this.collisionObstacles(),this.navigationOptions());}
+  blocked(x:number,z:number,omitDecoration?:string) {const obstacles=this.collisionObstacles();return blocked({x,z},omitDecoration?obstacles.filter(o=>o.tag!=='decor:'+omitDecoration):obstacles,this.navigationOptions());}
   walkTo(x:number,z:number,keepSelected=false) {
     if(this.resting)return;
     const distance=Math.hypot(x,z);if(distance>WORLD_BOUNDS-1){x*=((WORLD_BOUNDS-1)/distance);z*=((WORLD_BOUNDS-1)/distance);}if(!keepSelected)this.selected=null;

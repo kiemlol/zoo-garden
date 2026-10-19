@@ -55,7 +55,7 @@ function saveDrop(account,item,count,peer,now,{owner=account.id,priority=0,life=
 }
 
 /** Account records, receipts, theft ledgers and drops commit in one storage transaction. */
-export function createActionService({store,getPeer,getWorld=()=>null,afterCommit=()=>{},dungeonCheck=()=>true,mysteryRandom=random}){
+export function createActionService({store,getPeer,getPeers=()=>[],getWorld=()=>null,afterCommit=()=>{},dungeonCheck=()=>true,mysteryRandom=random}){
   return async function execute(actorId,data,{checkAccess}={}){
     checkAccess?.();
     if(data?.rulesVersion!==ACTION_RULES_VERSION||!validId(data.type)||!data.payload||typeof data.payload!=='object'||Array.isArray(data.payload))fail(400,'This action needs the current game rules.');
@@ -231,6 +231,10 @@ export function createActionService({store,getPeer,getWorld=()=>null,afterCommit
         // Workers' harvest goes to the chest while the server sees the explorer outside the home circle (delivery.ts).
         // The server's own pose decides; without a game socket the explorer is not away (a bare HTTP client cannot choose the chest).
         if((WORK_ACTIONS.has(data.type)||CATCH_UP_ACTIONS.has(data.type))&&p&&typeof p==='object')p.away=peer&&!peer.visit?explorerAway(peer.planet,peer.pose.x,peer.pose.z)||CATCH_UP_ACTIONS.has(data.type)&&now-(peer.tripAt||0)<120000:false;
+        if(['moveDecoration','removeDecoration'].includes(data.type)){
+          const occupied=[peer,...getPeers()].some(other=>other&&other.planet==='home'&&(other.visit??other.account?.id??actorId)===actorId&&(other.furniture?.pose?.uid===p.uid||other.pose?.visual?.carriage?.uid===p.uid));
+          if(occupied)fail(409,'Leave this decoration before moving or packing it.');
+        }
         if(['putAquariumFish','takeAquariumFish'].includes(data.type)){const tank=state.decorations.find(d=>d.uid===p.uid);requireNear(peer,tank);}
         if(data.type==='showFish'&&(!peer?.active||peer.visit||account.journeyPaid||state.hp<=0||peer.pose.visual?.furniture||peer.pose.visual?.carriage||peer.pose.visual?.fishing))fail(409,'Stand on the ground to show your fish.');
         result=applyGameAction(state,intent,{now,random});

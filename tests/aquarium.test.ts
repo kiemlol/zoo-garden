@@ -19,7 +19,7 @@ test('all tanks enforce their capacity and allowed classes atomically, and fish 
   const s=fixture(id),spec=aquarium(id)!;
   for(let i=0;i<spec.capacity;i++){const fish=allowed[i%allowed.length],before=s.bag[fish]!;assert.equal(action(s,'putAquariumFish',{uid:'tank',id:fish}),true);assert.equal(s.bag[fish],before-1);}
   const full=structuredClone(s);assert.throws(()=>action(s,'putAquariumFish',{uid:'tank',id:allowed[0]}),/full/);assert.deepEqual(s,full);
-  assert.equal(M.removeDecoration(s,'tank'),false,'packing cannot discard resident fish');
+  const packed=structuredClone(s);assert.equal(M.removeDecoration(packed,'tank'),true);assert.equal(packed.decorations.length,0);assert.equal(packed.bag[id],1);for(const fish of allowed)assert.equal(packed.bag[fish],8,'packing returns every resident');assert.equal(M.removeDecoration(packed,'tank'),false,'cannot pack twice');
   for(let i=spec.capacity-1;i>=0;i--){assert.equal(action(s,'takeAquariumFish',{uid:'tank',index:i}),true);assert.throws(()=>action(s,'takeAquariumFish',{uid:'tank',index:i}),ActionError);}
   for(const fish of Object.keys(s.bag))assert.equal(s.bag[fish],8);assert.equal(s.decorations[0].fish!.length,0);assert.equal(M.removeDecoration(s,'tank'),true);
  }

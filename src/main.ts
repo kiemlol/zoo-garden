@@ -1,3 +1,5 @@
+import {decorationControls,decorationPanel} from './decoration-ui.ts';
+import {showContextPrompt} from './context-prompt.ts';
 import {readYardLayout} from './home-layout.ts';
 import {gachaIconUrl} from './gacha-art.ts';
 import {HalloweenGachaPanel} from './halloween-gacha-ui.ts';
@@ -72,7 +74,7 @@ import { initUpgradeBench as mountUpgradeBench } from './upgrade-bench.ts';
 import { CombatView } from './combat-view.ts';
 import { SkillFx } from './skill-fx.ts';
 import { terrainHeight, inWater } from './environments.ts';
-import { FishingSimulation, selectCatch, planCast, catchWeight, resolveMysteryCatch, newMysteryCaller, attractMystery, mysteryMissed, mysteryLanded } from './fishing.ts';
+import { FishingSimulation, selectCatch, planForwardCast, catchWeight, resolveMysteryCatch, newMysteryCaller, attractMystery, mysteryMissed, mysteryLanded } from './fishing.ts';
 import { GroundGestures } from './gestures.ts';
 import { ZOOM, clampZoom } from './camera-rig.ts';
 import {clearSegment,WORLD_BOUNDS} from './navigation.ts';
@@ -207,7 +209,7 @@ let fishingEpoch=0;
 let lastCast:{id:string;x:number;z:number}|null=null;
 let fishingWater='home';
 let wildArmed:{kind:string;until:number}|null=null,shopTab='Weapons',journalTab:ProgressKind='story',craftStation:'craft'|'forge'='craft',craftTab='All';
-let placement:{id:string;rotation:number;x:number;z:number;ok:boolean;follow:boolean}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
+let placement:{id:string;rotation:number;x:number;z:number;ok:boolean;follow:boolean;uid?:string}|null=null,visiting:string|null=null,visitHome:M.SaveState|null=null;
 let persistence:((state:M.SaveState)=>void)|null=null,network:NetworkHooks={role:null};
 let actionHandler:((intent:GameIntent)=>Promise<ActionReply>)|null=null;
 /** The Delvers' Vault (dungeon.ts), set up at the end of this file: its creatures are fought locally, also online. */
@@ -534,7 +536,7 @@ function updateHud() {
   // The prompt stays short (the target frame names the creature) so the biggest tappable thing on a phone stays small.
   $('#hud').classList.toggle('carriage-riding',!!world.resting);
   $('#interact-button').dataset.action=world.furniture?.active?'leave-furniture':world.carriage?.active?'leave-carriage':'interact';
-  if(started&&!modal){const e=world.nearest();$('#context-prompt').hidden=!e;$('#interact-text').textContent=t(e?world.furniture?.active?'Leave furniture':world.carriage?.active?'Leave carriage':isRestFurniture(e)?e.mesh.userData.decorationId==='deco_cursed_coffin'?'Lie in coffin':'Sit on bench':isGhostCarriage(e)?'Board carriage':e.kind==='enemy'?'Attack':e.kind==='plot'?world.state.plots[e.index!]?.crop?M.cropProgress(world.state.plots[e.index!])===1?'Harvest crop':'Check growing crop':'Plant a seed':e.name:'');}else $('#context-prompt').hidden=true;
+  if(started&&!modal){const e=world.nearest();$('#context-prompt').hidden=!showContextPrompt(e?.kind,!!world.furniture?.active||!!world.carriage?.active);$('#interact-text').textContent=t(e?world.furniture?.active?'Leave furniture':world.carriage?.active?'Leave carriage':isRestFurniture(e)?e.mesh.userData.decorationId==='deco_cursed_coffin'?'Lie in coffin':'Sit on bench':isGhostCarriage(e)?'Board carriage':e.kind==='enemy'?'Attack':e.kind==='plot'?world.state.plots[e.index!]?.crop?M.cropProgress(world.state.plots[e.index!])===1?'Harvest crop':'Check growing crop':'Plant a seed':e.name:'');}else $('#context-prompt').hidden=true;
 }
 // The zone banner is outlined text with a difficulty chip and no card (C2): it plays once for 2.8 s and never blocks taps.
 let zoneTimer=0;
@@ -881,7 +883,7 @@ function forgeMenu(id?:string){
 }
 function decorations(){
   const owned=Object.entries(state.bag).filter(([id,n])=>n!>0&&(M.ITEMS[id].type==='decor'));
-  openDialog('decor','Make this place your own',`<p class="intro">Pick an item, tap the ground to move it, ↻ turns it, then ✔ Place.</p><div class="shop-grid">${owned.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(t(M.ITEMS[id].name))} ×${n}</strong></div><button class="primary" data-action="place-decor" data-item="${id}">Place</button></div>`).join('')||'<p class="muted">No decorations yet. Find them in the shop’s Decor tab.</p>'}</div><div class="section-label">PLACED AT HOME</div><div class="shop-grid">${state.decorations.map(d=>`<div class="storage-row"><span>${mini(d.id)} ${esc(t(M.ITEMS[d.id].name))}</span><button class="soft-button" data-action="remove-decor" data-id="${d.uid}">Pack away</button></div>`).join('')||'<p class="muted">A fresh canvas.</p>'}</div><button class="soft-button" data-action="decor-shop">Browse decorations</button>`,'YOUR HOME');
+  openDialog('decor','Make this place your own',`<p class="intro">Pick an item, tap the ground to move it, ↻ turns it, then ✔ Place.</p><div class="shop-grid">${owned.map(([id,n])=>`<div class="shop-item"><span class="shop-icon">${art(id,M.ITEMS[id].icon)}</span><div><strong>${esc(t(M.ITEMS[id].name))} ×${n}</strong></div><button class="primary" data-action="place-decor" data-item="${id}">Place</button></div>`).join('')||'<p class="muted">No decorations yet. Find them in the shop’s Decor tab.</p>'}</div><div class="section-label">PLACED AT HOME</div><div class="shop-grid">${state.decorations.map(d=>`<div class="storage-row"><span>${mini(d.id)} ${esc(t(M.ITEMS[d.id].name))}</span><button class="soft-button" data-action="edit-decor" data-uid="${d.uid}">✎ Chỉnh sửa</button><button class="soft-button" data-action="pack-decor" data-uid="${d.uid}">Pack away</button></div>`).join('')||'<p class="muted">A fresh canvas.</p>'}</div><button class="soft-button" data-action="decor-shop">Browse decorations</button>`,'YOUR HOME');
 }
 /**
  * Placing a garden bed kit or a decoration (reference decor.startPlace/moveGhost/rotate/confirm): a see-through model
@@ -901,18 +903,19 @@ function beginPlacement(id:string){if(visiting)return;if(state.planet!=='home'){
 }
 function cancelPlacement(){placement=null;$('#placement-bar').hidden=true;document.body.classList.remove('placing');$('#placement-bar').classList.remove('bad');world.placementGhost(null);}
 function movePlacement(x:number,z:number){
-  if(!placement)return;placement.x=Math.round(x*100)/100;placement.z=Math.round(z*100)/100;const {id,rotation}=placement;
-  placement.ok=M.ITEMS[id]?.type==='placeable'?M.bedSpotOk(state,placement.x,placement.z,rotation):M.decorSpotOk(state,placement.x,placement.z,id)&&!world.blocked(placement.x,placement.z);
+  if(!placement)return;placement.x=Math.round(x*100)/100;placement.z=Math.round(z*100)/100;const {id,rotation,uid}=placement;
+  placement.ok=M.ITEMS[id]?.type==='placeable'?M.bedSpotOk(state,placement.x,placement.z,rotation):M.decorSpotOk(state,placement.x,placement.z,id,uid)&&!world.blocked(placement.x,placement.z,uid);
   world.placementGhost(placement);$('#placement-bar').classList.toggle('bad',!placement.ok);
   $('#placement-hint').textContent=t(placement.ok?'':'Blocked here or outside the fence');
 }
 function rotatePlacement(){if(!placement)return;placement.rotation=(placement.rotation+Math.PI/4)%(Math.PI*2);movePlacement(placement.x,placement.z);tone('pop');}
 async function confirmPlacement(){
-  if(!placement)return;const {id,x,z,rotation,ok}=placement,item=M.ITEMS[id];
+  if(!placement)return;const {id,x,z,rotation,ok,uid}=placement,item=M.ITEMS[id];
   if(!ok){toast('Can’t place it here (blocked by something or outside the fence).','❌');return;}
   // The kit pays for the bed: without one expandGarden would charge energy, so a vanished item just ends placement.
-  if(!state.bag[id]){cancelPlacement();return;}
-  if(!await perform('placeDecoration',{id,x,z,rotation})){movePlacement(x,z);return;}
+  if(uid?!state.decorations.some(d=>d.uid===uid):!state.bag[id]){cancelPlacement();return;}
+  if(uid&&decorationOccupied(uid)){toast('Hãy rời đồ vật trước khi chỉnh sửa.','🪑');return;}
+  if(!await perform(uid?'moveDecoration':'placeDecoration',uid?{uid,x,z,rotation}:{id,x,z,rotation})){movePlacement(x,z);return;}
   cancelPlacement();
   if(item.type==='placeable'){world.syncCrops();plantBurst(state.plots.length-1);tone('pop');toast('A new garden bed! Tap it to plant.','🌱');}
   else{world.syncDecorations();tone('success');toast(`${t(item.name)} placed.`,'🏡');}
@@ -921,7 +924,35 @@ function placeAt(x:number,y:number){const point=world.groundPoint(x,y);if(placem
 
 /** Direct controls resume following after a precision tap has pinned the preview. */
 function followPlacement(){if(!placement)return;if(world.stickAngle()!==null)placement.follow=true;if(placement.follow)movePlacement(world.position.x+Math.sin(world.facing)*2.2,world.position.z+Math.cos(world.facing)*2.2);}
-function openAquarium(uid:string){const tank=world.state.decorations.find(d=>d.uid===uid);if(!tank||!aquarium(tank.id))return;activeAquarium=uid;openDialog('aquarium',M.ITEMS[tank.id].name,aquariumPanel(state,uid,art),'AQUARIUM','🐠');}
+function openAquarium(uid:string){const tank=world.state.decorations.find(d=>d.uid===uid);if(!tank||!aquarium(tank.id))return;activeAquarium=uid;openDialog('aquarium',M.ITEMS[tank.id].name,aquariumPanel(state,uid,art)+decorationControls(state,uid),'AQUARIUM','🐠');}
+/** Editing previews the original instance without consuming a second copy; cancel sends no action. */
+function decorationOccupied(uid:string){
+ if(world.furniture?.entity?.mesh.userData.decorationUid===uid||world.carriage?.entity?.mesh.userData.decorationUid===uid)return true;
+ return [...world.remotePlayers.values()].some(p=>p.pose.visual?.furniture?.uid===uid||p.pose.visual?.carriage?.uid===uid);
+}
+function beginDecorationEdit(uid:string){
+ if(visiting||state.planet!=='home'||world.interior)return;
+ const d=state.decorations.find(d=>d.uid===uid);if(!d)return;
+ if(decorationOccupied(uid)){toast('Hãy rời đồ vật trước khi chỉnh sửa.','🪑');return;}
+ closeDialog();placement={id:d.id,uid,rotation:d.rotation,x:d.x,z:d.z,ok:false,follow:false};
+ $('#placement-bar').hidden=false;document.body.classList.add('placing');$('#placement-name').textContent=`Đặt lại ${t(M.ITEMS[d.id].name)}: chạm đất để chọn vị trí`;
+ movePlacement(d.x,d.z);
+}
+function openDecoration(uid:string){
+ const d=world.state.decorations.find(d=>d.uid===uid);if(!d)return;
+ if(aquarium(d.id)&&!visiting){openAquarium(uid);return;}
+ openDialog('decor-item',M.ITEMS[d.id].name,decorationPanel(world.state,uid,art,!!visiting),'YOUR HOME','🏡');
+}
+async function useDecoration(uid:string){
+ const e=world.entities.find(e=>e.kind==='decoration'&&e.mesh.userData.decorationUid===uid);if(!e||placement||combat.pose||combat.airborne>0)return;
+ closeDialog();endFishing();
+ if(isRestFurniture(e)){if(await world.useFurniture(e)){clearHeldInput();tone();}}
+ else if(isGhostCarriage(e)&&!visiting&&world.boardCarriage(e)){clearHeldInput();tone('jump');}
+}
+async function packDecoration(uid:string){
+ if(visiting||decorationOccupied(uid)){toast('Hãy rời đồ vật trước khi cất.','🪑');return;}
+ if(await perform('removeDecoration',{uid})){cancelPlacement();world.syncDecorations();closeDialog();tone('pop');}
+}
 let activeAquarium:string|null=null;
 async function showBagFish(id:string){
  if(!started||visiting||fishGame||placement||flight||world.resting||world.jump.airborne||combat.pose||combat.airborne>0||state.hp<=0){toast('Hãy đứng trên mặt đất để khoe cá.','🐟');return;}
@@ -1129,9 +1160,9 @@ function fish(pond?:Entity|null){
   // Read the owned rod directly so a costume's combat skills cannot prevent casting.
   const rod=M.ITEMS[rodId].weapon!;
   fishPond=pond;fishingWater=pond.waterId??state.planet;
-  // The tap on the water picks the cast point, near or far (the reference's plan()); a recast reuses the last spot.
+  // Taps/recasts retain their existing reach only; the landing direction always follows the current facing.
   const water={x:pond.x,z:pond.z,r:pond.pond.rx},tap=world.pondTap?.id===pond.id?world.pondTap:lastCast?.id===pond.id?lastCast:water;world.pondTap=null;
-  const {cast}=planCast(water,world.position,tap);lastCast={id:pond.id,...cast};
+  const planned=planForwardCast(water,world.position,world.facing,tap);if(!planned){toast('Hãy quay mặt về phía mặt nước để thả câu.','🎣');return;}const {cast}=planned;lastCast={id:pond.id,...cast};
   const weights=M.FISH_WEIGHTS[fishingWater]??M.FISH_WEIGHTS.home,stats=M.activeStats(state),input=new FishingInput();input.ready=true;
   // Each fish that swims up is chosen then, with the worm/rod/luck bonus on rare and legendary fish.
   const choose=(bonus:number):FishPick|null=>{
@@ -1158,7 +1189,7 @@ function fish(pond?:Entity|null){
   };
   const simulation=new FishingSimulation<FishPick>({quality:rod.quality??.3,steady:rod.steady===true,breakChance:rod.breakChance,bait:(state.bag.worm??0)>0,luck:stats.luck,choose,approachFrom:p=>fishingView.approachDistance(p.id,!!p.mystery),water,cast,player:{x:world.position.x,z:world.position.z}});
   fishingEpoch++;fishGame={input,simulation,lastPhase:'cast',seen:{missed:0,bait:0,early:0},tooEarlyUntil:0,approach:0,pondId:pond.id};
-  world.destination=null;world.route=[];world.moving=false;world.selected=null;world.ring.visible=false;world.facing=Math.atan2(cast.x-world.position.x,cast.z-world.position.z);
+  world.destination=null;world.route=[];world.moving=false;world.selected=null;world.ring.visible=false;
   world.fishing='cast';world.castT=.5;showReel(true);
   fishingView.begin(pondView(pond),tipPosition(),cast,rodId);
 }
@@ -1245,12 +1276,9 @@ frameListeners.add(dt=>house.frame(dt));frameListeners.add(dt=>challenges.tick(d
 // The craft room's upgrade bench (upgrade-bench.ts): gear levels and skill levels, both run through actions.ts.
 const bench=mountUpgradeBench({state:()=>state,perform:(type,payload)=>perform(type,payload) as never,openDialog,modal:()=>modal,toast,tone:kind=>tone(kind as Parameters<typeof tone>[0]),ui:()=>({art,chips:materialChips,skills:ownSkills(M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).special??'fist'),moves:airOn(),jump:airOn(),disguised:!!state.gear.disguise,weaponKind:M.weaponStats({...state,gear:{...state.gear,disguise:undefined}}).kind})});
 world.onInteract=async(e)=>{
-  if(isRestFurniture(e)&&started&&!uiBlocked()){if(placement||combat.pose||combat.airborne>0)return;endFishing();if(await world.useFurniture(e)){clearHeldInput();tone();}return;}
-
-  if(isGhostCarriage(e)&&started&&!uiBlocked()&&!visiting){if(placement||combat.pose||combat.airborne>0)return;endFishing();if(world.boardCarriage(e)){clearHeldInput();tone('jump');}return;}
+  if(e.kind==='decoration'&&started&&!uiBlocked()){tone();openDecoration(e.mesh.userData.decorationUid);return;}
   if(!started||uiBlocked())return;tone();if(house.interact(e))return;if(visiting&&e.kind!=='travel'&&e.kind!=='plot'){toast('Enjoy looking around. Your own garden is waiting at home.','🌷');return;}const env=world.interactEnvironment(e);if(env){if(env.message)toast(env.message);save();updateHud();if(env.openCrafting){craftStation='forge';crafting();}return;}
   if(e.kind==='plot')plotDialog(e.index!);else if(e.kind==='sell')market();else if(e.kind==='shop')shop();else if(e.kind==='chest')storage();else if(e.kind==='upgrade')upgrades();else if(e.kind==='cook')cooking();else if(e.kind==='well')wellDialog();else if(e.kind==='craft'){craftStation='craft';crafting();}else if(e.kind==='travel')planets();else if(e.kind==='fish')fish(e);
-  else if(e.kind==='decoration'&&aquarium(e.mesh.userData.decorationId))openAquarium(e.mesh.userData.decorationUid);
   else if(e.kind==='pen')penTap();
   else if(e.kind==='cage')crew.tapCage(e);
   else if(e.kind==='friend'&&e.index!==undefined)friendDialog(FRIEND_IDS[e.index]);
@@ -1968,7 +1996,10 @@ app.addEventListener('click',async event=>{
     case 'put-aquarium-fish':{const uid=button.dataset.uid!;if(await perform('putAquariumFish',{uid,id})){world.syncDecorations();tone('success');}if(modal==='aquarium')openAquarium(uid);break;}
     case 'take-aquarium-fish':{const uid=button.dataset.uid!;if(await perform('takeAquariumFish',{uid,index:Number(button.dataset.index)})){world.syncDecorations();tone('pop');}if(modal==='aquarium')openAquarium(uid);break;}
     case 'show-fish':if(id)await showBagFish(id);break;
-    case 'remove-decor':if(await perform('removeDecoration',{uid:button.dataset.id})){world.syncDecorations();decorations();}break;
+    case 'edit-decor':beginDecorationEdit(button.dataset.uid!);break;
+    case 'pack-decor':await packDecoration(button.dataset.uid!);break;
+    case 'use-decor':await useDecoration(button.dataset.uid!);break;
+    case 'remove-decor':await packDecoration(button.dataset.id!);break;
     case 'buy':if(await perform('buy',{id})){
       // Gear goes straight onto the explorer, like picking up a fishing rod.
       if(M.ITEMS[id].slot&&!autoHeld(id)&&await perform('equip',{id}))equipFeedback(id);else{floating(`+ ${t(M.ITEMS[id].name)}`,world.position.x,world.position.z,'item');tone('success');}

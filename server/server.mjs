@@ -169,7 +169,7 @@ export async function createGameServer(options = {}) {
   // The Delvers' Vault lobby, runs and in-run relay (dungeon-lobby.mjs).
   const dungeonLobby=createDungeonLobby({peers,rooms,join:(...args)=>join(...args),send,arrived});
   const dungeonTimer=setInterval(()=>{try{dungeonLobby.tick(.25);}catch(error){console.error('Vault lobby tick failed.',error);}},250);dungeonTimer.unref?.();
-  const executeAction = createActionService({store,getPeer:id=>peers.get(id),getWorld:id=>rooms.has(id)?combatAuthority.state(rooms.get(id)):null,dungeonCheck:(id,type,p)=>dungeonLobby.check(id,type,p),afterCommit:async(committed,intent)=>{
+  const executeAction = createActionService({store,getPeer:id=>peers.get(id),getPeers:()=>peers.values(),getWorld:id=>rooms.has(id)?combatAuthority.state(rooms.get(id)):null,dungeonCheck:(id,type,p)=>dungeonLobby.check(id,type,p),afterCommit:async(committed,intent)=>{
     committed.accounts.forEach(remember);
     if(committed.reply.replayed)return;
     for(const changed of committed.accounts){

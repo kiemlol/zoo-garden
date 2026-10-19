@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import * as M from '../src/model.ts';
 import { ContextGearSelection } from '../src/context-gear.ts';
-import { FishingSimulation, planCast, selectCatch, catchWeight, newMysteryCaller, attractMystery, mysteryMissed, mysteryLanded } from '../src/fishing.ts';
+import { FishingSimulation, planForwardCast, selectCatch, catchWeight, newMysteryCaller, attractMystery, mysteryMissed, mysteryLanded } from '../src/fishing.ts';
 import { FishingInput, CombatTimers, MovementControls } from '../src/gameplay-controls.ts';
 import { BASE_SKILLS, SPECIALS } from '../src/combat.ts';
 import { fightNear } from '../src/hud-combat.ts';
@@ -36,7 +36,7 @@ function fixture(...items) {
   const pond = { id: 'pond', kind: 'fish', x: 0, z: 0, radius: 2, pond: { rx: 2, rz: 2, surface: 0 }, waterId: 'home' };
   const combatTimers = new CombatTimers();
   const ctx = vm.createContext({
-    M, ContextGearSelection, FishingSimulation, FishingInput, planCast, selectCatch, catchWeight, attractMystery, mysteryMissed, mysteryLanded, mysteryCaller: newMysteryCaller(),
+    M, ContextGearSelection, FishingSimulation, FishingInput, planForwardCast, selectCatch, catchWeight, attractMystery, mysteryMissed, mysteryLanded, mysteryCaller: newMysteryCaller(),
     BASE_SKILLS, SPECIALS, fightNear, recordEvent: M.recordEvent, esc: v => String(v),
     state, gearState: state, gearPlanet: state.planet, gearWater: false, combatGearUntil: 0,actionHandler:null,ctfApi:null,
     contextGear: new ContextGearSelection(), started: true, visiting: null, blocked: false,
@@ -47,7 +47,7 @@ function fixture(...items) {
     airOn: () => false, airCooldowns: [0, 0, 0, 0], airDurations: [6, 4, 7, 5], moveAt: () => null,
     uiBlocked: () => ctx.blocked,
     world: {
-      entities: [pond], enemies: [], position: { x: 5, z: 0 }, selected: null,
+      entities: [pond], enemies: [], position: { x: 5, z: 0 }, facing:-Math.PI/2, selected: null,
       destination: null, route: [], moving: false, keys: new Set(), pondTap: null, ring: { visible: false },
       refreshPlayer: () => { calls.refresh++; }, playerAttack() {}, jump: { airborne: false, diving: false, height: 0, jumps: 0 },
     },
@@ -311,4 +311,9 @@ test('air skill classification uses the combat weapon instead of the contextual 
   f.ctx.skill(3);
   assert.equal(checked, true);
   assert.equal(f.calls.skills.length, 0);
+});
+
+test('casting follows the current facing without auto-turning and preserves the previous cast reach',()=>{
+ const f=fixture('rod');f.ctx.world.facing=-Math.PI/2+.1;const facing=f.ctx.world.facing;f.ctx.fish(f.pond);assert.ok(f.ctx.fishGame);assert.equal(f.ctx.world.facing,facing);const cast=f.calls.casts[0][2];assert.ok(Math.abs(Math.hypot(cast.x-5,cast.z)-5)<1e-9);assert.ok(Math.abs((cast.x-5)*Math.cos(facing)-cast.z*Math.sin(facing))<1e-9);
+ const dry=fixture('rod');dry.ctx.world.facing=0;dry.ctx.fish(dry.pond);assert.equal(dry.ctx.fishGame,null);assert.equal(dry.calls.casts.length,0);assert.equal(dry.ctx.world.facing,0);
 });

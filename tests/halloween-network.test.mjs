@@ -30,6 +30,10 @@ test('online reservations synchronize two bench sitters, reject a third and forg
  async function use(c,uid){const requestId=randomUUID();c.send({type:'furnitureUse',uid,requestId});return c.next(m=>m.type==='furnitureResult'&&m.requestId===requestId);}
  for(const c of clients)await pose(c,2,0);
  const [a,b]=await Promise.all([use(owner,'bench'),use(guest,'bench')]);assert.deepEqual([a.pose.seat,b.pose.seat].sort(),[0,1]);assert.equal(a.pose.garden,owner.id);assert.match((await use(third,'bench')).error,/no free/);
+ // Editing must not remove occupied seats, including a visitor's reservation.
+ for(const type of ['moveDecoration','removeDecoration']){
+  const session=await call(owner.cookie,'auth/session');const response=await fetch(server.url+'/api/actions',{method:'POST',headers:{'Content-Type':'application/json',Cookie:owner.cookie},body:JSON.stringify({rulesVersion:1,type,payload:{uid:'bench',x:8,z:5},expectedRevision:session.data.revision,requestId:randomUUID()})});assert.equal(response.status,409);assert.match(JSON.stringify(await response.json()),/Leave this decoration/);assert.equal((await store.get(owner.id)).profile.decorations.find(d=>d.uid==='bench').x,3);
+ }
  const other=await third.next(m=>m.type==='pose'&&m.player.id===guest.id&&m.player.visual?.furniture?.seat===b.pose.seat);assert.equal(other.player.visual.furniture.since,b.pose.since);
  await pose(third,2,0,{furniture:{uid:'bench',id:CURSED_BENCH,seat:99,since:1,garden:owner.id}});const forged=await owner.next(m=>m.type==='pose'&&m.player.id===third.id&&m.player.visual?.furniture===null);assert.equal(forged.player.visual.furniture,null,'client cannot author furniture state');
  third.send({type:'join',planet:'home'});const roster=await third.next(m=>m.type==='joined');assert.equal(roster.players.find(p=>p.id===owner.id).visual.furniture.uid,'bench','late observers get current seat');
