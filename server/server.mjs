@@ -40,7 +40,7 @@ const cookieValue = request => (request.headers.cookie || '').split(';').map(val
 const publicAccount = account => ({ id: account.id, username: account.username, name: account.profile.name, color: account.profile.color, level: account.profile.level, gear: account.profile.gear, look: lookOf(account.profile), likes:likesOf(account), stats:{stars:(account.profile.bosses??[]).length,pets:Object.keys(account.profile.collection??{}).filter(id=>Game.ITEMS[id]?.slot==='pet').length,worlds:(account.profile.discovered??['home']).length} });
 const publicHome = account => {
   const source = account.profile;
-  return { ...publicAccount(account), discovered:source.discovered||['home'], plots: source.plots, decorations: source.decorations || [], farm: source.farm || null, helper: source.helper || null, friends: Array.isArray(source.friends) ? source.friends : [], home: source.home || null, placed: source.placed || [],
+  return { ...publicAccount(account), discovered:source.discovered||['home'], yardLayout:source.yardLayout, plots: source.plots, decorations: source.decorations || [], farm: source.farm || null, helper: source.helper || null, friends: Array.isArray(source.friends) ? source.friends : [], home: source.home || null, placed: source.placed || [],
     // The cottage's trophy shelf and paintings, for visitors (cooldown stamps stay private).
     bosses: Array.isArray(source.bosses) ? source.bosses : [], house: { paintings: Number.isSafeInteger(source.house?.paintings) ? source.house.paintings : 0 } };
 };

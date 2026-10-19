@@ -1,3 +1,4 @@
+import {readYardLayout} from './home-layout.ts';
 import {gachaIconUrl} from './gacha-art.ts';
 import {HalloweenGachaPanel} from './halloween-gacha-ui.ts';
 import {isRestFurniture} from './furniture-use.ts';
@@ -1254,7 +1255,6 @@ world.onInteract=async(e)=>{
   else if(e.kind==='cage')crew.tapCage(e);
   else if(e.kind==='friend'&&e.index!==undefined)friendDialog(FRIEND_IDS[e.index]);
   else if(e.kind==='animal'){if(M.readyAnimals(state).some(a=>a.uid===e.animalUid))collectFarm(e.animalUid);else penDialog();}
-  else if(e.kind==='home'){if(!await perform('rest'))return;toast('Home, sweet home. Your health is restored.','🏡');}
   else if(e.kind==='dropped')void deathBags.pick(e);
   else if(e.kind==='mine'){const index=e.index;if(index===undefined||!M.mineAvailable(state,state.planet,index)){toast('This crystal needs a moment to regrow.','💎');return;}if(!await perform('claimMine',{index}))return;world.burst(e.x,e.z,'#d9c9f3');toast('A crystal for your crafting collection!','💎');}
   else if(e.kind==='gift'){if(e.index===undefined)return;const outcome=await perform<M.GiftOutcome>('claimGift',{index:e.index!});if(!outcome)return;e.mesh.visible=false;if(outcome.kind==='bomb'){for(const target of world.enemies)if(target.hp>0&&Math.hypot(target.x-e.x,target.z-e.z)<(outcome.radius??4.5))hit(target,Math.round(M.attack(state)*(outcome.damageMultiplier??3)));world.burst(e.x,e.z,'#ffb269',28);checkDefeat();}toast(outcome.label,'🎁');}
@@ -1751,7 +1751,7 @@ export const gameBridge:GameBridge={
   setPersistence(handler){persistence=handler;},
   setActionHandler(handler){actionHandler=handler;world.authoritativeAction=handler?intent=>handler(intent).then(reply=>reply.result):undefined;},
   applyAuthoritativeState(next){
-    const planetChanged=next.planet!==state.planet,wasDead=state.hp<=0;const heldRod=M.ITEMS[state.gear.weapon??'']?.weapon?.kind==='rod'?state.gear.weapon:undefined;const previousDisguise=state.gear.disguise,previousGear=JSON.stringify(state.gear),wasFishing=!!world.fishing&&world.fishing!=='idle',plotsChanged=next.plots.length!==state.plots.length,decorChanged=JSON.stringify(next.decorations)!==JSON.stringify(state.decorations);
+    const planetChanged=next.planet!==state.planet,wasDead=state.hp<=0;const heldRod=M.ITEMS[state.gear.weapon??'']?.weapon?.kind==='rod'?state.gear.weapon:undefined;const previousDisguise=state.gear.disguise,previousGear=JSON.stringify(state.gear),wasFishing=!!world.fishing&&world.fishing!=='idle',plotsChanged=next.plots.length!==state.plots.length||JSON.stringify(next.yardLayout)!==JSON.stringify(state.yardLayout),decorChanged=JSON.stringify(next.decorations)!==JSON.stringify(state.decorations);
     const beforeLevel=state.level;const current=state as unknown as Record<string,unknown>;for(const key of Object.keys(current))if(!Object.hasOwn(next,key))delete current[key];Object.assign(state,next);if(wasFishing&&!planetChanged){const rod=contextGear.forFishing(state);if(rod)state.gear.weapon=rod;}else if(!planetChanged&&gearWater&&heldRod&&(state.bag[heldRod]??0)>0)state.gear.weapon=heldRod;if(modal==='aquarium'&&activeAquarium&&decorChanged)openAquarium(activeAquarium);const gearChanged=JSON.stringify(state.gear)!==previousGear;levelCheck(beforeLevel);if(planetChanged){visiting=null;visitHome=null;world.state=state;endFishing();resetCombat();world.build(state.planet);world.refreshPlayer();if(wasDead)toast('You are safe at home.','🏡');}if(!visiting){world.state=state;if(plotsChanged){const position=world.position.clone(),riding=!!world.resting;rebuildHomePresentation(state.planet);if(!riding)world.position.copy(position);}else{world.syncCrops();if(decorChanged)world.syncDecorations();}if(gearChanged){if(previousDisguise!==state.gear.disguise){combat.reset();birdFx.clear();sorcererFx.clear();inkFx.clear();inkWash.clear();world.playerHidden=false;world.spinT=0;}world.refreshPlayer();}world.syncDropped();}
     updateHud();updateLabels();
   },
@@ -1771,14 +1771,15 @@ export const gameBridge:GameBridge={
   },
   setVisiting(owner,home){
     if(owner&&owner===visiting&&home&&visitHome){
+      const layoutChanged=JSON.stringify((home as {yardLayout?:unknown}).yardLayout)!==JSON.stringify(visitHome.yardLayout);visitHome.yardLayout=readYardLayout((home as {yardLayout?:unknown}).yardLayout);
       const expanded=home.plots&&home.plots.length!==visitHome.plots.length,decorChanged=JSON.stringify(home.decorations??[])!==JSON.stringify(visitHome.decorations);
       if(home.name)visitHome.name=home.name;if(home.discovered)visitHome.discovered=[...home.discovered];visitHome.plots=structuredClone(home.plots??visitHome.plots);visitHome.decorations=structuredClone(home.decorations??visitHome.decorations);visitHome.farm=M.parseFarm((home as {farm?:unknown}).farm);visitHome.helper=M.parseHelper((home as {helper?:unknown}).helper);Object.assign(visitHome,{friends:structuredClone((home as {friends?:unknown}).friends??[])});
-      if(expanded){const position=world.position.clone();rebuildHomePresentation('home');world.position.copy(position);world.refreshPlayer();}
+      if(expanded||layoutChanged){const position=world.position.clone();rebuildHomePresentation('home');world.position.copy(position);world.refreshPlayer();}
       else{world.syncCrops();if(decorChanged)world.syncDecorations();}
       updateLabels();return;
     }
     visiting=owner;resetCombat();closeDialog();
-    if(owner&&home){visitHome={...structuredClone(state),name:home.name??state.name,planet:'home',discovered:[...(home.discovered??['home'])],plots:structuredClone(home.plots??state.plots),decorations:structuredClone(home.decorations??[]),farm:M.parseFarm((home as {farm?:unknown}).farm),helper:M.parseHelper((home as {helper?:unknown}).helper),friends:M.parseFriends((home as {friends?:unknown}).friends),bosses:M.parseBosses((home as {bosses?:unknown}).bosses),house:parseHouse((home as {house?:unknown}).house)};world.state=visitHome;rebuildHomePresentation('home');}
+    if(owner&&home){visitHome={...structuredClone(state),name:home.name??state.name,planet:'home',yardLayout:readYardLayout((home as {yardLayout?:unknown}).yardLayout),discovered:[...(home.discovered??['home'])],plots:structuredClone(home.plots??state.plots),decorations:structuredClone(home.decorations??[]),farm:M.parseFarm((home as {farm?:unknown}).farm),helper:M.parseHelper((home as {helper?:unknown}).helper),friends:M.parseFriends((home as {friends?:unknown}).friends),bosses:M.parseBosses((home as {bosses?:unknown}).bosses),house:parseHouse((home as {house?:unknown}).house)};world.state=visitHome;rebuildHomePresentation('home');}
     else{visitHome=null;world.state=state;rebuildHomePresentation(state.planet);}
     world.refreshPlayer();$('#visit-banner').hidden=!owner;$('#visit-banner').textContent=t(owner?t('Visiting {owner} · look around their garden',{owner}):'');updateLabels();
   },

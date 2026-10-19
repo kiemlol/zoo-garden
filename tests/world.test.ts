@@ -1,8 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import * as T from 'three';
+import {OBB} from 'three/addons/math/OBB.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {yardOf,inwardFacing} from '../src/home-layout.ts';
 import {World,HERO_SCALE} from '../src/world.ts';
 import {RefinedAssetLibrary} from '../src/assets.ts';
 import {clearSegment} from '../src/navigation.ts';
@@ -26,22 +29,37 @@ function world() {
   }) as World;
 }
 
-test('village shops form a separated horizontal row clear of the stone paths in both art variants',async()=>{
+// Rotated storefronts can have overlapping world AABBs without touching. Compare oriented footprints.
+function footprint(mesh:T.Object3D){
+ mesh.updateWorldMatrix(true,true);const inverse=mesh.matrixWorld.clone().invert(),box=new T.Box3();
+ mesh.traverse(o=>{if(o instanceof T.Mesh){o.geometry.computeBoundingBox();if(o.geometry.boundingBox)box.union(o.geometry.boundingBox.clone().applyMatrix4(inverse.clone().multiply(o.matrixWorld)));}});
+ return new OBB().fromBox3(box).applyMatrix4(mesh.matrixWorld);
+}
+
+test('moving home props leaves the regional creature roster and spawn positions unchanged',()=>{
+  const w=world();w.build('home');
+  // Snapshot of all 187 creature IDs/species/positions on main before the yard move.
+  const roster=w.enemies.map(e=>[e.id,e.type,e.x,e.z]);
+  assert.equal(createHash('sha256').update(JSON.stringify(roster)).digest('hex'),'1c4450a97d532035bd4b5d114ca2d8e38a9778409b225ce13d945c28bb06e336');
+});
+
+test('village shops occupy the three replacement sites facing inward, clear of paths in both art variants',async()=>{
   const w=world();w.build('home');
   const row=['craft','shop','sell'].map(kind=>w.entities.find(e=>e.kind===kind)!);
-  assert.ok(row[2].x>9,'the market moves right');
-  assert.ok(row.every(e=>e.z===row[0].z),'all three buildings share a row');
+  const yard=yardOf(w.state);
+  for(const e of row){const point=yard.stores[e.kind as keyof typeof yard.stores];assert.deepEqual([e.x,e.z],[point.x,point.z]);assert.equal(e.mesh.rotation.y,inwardFacing(point));}
+  assert.equal(new Set(row.map(e=>e.z)).size,3);
   for(const e of row){
     assert.ok(w.obstacles.some(o=>o.x===e.x&&o.z===e.z),'collision follows the building');
-    assert.ok(M.HOME_CLEARANCE.some(o=>o.x===e.x&&o.z===e.z&&o.r===e.radius),'bed clearance follows the building');
+    assert.ok(M.HOME_CLEARANCE.some(o=>o.x===e.x&&o.z===e.z&&o.r>=e.radius),'bed clearance follows the building');
     assert.equal(w.blocked(e.x,e.z),true);assert.equal(M.bedClear(e.x,e.z),false);
   }
   const checkFootprints=()=>{
     const buildings=w.entities.filter(e=>!['enemy','plot','fish','animal'].includes(e.kind));
     for(const e of row){
       const box=new T.Box3().setFromObject(e.mesh);
-      assert.ok(box.min.x>1.1&&box.min.z>1.1,`${e.kind} clears both stepping-stone axes`);
-      for(const other of buildings)if(other!==e)assert.equal(box.intersectsBox(new T.Box3().setFromObject(other.mesh)),false,`${e.kind} overlaps ${other.kind}`);
+      assert.ok((box.min.x>1.1||box.max.x< -1.1)&&(box.min.z>1.1||box.max.z< -1.1),`${e.kind} clears both stepping-stone axes`);
+      for(const other of buildings)if(other!==e)assert.equal(footprint(e.mesh).intersectsOBB(footprint(other.mesh)),false,`${e.kind} overlaps ${other.kind}`);
     }
   };
   checkFootprints();
@@ -52,14 +70,9 @@ test('village shops form a separated horizontal row clear of the stone paths in 
   await assets.loadAll();w.applyRefinedAssets(assets);checkFootprints();
 });
 
-test('shop gaps, frontage and paths remain walkable and each shop can be reached and used',()=>{
+test('the four paths remain walkable and each relocated shop can be reached and used',()=>{
   const w=world();w.build('home');
   const row=['craft','shop','sell'].map(kind=>w.entities.find(e=>e.kind===kind)!);
-  for(let i=1;i<row.length;i++){
-    const x=(row[i-1].x+row[i].x)/2,z=row[i].z;
-    assert.equal(clearSegment({x,z:z-2.5},{x,z:z+2.5},w.obstacles),true,'the explorer fits between neighbouring buildings');
-  }
-  assert.equal(clearSegment({x:2.6,z:9},{x:11,z:9},w.obstacles),true,'clear frontage across the row');
   assert.equal(clearSegment({x:0,z:1},{x:0,z:9},w.obstacles),true,'south stone path beside the row stays open');
   assert.equal(clearSegment({x:1,z:0},{x:18,z:0},w.obstacles),true,'east stone path stays open');
   for(const start of [[0,-4.8],[-4,3],[0,17],[17,0]])for(const e of row){
@@ -216,7 +229,7 @@ test('a farm animal tap carries only its own UID while the pen remains a separat
 test('home includes nine plots and exact regional creature populations within full bounds',()=>{
   const w=world();w.build('home');assert.equal(w.plotMeshes.length,9);assert.equal(w.enemies.length,151+FOREST_RAPTOR_COUNT+SWAMP_OCTO_COUNT+22);assert.equal(w.enemies.filter(e=>e.type==='forest_raptor').length,FOREST_RAPTOR_COUNT);assert.equal(w.enemies.filter(e=>e.boss).length,5);assert.equal(w.enemies.filter(e=>e.definition?.titan).length,1);
   assert.ok(w.enemies.some(e=>Math.hypot(e.x,e.z)>100));assert.equal(w.blocked(149,0),true);
-  assert.deepEqual(w.entities.filter(e=>e.kind==='plot').slice(0,3).map(e=>[e.x,e.z]),[[-12.23,1.16],[-11,1.16],[-9.77,1.16]]);
+  assert.deepEqual(w.entities.filter(e=>e.kind==='plot').slice(0,3).map(e=>[e.x,e.z]),M.GARDEN_GRID.slice(0,3).map(p=>[p.x,p.z]));
 });
 
 test('follow-up damage cannot shorten an active crowd-control stun',()=>{

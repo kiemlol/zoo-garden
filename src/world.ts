@@ -1,3 +1,4 @@
+import {yardOf,YARD_CHEST,YARD_WELL,YARD_TREES,inwardFacing} from './home-layout.ts';
 import {FurnitureUse,isRestFurniture,drawFurniture,drawFurnitureLids,resetFurniturePose} from './furniture-use.ts';
 import type {FurniturePose} from './furniture-rules.ts';
 import {buildPatchworkPet} from './halloween-art.ts';
@@ -22,7 +23,7 @@ import {colossusGearKit} from './colossus-art.ts';
 import { DECOR, planDecor, kitsFor, type DecorPlacement } from './biomes.ts';
 import { buildScatter, disposeScatter, fallbackParts, updateScatterShadows } from './scatter.ts';
 import { OccluderFade } from './occluders.ts';
-import { INDOOR_Y } from './house.ts';
+import { INDOOR_Y, HOUSE } from './house.ts';
 import {atHome,homeRecoveryBonus} from './home-care.ts';
 import { bakeCoverAtlas, coverCards, tickCoverCards, type CoverAtlas } from './cover-cards.ts';
 import { buildGround, shadeField, type GroundDetail } from './ground.ts';
@@ -602,26 +603,30 @@ export class World {
     this.dressLook(planet);
     if(planet==='home'){
       this.addEntity('home','Your cottage','🏡',this.house(),0,-8,3.2);this.obstacle(0,-8,2.7);
-      // A horizontal shop row east of the stepping stones, with walkable gaps and a clear frontage.
-      this.addEntity('sell','Harvest market','🧺',this.stall('#f291a9','sell'),11,6.5,2);this.obstacle(11,6.5,1.7);
-      const shop=this.stall('#68bcc7','shop');this.addEntity('shop','Equipment shop','🛍️',shop,6.8,6.5,2);this.obstacle(6.8,6.5,1.7);
+      const yard=yardOf(this.state);
+      // Each storefront faces the centre, at its owner's migrated garden position.
+      const market=this.stall('#f291a9','sell');market.rotation.y=inwardFacing(yard.stores.sell);this.addEntity('sell','Harvest market','🧺',market,yard.stores.sell.x,yard.stores.sell.z,2);this.obstacle(yard.stores.sell.x,yard.stores.sell.z,1.7);
+      const shop=this.stall('#68bcc7','shop');shop.rotation.y=inwardFacing(yard.stores.shop);this.addEntity('shop','Equipment shop','🛍️',shop,yard.stores.shop.x,yard.stores.shop.z,2);this.obstacle(yard.stores.shop.x,yard.stores.shop.z,1.7);
       const chest=group(box('#aa794d',1.25,.7,.8,0,.35),cyl('#a67c4f',.5,.5,1.2,0,.65),box('#e7bb68',.15,.8,.84,0,.4));chest.children[1].rotation.z=Math.PI/2;
-      this.addEntity('chest','Storage chest','📦',chest,-3.3,-4.9,1);this.obstacle(-3.3,-4.9,.6);
+      this.addEntity('chest','Storage chest','📦',chest,YARD_CHEST.x,YARD_CHEST.z,1);this.obstacle(YARD_CHEST.x,YARD_CHEST.z,.6);
       this.addEntity('upgrade','Energy crystal','💎',this.crystal(),8.5,-7,1.5);this.obstacle(8.5,-7,1.4);
       this.addEntity('travel','Starship station','🚀',this.rocket(),13.5,-3,2);this.obstacle(13.5,-3,1.5);
       const forge=group(box('#a89e8c',1.8,.8,1.2,0,.4),box('#677b7d',1.1,.25,.65,0,1),cyl('#708384',.4,.25,.5,0,.75),box('#bd9673',.2,1.1,.2,.7,.75));
-      this.addEntity('craft','Workshop','🔨',forge,2.6,6.5,1.3);this.obstacle(2.6,6.5,1.1);
+      forge.rotation.y=inwardFacing(yard.stores.craft);this.addEntity('craft','Workshop','🔨',forge,yard.stores.craft.x,yard.stores.craft.z,1.3);this.obstacle(yard.stores.craft.x,yard.stores.craft.z,1.1);
       const cook=group(cyl('#71646b',1.2,.8,1.1,0,.55),cyl('#fc9b51',.7,.7,.12,0,1.12),box('#49454e',1.8,.12,.15,0,1.3));this.addEntity('cook','Volcano kitchen','🔥',cook,1,10.5,1.4);this.obstacle(1,10.5,1);
       for(let i=0;i<this.state.plots.length;i++)this.makePlot(i);
       this.buildPen();
-      const well=group(cyl('#a0a8a2',1,1,.8,0,.4,0,10),cyl('#63c5ed',.72,.72,.05,0,.83),box('#957651',.12,2.2,.12,-.85,1.5),box('#957651',.12,2.2,.12,.85,1.5),box('#cc9f78',2.4,.15,1.8,0,2.6));well.userData.prop='well';this.addEntity('well','Ember well','🪨',well,-7,-11,1.6);this.obstacle(-7,-11,1.2);
+      const well=group(cyl('#a0a8a2',1,1,.8,0,.4,0,10),cyl('#63c5ed',.72,.72,.05,0,.83),box('#957651',.12,2.2,.12,-.85,1.5),box('#957651',.12,2.2,.12,.85,1.5),box('#cc9f78',2.4,.15,1.8,0,2.6));well.userData.prop='well';this.addEntity('well','Ember well','🪨',well,YARD_WELL.x,YARD_WELL.z,1.6);this.obstacle(YARD_WELL.x,YARD_WELL.z,1.2);
       for(let i=0;i<54;i++){
         const a=i/54*Math.PI*2;if(Math.abs(Math.sin(a*2))<.32)continue;
         const g=this.kit('fence')??group(box('#b18459',.16,1,.16,-1,.5),box('#b18459',.16,1,.16,1,.5),box('#edbe77',2.1,.12,.1,0,.4),box('#edbe77',2.1,.12,.1,0,.8));g.position.set(Math.cos(a)*18,0,Math.sin(a)*18);g.rotation.y=-a-Math.PI/2;this.root.add(g);
         for(const d of [-.6,0,.6])this.obstacle(Math.cos(a)*18-Math.sin(a)*d,Math.sin(a)*18+Math.cos(a)*d,.42);
       }
       for(let i=0;i<4;i++){const a=i*Math.PI/2,g=this.kit('gate')??group(cyl('#b18c59',.14,.14,3.1,-1.7,1.55),cyl('#b18c59',.14,.14,3.1,1.7,1.55),box('#edc57a',3.75,.2,.2,0,3));g.position.set(Math.cos(a)*18,0,Math.sin(a)*18);g.rotation.y=-a-Math.PI/2;this.root.add(g);}
-      for(const [x,z] of [[-13,-8],[-14,7],[3,-13],[10,-11],[14,5],[-2,15]])this.tree(x,z,.75,true,rng);
+      // Keep the original six random draws and tree order: moving home props must not reshuffle creatures outside.
+      for(const at of [YARD_TREES[0],[yard.pinkTree.x,yard.pinkTree.z],YARD_TREES[1],null,YARD_TREES[2],YARD_TREES[3]]){
+        if(at)this.tree(at[0],at[1],.75,true,rng);else rng(); // the tree replaced by the market
+      }
       // The home pond first, so the stones and fence-side bushes below keep off its water.
       this.makePond(-7.5,11.2,3.3);
       // Stepping-stone trails lead from the cottage to the four gates.
@@ -1276,6 +1281,7 @@ export class World {
   select(e:Entity) {
     if(this.resting)return;
     if(!this.validTarget(e))return;
+    if(e.kind==='home'){this.walkTo(HOUSE.outdoorDoor.x,HOUSE.outdoorDoor.z+.85);return;}
     this.selected=e;this.ring.visible=e.kind!=='enemy'&&!e.pond;this.ring.scale.setScalar(e.radius);this.ring.position.set(e.x,.12,e.z);
     if(this.position.distanceTo(new T.Vector3(e.x,0,e.z))<=this.interactionRange(e)){this.destination=null;this.route=[];this.marker.visible=false;if(e.kind==='enemy')this.onAttackEnemy(e as Enemy);else {this.selected=null;this.ring.visible=false;this.onInteract(e);}return;}
     const point=approach(this.position,e,e.radius,this.collisionObstacles(),e.kind==='enemy'?this.interactionRange(e)-.15:e.radius+1.1,this.navigationOptions());if(point)this.walkTo(point.x,point.z,true);
@@ -1319,10 +1325,10 @@ export class World {
   nearest() {
     if(this.furniture?.active)return this.furniture.entity!;
     if(this.carriage?.active)return this.carriage.entity!;
-    const s=this.selected;if(s&&this.validTarget(s)&&Math.hypot(s.x-this.position.x,s.z-this.position.z)<s.radius+2)return s;
+    const s=this.selected;if(s&&s.kind!=='home'&&this.validTarget(s)&&Math.hypot(s.x-this.position.x,s.z-this.position.z)<s.radius+2)return s;
     // Same door priority and stable tie order, without filtering/sorting the whole world every HUD tick.
     let nearest:Entity|undefined,best=Infinity;
-    for(const e of this.entities){if(!this.validTarget(e))continue;const distance=Math.hypot(e.x-this.position.x,e.z-this.position.z);if(distance>=e.radius+2)continue;const gap=distance-e.radius-(e.kind==='home'?1.6:0);if(gap<best){best=gap;nearest=e;}}
+    for(const e of this.entities){if(e.kind==='home'||!this.validTarget(e))continue;const distance=Math.hypot(e.x-this.position.x,e.z-this.position.z);if(distance>=e.radius+2)continue;const gap=distance-e.radius;if(gap<best){best=gap;nearest=e;}}
     return nearest;
   }
   /** True when something was in reach to act on. */

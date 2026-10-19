@@ -11,7 +11,7 @@ import type {GameIntent,ActionReply} from './actions.ts';
 
 interface GuestEntry { at:number;by:string;name:string;kind:'visit'|'water'|'gift'|'steal'|'message';what?:string;count?:number;text?:string }
 interface Explorer { id:string;username?:string;name:string;color:string;level:number;gear:SaveState['gear'];look?:LookId;online?:boolean;x?:number;z?:number;y?:number;facing?:number;moving?:boolean;space?:string;planet?:string;difficulty?:string;likes?:number;stats?:SocialPlayer['stats'] }
-interface Home extends Explorer { discovered?:PlanetId[]; plots:SaveState['plots'];farm?:SaveState['farm'];placed?:unknown[];decorations?:unknown[];helper?:unknown;friends?:unknown[] }
+interface Home extends Explorer { yardLayout?:SaveState['yardLayout']; discovered?:PlanetId[]; plots:SaveState['plots'];farm?:SaveState['farm'];placed?:unknown[];decorations?:unknown[];helper?:unknown;friends?:unknown[] }
 interface EnemyState { id:string;x:number;z:number;hp:number;maxHp:number;[key:string]:unknown }
 interface NetworkWorld {
   furnitureGarden:string;requestFurniture?: (uid:string|null)=>Promise<FurniturePose|null>;furniture?:{cancel(notify?:boolean):void;reconcile(p:FurniturePose|null):void};
@@ -247,9 +247,9 @@ export function initOnline(game:GameBridge) {
       else if(message.type==='guestNotice'&&message.entry){const e=message.entry as GuestEntry;visitLog=[e,...visitLog].slice(0,30);unreadLog++;refreshButton();announce(guestLine(e));if(dialog.open&&tab==='diary'){unreadLog=0;render();}}
       else if(message.type==='visit'){
         playerChat.online(true);visiting=message.home?.id||null;
-        if(message.home){const home=message.home as Home;const state={...newGame(home.name,home.color),discovered:home.discovered??['home'],plots:home.plots,gear:home.gear,...(home.farm?{farm:home.farm}:{}),...(home.placed?{placed:home.placed}:{}),...(home.decorations?{decorations:home.decorations}:{}),...(home.helper?{helper:home.helper}:{}),...(home.friends?{friends:home.friends}:{})};game.setVisiting(home.name,state as SaveState);}
+        if(message.home){const home=message.home as Home;const state={...newGame(home.name,home.color),discovered:home.discovered??['home'],plots:home.plots,yardLayout:home.yardLayout,gear:home.gear,...(home.farm?{farm:home.farm}:{}),...(home.placed?{placed:home.placed}:{}),...(home.decorations?{decorations:home.decorations}:{}),...(home.helper?{helper:home.helper}:{}),...(home.friends?{friends:home.friends}:{})};game.setVisiting(home.name,state as SaveState);}
         else game.setVisiting(null);renderPlayers();announce(visiting?"Visiting {name}'s garden":'Back in your garden',{name:message.home?.name||''});if(dialog.open)render();
-      }else if(message.type==='home'&&message.home?.id===visiting)game.setVisiting(message.home.name,{discovered:message.home.discovered,plots:message.home.plots,decorations:message.home.decorations,farm:message.home.farm,helper:message.home.helper,friends:message.home.friends} as Partial<SaveState>);
+      }else if(message.type==='home'&&message.home?.id===visiting)game.setVisiting(message.home.name,{discovered:message.home.discovered,plots:message.home.plots,yardLayout:message.home.yardLayout,decorations:message.home.decorations,farm:message.home.farm,helper:message.home.helper,friends:message.home.friends} as Partial<SaveState>);
       else if(message.type==='effect'){if(message.visual)game.applyRemoteEffect(message.visual,message.by);else world().burst(message.x,message.z,message.color,8);}
       else if(message.type==='error')announce(message.message||'That action was unavailable.');
     });

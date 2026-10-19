@@ -196,7 +196,7 @@ export function initHouse(d: HouseDeps) {
   /** Taps on house things; true when handled (main.ts calls this first in world.onInteract). */
   const interact = (e: Entity) => {
     if (life.interact(e)) return true;
-    if (e.kind === 'home') { if (!d.visiting()) void d.perform('rest').then(ok => { if (ok) d.toast('Home, sweet home. Your health is restored.', '🏡'); }); enter(); return true; }
+    if (e.kind === 'home') { world.walkTo(HOUSE.outdoorDoor.x,HOUSE.outdoorDoor.z+.85); return true; }
     if (e.kind === 'house-door') { leave(); return true; }
     if (e.kind === 'house-wardrobe' || e.kind === 'house-mirror') { if (d.visiting()) d.toast('Enjoy looking around. Your own garden is waiting at home.', '🌷'); else if (e.kind === 'house-mirror' && d.looks) d.looks(); else d.ownGear(); return true; }
     if (e.kind === 'house-bench') { if (d.visiting()) d.toast('Enjoy looking around. Your own garden is waiting at home.', '🌷'); else d.bench?.(); return true; }

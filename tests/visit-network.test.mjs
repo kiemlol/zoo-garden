@@ -91,3 +91,23 @@ test('a friend visiting or messaging does not make the owner\'s next action fail
   const next = await call(owner.cookie, 'actions', { type: 'settings', payload: { settings: { sound: false } }, requestId: randomUUID(), rulesVersion: 1, expectedRevision: before });
   assert.equal(next.status, 200, JSON.stringify(next.data)); // not a 409: the owner's next action goes through
 });
+
+test('a migrated yard and its compensation persist once and visitors receive the same saved store positions', async t => {
+  const {previousBed}=await import('../src/model.ts');
+  const dataDir=await mkdtemp(path.join(os.tmpdir(),'zoo-yard-migration-')),store=await createAccountStore({dataDir,databaseUrl:''});
+  const server=await createGameServer({host:'127.0.0.1',port:0,dataDir,accountStore:store,databaseUrl:'',databaseRequired:false}),clients=[];
+  t.after(async()=>{clients.forEach(c=>c.socket.terminate());await server.close();await rm(dataDir,{recursive:true,force:true});});
+  async function call(cookie,route,body){const r=await fetch(server.url+'/api/'+route,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
+  async function explorer(username,old=false){const session=await call(null,'auth/register',{username,password:'Yard-migration-local-123',name:username}),id=session.data.account.id;
+    if(old)await store.command({actorId:id,requestId:randomUUID(),expectedRevision:session.data.revision,actionType:'testSetup',hash:'e'.repeat(64),run:records=>{const s=records.get(id).profile;delete s.yardLayout;s.plots=Array.from({length:12},(_,i)=>({crop:null,plantedAt:0,...previousBed(i)}));s.decorations=[{uid:'coffin',id:'deco_cursed_coffin',x:13.2,z:-8,rotation:0},{uid:'tree',id:'deco_cursed_tree',x:6.5,z:-13.5,rotation:0},{uid:'tank',id:'deco_aquarium',x:10,z:-11,rotation:0,fish:[{id:'fish_clown',size:13}]}];return true;}});
+    const c={id,cookie:session.cookie,...connect(server.url,session.cookie)};clients.push(c);await c.next(m=>m.type==='joined');return c;
+  }
+  const owner=await explorer('yard_migration_owner',true),guest=await explorer('yard_migration_guest');
+  await call(guest.cookie,'friends/request',{id:owner.id});await call(owner.cookie,'friends/accept',{id:guest.id});
+  const before=(await call(owner.cookie,'auth/session')).data;assert.equal(before.profile.bag.deco_cursed_coffin,1);assert.equal(before.profile.bag.deco_aquarium,1);assert.equal(before.profile.bag.fish_clown,1);
+  guest.send({type:'visit',id:owner.id});const visit=await guest.next(m=>m.type==='visit'&&m.home);assert.deepEqual(visit.home.yardLayout,before.profile.yardLayout);assert.deepEqual(visit.home.yardLayout.stores.craft,{x:13.2,z:-8});assert.deepEqual(visit.home.yardLayout.stores.shop,{x:6.5,z:-13.5});assert.equal(visit.home.plots.length,12);assert.equal(visit.home.decorations.length,0);
+  const result=await call(owner.cookie,'actions',{rulesVersion:1,type:'settings',payload:{settings:{lowGraphics:true}},expectedRevision:before.revision,requestId:randomUUID()});assert.equal(result.status,200,JSON.stringify(result.data));
+  const update=await guest.next(m=>m.type==='home');assert.deepEqual(update.home.yardLayout,visit.home.yardLayout);
+  const persisted=(await store.get(owner.id)).profile;assert.deepEqual(persisted.yardLayout,visit.home.yardLayout);assert.equal(persisted.bag.deco_cursed_coffin,1);assert.equal(persisted.bag.fish_clown,1);
+  assert.deepEqual((await call(owner.cookie,'auth/session')).data.profile.bag,persisted.bag,'reloading cannot grant displaced items twice');
+});

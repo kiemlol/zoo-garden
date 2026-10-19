@@ -146,7 +146,7 @@ test('new beds never land on village obstacles, and saved beds on top of them mo
   for (const p of s.plots.slice(9)) assert.ok(M.bedClear(p.x!, p.z!), `${p.x},${p.z}`);
   // Explicit spots: the well and the cottage are refused.
   const t = M.newGame(); t.energy = 1e4;
-  assert.equal(M.expandGarden(t, -7, -11), false); assert.equal(M.expandGarden(t, 0, -8), false); assert.equal(M.expandGarden(t, -13.65, 4.1), true);
+  assert.equal(M.expandGarden(t, -7, -11), false); assert.equal(M.expandGarden(t, 0, -8), false); assert.equal(M.expandGarden(t, -9.2, 6.14), true);
   // An old save with a bed on the well and one stacked on a starting bed.
   const old = M.newGame(); old.plots.push({ crop: 'radish', plantedAt: 5, x: -7, z: -11 }, { crop: null, plantedAt: 0, x: -10.95, z: .05 });
   const r = reload(old), [well, stacked] = r.plots.slice(9);

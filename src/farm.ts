@@ -86,7 +86,7 @@ export const PEN_BUILD = { level: 2, price: 40 } as const;
  * the well and the west trees, clear of the trails and the fence. hw/hd are the half width (x) and half depth (z) of
  * its sandy floor, which keeps garden beds off; the open side faces the garden (south).
  */
-export const PEN = { x: -8.6, z: -5, hw: 3.4, hd: 2.2 } as const;
+export const PEN = { x: -7.6, z: -9, hw: 3.4, hd: 2.2 } as const;
 /**
  * The open farmyard the animals roam, like fish in a pond: an oval around the pen a little wider than its old fence
  * (rx/rz are the half axes, centred on PEN). Only a low fence behind it remains, so nothing hides the animals from the
@@ -348,7 +348,7 @@ export function cookDish(s: SaveState, id: ItemId) {
 }
 function count(value: unknown, fallback = 0) { return typeof value === 'number' && Number.isSafeInteger(Math.floor(value)) && value >= 0 ? Math.floor(value) : fallback; }
 /** The farm from a save: unknown kinds and bad times are dropped, the pen keeps its caps; missing = an empty pen. */
-export function parseFarm(raw: unknown): FarmState {
+export function parseFarm(raw: unknown, origin: {x:number;z:number} = PEN): FarmState {
   const farm = emptyFarm();
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return farm;
   const v = raw as Record<string, unknown>;
@@ -373,7 +373,7 @@ export function parseFarm(raw: unknown): FarmState {
     // Saves from before breeds get a stable coat from the animal's id (the same one on every load).
     const coat = coatOf({ kind, uid, coat: a.coat as number | undefined });
     const h = a.home as { x?: unknown; z?: unknown } | undefined;
-    const home = h && typeof h.x === 'number' && typeof h.z === 'number' && Number.isFinite(h.x) && Number.isFinite(h.z) && Math.abs(h.x) <= 200 && Math.abs(h.z) <= 200 ? { x: h.x, z: h.z } : releasePoint(kind);
+    const home = h && typeof h.x === 'number' && typeof h.z === 'number' && Number.isFinite(h.x) && Number.isFinite(h.z) && Math.abs(h.x) <= 200 && Math.abs(h.z) <= 200 ? { x: h.x, z: h.z } : { x: releasePoint(kind).x + origin.x - PEN.x, z: releasePoint(kind).z + origin.z - PEN.z };
     const animal: Animal = { uid, kind, bornAt, acquiredAt, cycleAt, coat, home, timerVersion: 2, ...(a.pace === PRODUCT_PACE ? { pace: PRODUCT_PACE } : {}), ...(a.fedYoung === true ? { fedYoung: true } : {}), ...(a.fed === true ? { fed: true } : {}) };
     // First legacy deadline stays exact; subsequent cycles use the new shared clock, even after reload.
     if (kind !== 'dog') {

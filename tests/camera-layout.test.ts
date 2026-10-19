@@ -29,14 +29,14 @@ test('cached indoor focus remains equivalent to fresh ground rays after pitch, z
  }finally{setCameraPitch(previous);}
 });
 
-test('single-pass interaction search preserves selection, door priority and stable ties of the former sorted search',()=>{
+test('single-pass interaction search preserves other selections and stable ties while excluding the cottage',()=>{
  const w=Object.assign(Object.create(World.prototype),{position:new T.Vector3(),validTarget:(e:Entity)=>e.mesh.visible}) as World;
  let seed=42;const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
  for(let run=0;run<100;run++){
  w.entities=Array.from({length:200},(_,i)=>({kind:i%10===0?'home':'friend',x:(random()-.5)*20,z:(random()-.5)*20,radius:random()*3,mesh:{visible:random()>.1}} as Entity));
  w.selected=run%2?w.entities[0]:null;
- const gap=(e:Entity)=>Math.hypot(e.x-w.position.x,e.z-w.position.z)-e.radius-(e.kind==='home'?1.6:0);
- const s=w.selected,expected=s&&w.validTarget(s)&&Math.hypot(s.x,s.z)<s.radius+2?s:w.entities.filter(e=>w.validTarget(e)).sort((a,b)=>gap(a)-gap(b)).find(e=>Math.hypot(e.x,e.z)<e.radius+2);
+ const gap=(e:Entity)=>Math.hypot(e.x-w.position.x,e.z-w.position.z)-e.radius;
+ const s=w.selected,expected=s&&s.kind!=='home'&&w.validTarget(s)&&Math.hypot(s.x,s.z)<s.radius+2?s:w.entities.filter(e=>e.kind!=='home'&&w.validTarget(e)).sort((a,b)=>gap(a)-gap(b)).find(e=>Math.hypot(e.x,e.z)<e.radius+2);
  assert.equal(w.nearest(),expected);
  }
 });
